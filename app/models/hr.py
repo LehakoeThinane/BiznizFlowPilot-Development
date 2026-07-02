@@ -29,11 +29,13 @@ class Employee(BaseModel):
     __table_args__ = (
         Index("ix_employees_biz_active", "business_id", "is_active"),
         Index("ix_employees_department", "department_id"),
+        Index("ix_employees_manager", "manager_id"),
     )
 
     business_id     = Column(Uuid, ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True)
     department_id   = Column(Uuid, ForeignKey("departments.id", ondelete="SET NULL"), nullable=True)
     user_id         = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    manager_id      = Column(Uuid, ForeignKey("employees.id", ondelete="SET NULL"), nullable=True)
 
     first_name      = Column(String(100), nullable=False)
     last_name       = Column(String(100), nullable=False)
@@ -56,6 +58,8 @@ class Employee(BaseModel):
     department  = relationship("Department", back_populates="employees")
     leave_requests = relationship("LeaveRequest", back_populates="employee", cascade="all, delete-orphan")
     payslips    = relationship("Payslip", back_populates="employee")
+    manager        = relationship("Employee", remote_side="Employee.id", back_populates="direct_reports")
+    direct_reports = relationship("Employee", back_populates="manager")
 
 
 class LeaveType(BaseModel):

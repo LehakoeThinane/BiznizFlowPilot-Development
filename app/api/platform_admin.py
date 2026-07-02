@@ -32,7 +32,9 @@ from app.schemas.platform import (
     PlatformAdminCreate,
     PlatformAdminResponse,
 )
+from app.services.email import send_invite_email
 from app.services.event import EventService
+from app.services.invitation import InvitationService
 from app.services.organization import OrganizationService
 from app.services.platform_audit import record_audit
 from app.services.platform_auth import PlatformAuthService
@@ -356,24 +358,29 @@ def provision_organization(
     current_admin: Annotated[CurrentPlatformAdmin, Depends(get_current_platform_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> OrganizationAdminResponse:
-    """Provision a brand-new client Organization + first subsidiary + owner.
+    """Provision a brand-new client Organization + first subsidiary, then invite the owner.
 
-    Shares the exact same code path as self-service registration
-    (OrganizationService.create_organization_with_first_subsidiary), so there
-    is exactly one place that creates this Organization+Business+User triple.
+    No owner User is created here — ownership transfers to the client via the
+    same invite-token flow used for tenant-side invites (InvitationService),
+    so the platform admin never sets or knows the client's password.
     """
     org_service = OrganizationService(db)
     try:
-        provisioned = org_service.create_organization_with_first_subsidiary(
+        shell = org_service.create_organization_shell(
             org_name=body.org_name,
             billing_email=body.billing_email,
-            owner_email=body.owner_email,
-            owner_password=body.owner_password,
-            owner_first_name=body.owner_first_name,
-            owner_last_name=body.owner_last_name,
             subsidiary_name=body.subsidiary_name,
             primary_domain=body.primary_domain,
             plan_tier=body.plan_tier,
+        )
+        invitation, raw_token = InvitationService(db).create_invitation(
+            business_id=shell.business.id,
+            organization_id=shell.organization.id,
+            email=body.owner_email,
+            role="owner",
+            invited_by=None,
+            inviter_role="platform_admin",
+            inviter_name=f"{current_admin.full_name} (Platform Team)",
         )
     except ValueError as e:
         db.rollback()
@@ -387,29 +394,40 @@ def provision_organization(
         db.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
+    try:
+        send_invite_email(
+            to_email=body.owner_email,
+            organization_name=shell.organization.name,
+            business_name=shell.business.name,
+            invited_by_name=f"{current_admin.full_name} (Platform Team)",
+            raw_token=raw_token,
+        )
+    except Exception:
+        pass  # email delivery failure is logged inside send_invite_email
+
     record_audit(
         db,
         current_admin.platform_admin_id,
         "organization.provision",
         target_type="organization",
-        target_id=provisioned.organization.id,
-        meta_data={"org_name": body.org_name, "owner_email": body.owner_email},
+        target_id=shell.organization.id,
+        meta_data={"org_name": body.org_name, "owner_email": body.owner_email, "invitation_id": str(invitation.id)},
     )
 
     try:
         EventService(db).create_event(
-            business_id=provisioned.business.id,
+            business_id=shell.business.id,
             event_type=EventType.ORGANIZATION_PROVISIONED,
             entity_type="organization",
-            entity_id=provisioned.organization.id,
-            description=f"Organization '{provisioned.organization.name}' provisioned by platform admin",
+            entity_id=shell.organization.id,
+            description=f"Organization '{shell.organization.name}' provisioned by platform admin; owner invited",
         )
     except Exception:
         pass
 
     db.commit()
-    db.refresh(provisioned.organization)
-    return _org_to_admin_response(db, provisioned.organization)
+    db.refresh(shell.organization)
+    return _org_to_admin_response(db, shell.organization)
 
 
 @router.get("/organizations/{organization_id}", response_model=OrganizationAdminResponse)

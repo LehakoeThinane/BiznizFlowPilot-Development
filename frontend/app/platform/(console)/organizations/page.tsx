@@ -12,9 +12,6 @@ const EMPTY_FORM: OrganizationProvisionRequest = {
   org_name: "",
   billing_email: "",
   owner_email: "",
-  owner_password: "",
-  owner_first_name: "",
-  owner_last_name: "",
   plan_tier: "trial",
 };
 
@@ -25,6 +22,7 @@ export default function PlatformOrganizationsPage() {
   const [form, setForm] = useState<OrganizationProvisionRequest>(EMPTY_FORM);
   const [formError, setFormError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   function load() {
     platformApiRequest<OrganizationAdminListResponse>("/platform/v1/organizations")
@@ -41,6 +39,7 @@ export default function PlatformOrganizationsPage() {
     try {
       await platformApiRequest("/platform/v1/organizations", { method: "POST", body: form });
       setShowForm(false);
+      setSuccessMessage(`Invite sent to ${form.owner_email}. The organization will activate once they accept it.`);
       setForm(EMPTY_FORM);
       load();
     } catch (err) {
@@ -100,25 +99,7 @@ export default function PlatformOrganizationsPage() {
               <option value="enterprise">Enterprise</option>
             </select>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#aaa]">Owner first name</label>
-            <input
-              required
-              className={INPUT}
-              value={form.owner_first_name}
-              onChange={(e) => setForm({ ...form, owner_first_name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#aaa]">Owner last name</label>
-            <input
-              required
-              className={INPUT}
-              value={form.owner_last_name}
-              onChange={(e) => setForm({ ...form, owner_last_name: e.target.value })}
-            />
-          </div>
-          <div>
+          <div className="sm:col-span-2">
             <label className="mb-1 block text-xs font-medium text-[#aaa]">Owner email</label>
             <input
               required
@@ -126,18 +107,11 @@ export default function PlatformOrganizationsPage() {
               className={INPUT}
               value={form.owner_email}
               onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+              placeholder="owner@client-company.com"
             />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-[#aaa]">Owner temporary password</label>
-            <input
-              required
-              type="password"
-              minLength={8}
-              className={INPUT}
-              value={form.owner_password}
-              onChange={(e) => setForm({ ...form, owner_password: e.target.value })}
-            />
+            <p className="mt-1 text-xs text-[#777]">
+              We'll send this person an invite to set up their own password and activate the organization.
+            </p>
           </div>
 
           {formError && (
@@ -152,10 +126,16 @@ export default function PlatformOrganizationsPage() {
               disabled={isSubmitting}
               className="rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             >
-              {isSubmitting ? "Provisioning..." : "Provision organization"}
+              {isSubmitting ? "Sending invite..." : "Provision & send invite"}
             </button>
           </div>
         </form>
+      )}
+
+      {successMessage && (
+        <p className="mb-4 rounded-md border border-emerald-900/40 bg-emerald-950/30 px-3 py-2 text-sm text-emerald-400">
+          {successMessage}
+        </p>
       )}
 
       {error && (

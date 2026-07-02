@@ -23,6 +23,8 @@ from app.api import (
     inventory,
     invoice,
     leads,
+    meetings,
+    messaging,
     metrics,
     notification,
     organizations,
@@ -129,6 +131,12 @@ app.include_router(leads.router)
 app.include_router(tasks.router)
 app.include_router(users.router)
 app.include_router(invites.router)
+
+# Meetings / calendar calls (auth required)
+app.include_router(meetings.router)
+
+# Direct messaging (auth required)
+app.include_router(messaging.router)
 
 # Organization / subsidiary management (auth required, IT Admin for mutations)
 app.include_router(organizations.router)

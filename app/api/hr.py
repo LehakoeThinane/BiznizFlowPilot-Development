@@ -32,6 +32,7 @@ from app.schemas.hr import (
     LeaveStatusUpdate,
     LeaveTypeCreate,
     LeaveTypeOut,
+    OrgChartNode,
     PayrollGenerateRequest,
     PayrollPeriodOut,
     PayslipOut,
@@ -81,7 +82,23 @@ def _employee_out(emp: Employee) -> EmployeeOut:
     out = EmployeeOut.model_validate(emp)
     out.full_name = f"{emp.first_name} {emp.last_name}"
     out.department_name = emp.department.name if emp.department else None
+    out.manager_name = f"{emp.manager.first_name} {emp.manager.last_name}" if emp.manager else None
     return out
+
+
+def _assert_no_manager_cycle(db: Session, employee_id: UUID, manager_id: UUID) -> None:
+    """Walk the proposed manager's chain; reject if it revisits employee_id."""
+    if manager_id == employee_id:
+        raise HTTPException(status_code=400, detail="An employee cannot be their own manager")
+    current_id = manager_id
+    for _ in range(50):
+        mgr = db.query(Employee.manager_id).filter(Employee.id == current_id).first()
+        if not mgr or not mgr[0]:
+            return
+        if mgr[0] == employee_id:
+            raise HTTPException(status_code=400, detail="Invalid manager: would create a reporting cycle")
+        current_id = mgr[0]
+    raise HTTPException(status_code=400, detail="Invalid manager: reporting chain too deep")
 
 
 # ── Departments ─────────────────────────────────────────────────────────────
@@ -180,6 +197,30 @@ def list_employees(
     )
 
 
+@router.get("/employees/org-chart", response_model=list[OrgChartNode])
+def get_org_chart(
+    include_inactive: bool = False,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    q = db.query(Employee).filter(Employee.business_id == current_user.business_id)
+    if not include_inactive:
+        q = q.filter(Employee.is_active.is_(True))
+    rows = q.all()
+    return [
+        OrgChartNode(
+            id=e.id,
+            full_name=f"{e.first_name} {e.last_name}",
+            position=e.position,
+            department_name=e.department.name if e.department else None,
+            manager_id=e.manager_id,
+            is_active=e.is_active,
+            email=e.email,
+        )
+        for e in rows
+    ]
+
+
 @router.get("/employees/{emp_id}", response_model=EmployeeOut)
 def get_employee(
     emp_id: UUID,
@@ -201,7 +242,10 @@ def create_employee(
     db: Annotated[Session, Depends(get_db)] = None,
 ):
     _require_manager(current_user)
-    emp = Employee(id=uuid4(), business_id=current_user.business_id, **data.model_dump())
+    new_id = uuid4()
+    if data.manager_id:
+        _assert_no_manager_cycle(db, new_id, data.manager_id)
+    emp = Employee(id=new_id, business_id=current_user.business_id, **data.model_dump())
     db.add(emp)
     db.flush()
     notify_business(
@@ -234,6 +278,8 @@ def update_employee(
     ).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+    if data.manager_id:
+        _assert_no_manager_cycle(db, emp.id, data.manager_id)
     updated_fields = list(data.model_dump(exclude_none=True).keys())
     for k, v in data.model_dump(exclude_none=True).items():
         setattr(emp, k, v)

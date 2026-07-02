@@ -38,6 +38,7 @@ class DepartmentOut(BaseModel):
 
 class EmployeeCreate(BaseModel):
     department_id: UUID | None = None
+    manager_id: UUID | None = None
     first_name: str = Field(..., max_length=100)
     last_name: str = Field(..., max_length=100)
     email: str | None = Field(None, max_length=254)
@@ -55,6 +56,7 @@ class EmployeeCreate(BaseModel):
 
 class EmployeeUpdate(BaseModel):
     department_id: UUID | None = None
+    manager_id: UUID | None = None
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
     email: str | None = Field(None, max_length=254)
@@ -77,6 +79,7 @@ class EmployeeOut(BaseModel):
     id: UUID
     business_id: UUID
     department_id: UUID | None
+    manager_id: UUID | None = None
     first_name: str
     last_name: str
     full_name: str = ""
@@ -90,6 +93,7 @@ class EmployeeOut(BaseModel):
     end_date: date | None
     is_active: bool
     department_name: str | None = None
+    manager_name: str | None = None
     created_at: datetime
 
 
@@ -98,6 +102,17 @@ class EmployeeListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+class OrgChartNode(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    full_name: str
+    position: str | None
+    department_name: str | None
+    manager_id: UUID | None
+    is_active: bool
+    email: str | None
 
 
 # ── Leave ──────────────────────────────────────────────────────────────────

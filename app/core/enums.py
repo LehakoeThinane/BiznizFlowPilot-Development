@@ -135,6 +135,12 @@ class EventType(str, Enum):
     IMPERSONATION_SESSION_STARTED = "impersonation_session_started"
     IMPERSONATION_SESSION_ENDED = "impersonation_session_ended"
 
+    # --- Meetings / Calls ---
+    MEETING_SCHEDULED = "meeting_scheduled"
+    MEETING_UPDATED = "meeting_updated"
+    MEETING_CANCELLED = "meeting_cancelled"
+    MEETING_STARTED = "meeting_started"
+
     # --- System ---
     WORKFLOW_TRIGGERED = "workflow_triggered"
     CUSTOM = "custom"
