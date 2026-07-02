@@ -1,6 +1,6 @@
 """Meeting model - scheduled calls between users, with Agora-backed voice/video."""
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
