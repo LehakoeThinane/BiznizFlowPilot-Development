@@ -26,6 +26,7 @@ from app.models.user import User
 from app.models.customer import Customer
 from app.models.inventory import InventoryLocation
 from app.models.lead import Lead
+from app.models.platform_admin import PlatformAdmin
 from app.models.product import Product
 from app.models.supplier import Supplier
 from app.models.task import Task
@@ -340,6 +341,45 @@ def sample_task(test_db: Session, owner_business: Business, sample_lead: Lead) -
     test_db.add(task)
     test_db.commit()
     return task
+
+
+# ============================================================================
+# Platform (vendor staff) Fixtures
+# ============================================================================
+
+
+@pytest.fixture
+def platform_admin(test_db: Session) -> PlatformAdmin:
+    """Create a platform admin with the default 'support' role."""
+    admin = PlatformAdmin(
+        id=uuid4(),
+        email=f"support-{uuid4().hex[:8]}@vendor.example.com",
+        hashed_password=hash_password("password123"),
+        full_name="Support Admin",
+        platform_role="support",
+        is_active=True,
+        impersonation_allowed=False,
+    )
+    test_db.add(admin)
+    test_db.commit()
+    return admin
+
+
+@pytest.fixture
+def platform_super_admin(test_db: Session) -> PlatformAdmin:
+    """Create a platform admin with the 'super_admin' role."""
+    admin = PlatformAdmin(
+        id=uuid4(),
+        email=f"super-{uuid4().hex[:8]}@vendor.example.com",
+        hashed_password=hash_password("password123"),
+        full_name="Super Admin",
+        platform_role="super_admin",
+        is_active=True,
+        impersonation_allowed=True,
+    )
+    test_db.add(admin)
+    test_db.commit()
+    return admin
 
 
 # ============================================================================

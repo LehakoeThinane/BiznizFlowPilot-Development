@@ -46,6 +46,20 @@ class Settings(BaseSettings):
     password_reset_token_expiration_minutes: int = 30
     invite_token_expiration_days: int = 7
 
+    # Platform (vendor staff) JWT — deliberately a distinct signing key from
+    # tenant `secret_key` so a leaked/misused tenant secret can never mint a
+    # valid platform token. Defaults to reusing secret_key so rollout doesn't
+    # require a new required env var; set a distinct PLATFORM_SECRET_KEY in
+    # production.
+    platform_secret_key: str = ""
+    platform_jwt_expiration_hours: int = 8
+    platform_refresh_token_expiration_days: int = 1
+
+    @property
+    def effective_platform_secret_key(self) -> str:
+        """The signing key actually used for platform tokens."""
+        return self.platform_secret_key or self.secret_key
+
     # API
     api_base_url: str = "http://localhost:8000"
     api_v1_prefix: str = "/api/v1"

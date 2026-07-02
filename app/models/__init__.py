@@ -24,6 +24,8 @@ from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
+from app.models.platform_admin import PlatformAdmin
+from app.models.platform_audit_log import PlatformAuditLog
 
 __all__ = [
     "Base",
@@ -61,4 +63,6 @@ __all__ = [
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",
+    "PlatformAdmin",
+    "PlatformAuditLog",
 ]
