@@ -5,6 +5,8 @@ import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Pagination } from "@/components/Pagination";
+import { OrgChart } from "@/components/OrgChart";
+import type { OrgChartNode } from "@/types/api";
 
 const PAGE_SIZE = 20;
 
@@ -14,6 +16,7 @@ interface Employee {
   email: string | null; phone: string | null; position: string | null;
   employment_type: string; salary_type: string; gross_salary: number;
   department_id: string | null; department_name: string | null;
+  manager_id: string | null; manager_name: string | null;
   is_active: boolean; start_date: string | null;
 }
 interface EmployeeListResponse { items: Employee[]; total: number }
@@ -61,12 +64,12 @@ function XIcon() {
 
 interface EmployeeForm {
   first_name: string; last_name: string; email: string; phone: string;
-  position: string; department_id: string; employment_type: string;
+  position: string; department_id: string; manager_id: string; employment_type: string;
   salary_type: string; gross_salary: string; start_date: string; notes: string;
 }
 const EMPTY_FORM: EmployeeForm = {
   first_name: "", last_name: "", email: "", phone: "",
-  position: "", department_id: "", employment_type: "full_time",
+  position: "", department_id: "", manager_id: "", employment_type: "full_time",
   salary_type: "monthly", gross_salary: "", start_date: "", notes: "",
 };
 function empToForm(e: Employee): EmployeeForm {
@@ -74,6 +77,7 @@ function empToForm(e: Employee): EmployeeForm {
     first_name: e.first_name, last_name: e.last_name,
     email: e.email ?? "", phone: e.phone ?? "",
     position: e.position ?? "", department_id: e.department_id ?? "",
+    manager_id: e.manager_id ?? "",
     employment_type: e.employment_type, salary_type: e.salary_type,
     gross_salary: String(e.gross_salary), start_date: e.start_date ?? "", notes: "",
   };
@@ -82,7 +86,7 @@ function empToForm(e: Employee): EmployeeForm {
 interface DeptForm { name: string; description: string }
 const EMPTY_DEPT: DeptForm = { name: "", description: "" };
 
-type ActiveTab = "employees" | "departments";
+type ActiveTab = "employees" | "departments" | "org-chart";
 
 export default function EmployeesPage() {
   const [tab, setTab] = useState<ActiveTab>("employees");
@@ -93,6 +97,11 @@ export default function EmployeesPage() {
   const [page, setPage]             = useState(1);
   const [loading, setLoading]       = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
+
+  // ── Org chart state ────────────────────────────────────────────────────────
+  const [orgChartNodes, setOrgChartNodes] = useState<OrgChartNode[]>([]);
+  const [orgChartLoading, setOrgChartLoading] = useState(false);
+  const [orgChartLoaded, setOrgChartLoaded] = useState(false);
 
   const [showAddModal, setShowAddModal]   = useState(false);
   const [editTarget, setEditTarget]       = useState<Employee | null>(null);
@@ -129,6 +138,14 @@ export default function EmployeesPage() {
 
   useEffect(() => { loadEmployees(); loadDepartments(); }, [loadEmployees, loadDepartments]);
 
+  useEffect(() => {
+    if (tab !== "org-chart" || orgChartLoaded) return;
+    setOrgChartLoading(true);
+    apiRequest<OrgChartNode[]>("/api/v1/hr/employees/org-chart", { authToken: token })
+      .then((d) => { setOrgChartNodes(d ?? []); setOrgChartLoaded(true); })
+      .catch(console.error).finally(() => setOrgChartLoading(false));
+  }, [tab, orgChartLoaded, token]);
+
   function set(field: keyof EmployeeForm, value: string) {
     setForm((f) => ({ ...f, [field]: value }));
     setErrors((e) => ({ ...e, [field]: undefined }));
@@ -157,6 +174,7 @@ export default function EmployeesPage() {
       if (form.phone)         body.phone         = form.phone.trim();
       if (form.position)      body.position      = form.position.trim();
       if (form.department_id) body.department_id = form.department_id;
+      if (form.manager_id)    body.manager_id    = form.manager_id;
       if (form.start_date)    body.start_date    = form.start_date;
       if (form.notes)         body.notes         = form.notes.trim();
 
@@ -167,7 +185,7 @@ export default function EmployeesPage() {
         await apiRequest("/api/v1/hr/employees", { method: "POST", body, authToken: token });
         setShowAddModal(false);
       }
-      setForm(EMPTY_FORM); loadEmployees();
+      setForm(EMPTY_FORM); loadEmployees(); setOrgChartLoaded(false);
     } catch (err: unknown) {
       setServerError(err instanceof Error ? err.message : "Failed to save employee.");
     } finally { setSaving(false); }
@@ -213,7 +231,7 @@ export default function EmployeesPage() {
       {/* ── Header ────────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <PageHeader title="Employees & Departments" subtitle={`${total} employees · ${departments.length} departments`} />
-        {tab === "employees" ? (
+        {tab === "employees" && (
           <button
             type="button"
             onClick={() => { setShowAddModal(true); setForm(EMPTY_FORM); setErrors({}); setServerError(""); }}
@@ -221,7 +239,8 @@ export default function EmployeesPage() {
           >
             + Add Employee
           </button>
-        ) : (
+        )}
+        {tab === "departments" && (
           <button
             type="button"
             onClick={() => { setShowDeptModal(true); setDeptForm(EMPTY_DEPT); setDeptServerError(""); }}
@@ -234,7 +253,7 @@ export default function EmployeesPage() {
 
       {/* ── Tab switcher ─────────────────────────────────────────────────────── */}
       <div className="flex gap-2">
-        {(["employees", "departments"] as ActiveTab[]).map((t) => (
+        {(["employees", "departments", "org-chart"] as ActiveTab[]).map((t) => (
           <button
             key={t} type="button"
             onClick={() => setTab(t)}
@@ -242,7 +261,7 @@ export default function EmployeesPage() {
               tab === t ? "bg-blue-600 text-white" : "bg-white/4 text-slate-400 hover:bg-white/8"
             }`}
           >
-            {t}
+            {t === "org-chart" ? "Org Chart" : t}
           </button>
         ))}
       </div>
@@ -362,6 +381,22 @@ export default function EmployeesPage() {
         </div>
       )}
 
+      {/* ── Org Chart tab ─────────────────────────────────────────────────────── */}
+      {tab === "org-chart" && (
+        <div className="erp-panel">
+          <div className="border-b border-outline-variant/80 px-5 py-3">
+            <p className="text-sm font-semibold text-slate-300">Reporting Structure</p>
+          </div>
+          <div className="h-[600px]">
+            {orgChartLoading ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-400">Loading…</div>
+            ) : (
+              <OrgChart nodes={orgChartNodes} />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ── Add / Edit Employee Modal ─────────────────────────────────────────── */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -401,6 +436,14 @@ export default function EmployeesPage() {
                     <select aria-label="Department" className={SELECT} value={form.department_id} onChange={(e) => set("department_id", e.target.value)}>
                       <option value="">No department</option>
                       {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    </select>
+                  </Field>
+                  <Field label="Reports To">
+                    <select aria-label="Reports To" className={SELECT} value={form.manager_id} onChange={(e) => set("manager_id", e.target.value)}>
+                      <option value="">No manager</option>
+                      {employees.filter((e) => e.id !== editTarget?.id).map((e) => (
+                        <option key={e.id} value={e.id}>{e.full_name}</option>
+                      ))}
                     </select>
                   </Field>
                   <Field label="Employment Type">

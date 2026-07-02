@@ -65,14 +65,15 @@ class PlatformAdminResponse(BaseModel):
 
 
 class OrganizationProvisionRequest(BaseModel):
-    """Provision a brand-new client Organization + first subsidiary + owner."""
+    """Provision a brand-new client Organization + first subsidiary.
+
+    No owner password is collected here — the client's owner sets their own
+    credentials by accepting the invite email sent on provisioning.
+    """
 
     org_name: str = Field(..., min_length=1, max_length=255)
     billing_email: EmailStr
     owner_email: EmailStr
-    owner_password: str = Field(..., min_length=8)
-    owner_first_name: str = Field(..., min_length=1, max_length=100)
-    owner_last_name: str = Field(..., min_length=1, max_length=100)
     subsidiary_name: str | None = None
     primary_domain: str | None = None
     plan_tier: str = Field(default="trial", pattern=r"^(trial|starter|professional|enterprise|legacy)$")

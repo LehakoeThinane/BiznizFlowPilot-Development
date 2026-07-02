@@ -20,6 +20,8 @@ from app.models.sales_order import SalesOrder, OrderLineItem
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLineItem
 from app.models.finance import Expense, ExpenseCategory
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
+from app.models.meeting import Meeting, MeetingParticipant
+from app.models.messaging import Conversation, ConversationParticipant, Message
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
 from app.models.chat import ChatConversation, ChatMessage
@@ -57,6 +59,11 @@ __all__ = [
     "LeaveRequest",
     "PayrollPeriod",
     "Payslip",
+    "Meeting",
+    "MeetingParticipant",
+    "Conversation",
+    "ConversationParticipant",
+    "Message",
     "Invoice",
     "InvoiceLineItem",
     "Notification",

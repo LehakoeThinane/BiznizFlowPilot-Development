@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import ENUM
 from app.models.base import BaseModel
 
 _notif_type = ENUM(
-    "low_stock", "overdue_task", "order_status", "payroll", "leave", "system",
+    "low_stock", "overdue_task", "order_status", "payroll", "leave", "system", "meeting",
     name="notification_type", create_type=False,
 )
 

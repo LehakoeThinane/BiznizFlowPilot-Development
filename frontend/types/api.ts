@@ -157,9 +157,6 @@ export interface OrganizationProvisionRequest {
   org_name: string;
   billing_email: string;
   owner_email: string;
-  owner_password: string;
-  owner_first_name: string;
-  owner_last_name: string;
   subsidiary_name?: string;
   primary_domain?: string;
   plan_tier?: string;
@@ -594,4 +591,98 @@ export interface EventListResponse {
   total: number;
   skip: number;
   limit: number;
+}
+
+// ─── Org Chart ────────────────────────────────────────────────────────────
+
+export interface OrgChartNode {
+  id: string;
+  full_name: string;
+  position: string | null;
+  department_name: string | null;
+  manager_id: string | null;
+  is_active: boolean;
+  email: string | null;
+}
+
+// ─── Meetings / Calls ─────────────────────────────────────────────────────
+
+export type MeetingCallType = "voice" | "video";
+export type MeetingStatus = "scheduled" | "in_progress" | "completed" | "cancelled";
+export type MeetingResponseStatus = "pending" | "accepted" | "declined";
+
+export interface MeetingParticipant {
+  user_id: string;
+  full_name: string;
+  email: string | null;
+  response_status: MeetingResponseStatus;
+  joined_at: string | null;
+}
+
+export interface Meeting {
+  id: string;
+  business_id: string;
+  organizer_id: string | null;
+  organizer_name: string;
+  title: string;
+  description: string | null;
+  start_time: string;
+  end_time: string;
+  call_type: MeetingCallType;
+  status: MeetingStatus;
+  created_at: string;
+  participants: MeetingParticipant[];
+}
+
+export interface MeetingListResponse {
+  items: Meeting[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
+export interface AgoraJoinResponse {
+  agora_app_id: string;
+  channel_name: string;
+  token: string;
+  uid: number;
+  expires_at: string;
+}
+
+// ─── Direct Messages (colleague chat) ────────────────────────────────────
+
+export interface OtherUser {
+  id: string;
+  full_name: string;
+  email: string;
+}
+
+export interface LastMessagePreview {
+  content: string;
+  created_at: string;
+  sender_id: string | null;
+}
+
+export interface Conversation {
+  id: string;
+  other_user: OtherUser;
+  last_message: LastMessagePreview | null;
+  unread_count: number;
+}
+
+export interface ConversationListResponse {
+  items: Conversation[];
+}
+
+export interface DirectMessage {
+  id: string;
+  conversation_id: string;
+  sender_id: string | null;
+  sender_name: string;
+  content: string;
+  created_at: string;
+}
+
+export interface MessageListResponse {
+  items: DirectMessage[];
 }

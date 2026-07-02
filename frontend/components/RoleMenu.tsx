@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
 import type { UserRole } from "@/types/api";
+import { apiRequest } from "@/lib/api";
 
 interface NavItem {
   label: string;
@@ -33,6 +35,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: "calendar_month",
     href: "/calendar",
     matches: ["/calendar"],
+    roles: ["owner", "manager", "staff"],
+  },
+  {
+    label: "Messages",
+    icon: "chat",
+    href: "/messages",
+    matches: ["/messages"],
     roles: ["owner", "manager", "staff"],
   },
   {
@@ -79,8 +88,30 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+function UnreadBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="ml-auto flex h-4.5 min-w-[1.125rem] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white">
+      {count > 9 ? "9+" : count}
+    </span>
+  );
+}
+
 export function RoleMenu({ role }: { role: UserRole }) {
   const pathname = usePathname();
+  const [unreadMessages, setUnreadMessages] = useState(0);
+
+  const fetchUnread = useCallback(() => {
+    apiRequest<{ unread_count: number }>("/api/v1/messaging/unread-count", { _skipRefresh: true })
+      .then((d) => setUnreadMessages(d.unread_count))
+      .catch(() => null);
+  }, []);
+
+  useEffect(() => {
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30_000);
+    return () => clearInterval(interval);
+  }, [fetchUnread]);
 
   return (
     <div className="flex flex-col gap-1">
@@ -88,6 +119,7 @@ export function RoleMenu({ role }: { role: UserRole }) {
         const isActive = item.matches.some(
           (m) => pathname === m || pathname.startsWith(`${m}/`)
         );
+        const badge = item.href === "/messages" ? <UnreadBadge count={unreadMessages} /> : null;
 
         if (isActive) {
           return (
@@ -98,6 +130,7 @@ export function RoleMenu({ role }: { role: UserRole }) {
             >
               <span className="material-symbols-outlined text-primary-fixed-dim">{item.icon}</span>
               <span className="font-medium">{item.label}</span>
+              {badge}
             </Link>
           );
         }
@@ -110,6 +143,7 @@ export function RoleMenu({ role }: { role: UserRole }) {
           >
             <span className="material-symbols-outlined text-primary-fixed-dim/90 transition-transform group-hover:scale-105">{item.icon}</span>
             <span className="font-medium">{item.label}</span>
+            {badge}
           </Link>
         );
       })}

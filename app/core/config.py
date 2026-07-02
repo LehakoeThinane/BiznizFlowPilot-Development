@@ -115,6 +115,13 @@ class Settings(BaseSettings):
     ai_max_tokens: int = 1024
     ai_conversation_history_limit: int = 20
 
+    # Agora (voice/video calling) — required for meetings/join to function;
+    # no safe fallback exists (unlike secret_key) because calls cannot be
+    # signed without real vendor credentials from an Agora Console project.
+    agora_app_id: str = ""
+    agora_app_certificate: str = ""
+    agora_token_expiration_seconds: int = 3600
+
     @classmethod
     def settings_customise_sources(
         cls,
