@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main, Development]
+  pull_request:
+    branches: [main]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  # ── Backend ────────────────────────────────────────────────────────────────
+  backend:
+    name: Backend (lint + migrate)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bfp
+          POSTGRES_PASSWORD: bfp
+          POSTGRES_DB: bfp_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://bfp:bfp@localhost:5432/bfp_test
+      SECRET_KEY: ci-secret-key-not-for-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Lint (ruff)
+        run: ruff check app/
+
+      - name: Run migrations
+        run: python -m alembic -c migrations/alembic.ini upgrade head
+
+      - name: Run tests
+        run: pytest tests/ -v --tb=short -q --cov=app --cov-report=term --cov-fail-under=80
+        env:
+          DATABASE_URL: postgresql://bfp:bfp@localhost:5432/bfp_test
+          SECRET_KEY: ci-secret-key-not-for-production
+
+  # ── Frontend ───────────────────────────────────────────────────────────────
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+        env:
+          # Rewrites in next.config.ts use BACKEND_URL only at dev-server time,
+          # not at build time, so this is a no-op for the build job.
+          BACKEND_URL: http://127.0.0.1:8000
