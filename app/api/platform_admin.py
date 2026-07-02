@@ -32,7 +32,6 @@ from app.schemas.platform import (
     PlatformAdminCreate,
     PlatformAdminResponse,
 )
-from app.services.email import send_invite_email
 from app.services.event import EventService
 from app.services.invitation import InvitationService
 from app.services.organization import OrganizationService
@@ -393,6 +392,8 @@ def provision_organization(
         )
         db.commit()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    from app.services.email import send_invite_email  # local import - patchable in tests, matches app/api/invites.py
 
     try:
         send_invite_email(

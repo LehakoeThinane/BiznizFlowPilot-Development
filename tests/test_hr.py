@@ -128,6 +128,66 @@ class TestEmployees:
         assert r.json()["items"][0]["first_name"] == "Alice"
 
 
+class TestOrgChart:
+    def test_org_chart_reflects_manager_hierarchy(self, client: TestClient, token: str):
+        manager = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Carol", "last_name": "Boss", "gross_salary": "40000"},
+            headers=auth(token),
+        ).json()
+        report = client.post(
+            "/api/v1/hr/employees",
+            json={
+                "first_name": "Dave",
+                "last_name": "Report",
+                "gross_salary": "20000",
+                "manager_id": manager["id"],
+            },
+            headers=auth(token),
+        ).json()
+        assert report["manager_id"] == manager["id"]
+        assert report["manager_name"] == "Carol Boss"
+
+        r = client.get("/api/v1/hr/employees/org-chart", headers=auth(token))
+        assert r.status_code == 200
+        nodes = {n["id"]: n for n in r.json()}
+        assert nodes[report["id"]]["manager_id"] == manager["id"]
+        assert nodes[manager["id"]]["manager_id"] is None
+
+    def test_employee_cannot_be_own_manager(self, client: TestClient, token: str):
+        emp = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Eve", "last_name": "Solo", "gross_salary": "20000"},
+            headers=auth(token),
+        ).json()
+        r = client.patch(
+            f"/api/v1/hr/employees/{emp['id']}",
+            json={"manager_id": emp["id"]},
+            headers=auth(token),
+        )
+        assert r.status_code == 400
+
+    def test_manager_cycle_rejected(self, client: TestClient, token: str):
+        a = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "A", "last_name": "One", "gross_salary": "20000"},
+            headers=auth(token),
+        ).json()
+        b = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "B", "last_name": "Two", "gross_salary": "20000", "manager_id": a["id"]},
+            headers=auth(token),
+        ).json()
+
+        # A reports to B would close the loop (A -> B -> A).
+        r = client.patch(
+            f"/api/v1/hr/employees/{a['id']}",
+            json={"manager_id": b["id"]},
+            headers=auth(token),
+        )
+        assert r.status_code == 400
+
+
 # ── Leave ────────────────────────────────────────────────────────────────────
 
 class TestLeave:

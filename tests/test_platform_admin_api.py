@@ -41,9 +41,6 @@ PROVISION_BODY = {
     "org_name": "Acme Client Co",
     "billing_email": "billing@acmeclient.com",
     "owner_email": "owner@acmeclient.com",
-    "owner_password": "password123",
-    "owner_first_name": "Jane",
-    "owner_last_name": "Doe",
 }
 
 
@@ -94,7 +91,19 @@ class TestPlatformOrganizations:
         assert r.status_code == 200
         assert r.json()["total"] >= 1
 
-    def test_provision_new_organization(self, client, platform_admin: PlatformAdmin):
+    def test_provision_new_organization(self, client, platform_admin: PlatformAdmin, monkeypatch):
+        """Provisioning creates the org shell and invites the owner - no User yet.
+
+        No password is collected from the platform admin; the owner sets their
+        own credentials by accepting the emailed invite (see InvitationService).
+        """
+        captured = {}
+
+        def _fake_send_invite_email(**kwargs):
+            captured["raw_token"] = kwargs["raw_token"]
+
+        monkeypatch.setattr("app.services.email.send_invite_email", _fake_send_invite_email)
+
         r = client.post(
             "/platform/v1/organizations", json=PROVISION_BODY, headers=_platform_headers(platform_admin)
         )
@@ -102,18 +111,51 @@ class TestPlatformOrganizations:
         body = r.json()
         assert body["name"] == "Acme Client Co"
         assert body["subsidiary_count"] == 1
-        assert body["user_count"] == 1
+        assert body["user_count"] == 0
 
-        # Owner can now log in through the normal tenant login flow.
+        # Owner accepts the invite, setting their own password, and can then log in.
+        raw_token = captured["raw_token"]
+        accept = client.post(
+            "/api/v1/auth/invite/accept",
+            json={
+                "token": raw_token,
+                "password": "password123",
+                "first_name": "Jane",
+                "last_name": "Doe",
+            },
+        )
+        assert accept.status_code == 200
+        assert "access_token" in accept.json()
+
         login = client.post(
             "/api/v1/auth/login",
             json={"email": "owner@acmeclient.com", "password": "password123"},
         )
         assert login.status_code == 200
 
-    def test_provision_duplicate_owner_email_rejected(self, client, platform_admin: PlatformAdmin):
+    def test_provision_rejects_owner_email_of_existing_active_user(
+        self, client, platform_admin: PlatformAdmin, monkeypatch
+    ):
+        """Provisioning a second organization for an email that already has an
+        active account (from a prior accepted invite) is rejected."""
+        captured = {}
+        monkeypatch.setattr(
+            "app.services.email.send_invite_email",
+            lambda **kwargs: captured.update(raw_token=kwargs["raw_token"]),
+        )
         headers = _platform_headers(platform_admin)  # captured once - fixture detaches after first request
+
         client.post("/platform/v1/organizations", json=PROVISION_BODY, headers=headers)
+        client.post(
+            "/api/v1/auth/invite/accept",
+            json={
+                "token": captured["raw_token"],
+                "password": "password123",
+                "first_name": "Jane",
+                "last_name": "Doe",
+            },
+        )
+
         r = client.post("/platform/v1/organizations", json=PROVISION_BODY, headers=headers)
         assert r.status_code == 400
 
