@@ -12,7 +12,6 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.api import (
-    admin,
     auth,
     chat,
     customers,
@@ -27,6 +26,8 @@ from app.api import (
     metrics,
     notification,
     organizations,
+    platform_admin,
+    platform_auth,
     products,
     purchase_orders,
     sales_orders,
@@ -157,8 +158,9 @@ app.include_router(chat.router)
 # Global search (auth required)
 app.include_router(search.router)
 
-# Admin routes (superadmin only — cross-tenant)
-app.include_router(admin.router)
+# Platform (vendor staff) routes — fully separate auth boundary, cross-tenant
+app.include_router(platform_auth.router)
+app.include_router(platform_admin.router)
 
 
 # ============================================================================

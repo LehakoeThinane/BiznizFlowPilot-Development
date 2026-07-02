@@ -103,6 +103,75 @@ export interface BusinessUserListResponse {
   items: BusinessUser[];
 }
 
+// ─── Platform (vendor staff) console ──────────────────────────────────────────
+
+export type PlatformRole = "support" | "billing_ops" | "admin" | "super_admin";
+
+export interface PlatformLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface PlatformTokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface CurrentPlatformAdmin {
+  platform_admin_id: string;
+  email: string;
+  full_name: string;
+  platform_role: PlatformRole;
+  impersonation_allowed: boolean;
+}
+
+export interface PlatformStats {
+  total_organizations: number;
+  total_tenants: number;
+  total_users: number;
+  active_users: number;
+  total_events: number;
+  total_workflow_runs: number;
+  workflow_runs_failed: number;
+}
+
+export interface OrganizationAdmin {
+  id: string;
+  name: string;
+  billing_email: string;
+  plan_tier: string;
+  subscription_status: string;
+  seats_included: number | null;
+  subsidiary_count: number;
+  user_count: number;
+}
+
+export interface OrganizationAdminListResponse {
+  total: number;
+  items: OrganizationAdmin[];
+}
+
+export interface OrganizationProvisionRequest {
+  org_name: string;
+  billing_email: string;
+  owner_email: string;
+  owner_password: string;
+  owner_first_name: string;
+  owner_last_name: string;
+  subsidiary_name?: string;
+  primary_domain?: string;
+  plan_tier?: string;
+}
+
+export interface OrganizationAdminUpdate {
+  name?: string;
+  plan_tier?: string;
+  subscription_status?: string;
+  seats_included?: number;
+}
+
 export interface DashboardSalesKPIs {
   revenue_total: string;
   revenue_this_month: string;
