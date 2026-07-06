@@ -18,7 +18,7 @@ class PlatformAdmin(BaseModel):
     __table_args__ = (
         CheckConstraint(
             "platform_role IN ('support', 'billing_ops', 'admin', 'super_admin')",
-            name="ck_platform_admins_platform_role_valid",
+            name="ck_platform_admins_role_valid",
         ),
     )
 
@@ -46,7 +46,8 @@ class PlatformAdmin(BaseModel):
         nullable=False,
         server_default="support",
         doc="support | billing_ops | admin | super_admin. Enforced at the "
-            "database level - see ck_platform_admins_platform_role_valid.",
+            "database level since migration 20260702_09 - see "
+            "ck_platform_admins_role_valid.",
     )
 
     is_active = Column(

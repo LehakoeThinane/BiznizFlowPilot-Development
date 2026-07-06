@@ -57,7 +57,8 @@ class User(BaseModel):
         index=True,
         doc="User role: owner, manager, staff (business-scoped), or "
             "it_admin (organization-wide, spans every subsidiary business). "
-            "Enforced at the database level - see ck_users_role_valid.",
+            "Enforced at the database level since migration 20260702_06 - "
+            "see ck_users_role_valid.",
     )
 
     is_active = Column(
