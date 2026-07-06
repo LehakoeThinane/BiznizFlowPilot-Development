@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api import (
     auth,
+    billing,
     chat,
     customers,
     dashboard,
@@ -123,6 +124,9 @@ def health_check(db: Session = Depends(get_db)) -> dict:
 
 # Auth routes (no auth required)
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
+
+# Billing routes (no auth required — see app/api/billing.py docstring)
+app.include_router(billing.router)
 
 # CRM routes (auth required)
 app.include_router(customers.router)

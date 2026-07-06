@@ -1,73 +1,69 @@
-"""Tests for authentication."""
+"""Tests for authentication.
 
-import pytest
-from app.core.security import create_access_token
+There is no public self-service registration endpoint - new client
+organizations are provisioned by a platform admin, then the owner joins via
+an invite (see app/api/platform_admin.py, app/services/invitation.py).
+_create_user() below recreates just the end state these tests need (a real
+owner user in the DB with known credentials) without going through that flow.
+"""
+
+from uuid import uuid4
+
+from sqlalchemy.orm import Session
+
+from app.core.security import create_access_token, hash_password
+from app.models.business import Business
+from app.models.organization import Organization
+from app.models.user import User
 from app.services.auth import AuthService
 
 
-class TestRegistration:
-    """Test user registration."""
+def _create_user(test_db: Session, data: dict) -> User:
+    organization = Organization(id=uuid4(), name=data["business_name"], billing_email=data["email"])
+    test_db.add(organization)
+    test_db.commit()
 
-    def test_register_success(self, client, sample_user_data):
-        """Test successful registration."""
-        response = client.post("/api/v1/auth/register", json=sample_user_data)
-        
-        assert response.status_code == 200
-        data = response.json()
-        
-        assert "access_token" in data
-        assert "refresh_token" in data
-        assert data["token_type"] == "bearer"
-        assert data["expires_in"] == 24 * 60 * 60
+    business = Business(
+        id=uuid4(), organization_id=organization.id, name=data["business_name"],
+        email=data["email"], is_primary_subsidiary=True,
+    )
+    test_db.add(business)
+    test_db.commit()
 
-    def test_register_duplicate_email(self, client, sample_user_data):
-        """Test registration with duplicate email fails."""
-        # Register first user
-        response1 = client.post("/api/v1/auth/register", json=sample_user_data)
-        assert response1.status_code == 200
-        
-        # Try to register with same email
-        response2 = client.post("/api/v1/auth/register", json=sample_user_data)
-        assert response2.status_code == 400
-        assert "already exists" in response2.json()["detail"]
-
-    def test_register_missing_required_fields(self, client):
-        """Test registration with missing fields."""
-        incomplete_data = {
-            "business_name": "Test",
-            "email": "test@example.com",
-            # Missing other required fields
-        }
-        
-        response = client.post("/api/v1/auth/register", json=incomplete_data)
-        assert response.status_code == 422  # Validation error
+    user = User(
+        id=uuid4(), business_id=business.id, email=data["email"],
+        hashed_password=hash_password(data["password"]),
+        first_name=data["first_name"], last_name=data["last_name"],
+        role="owner", is_active=True,
+    )
+    test_db.add(user)
+    test_db.commit()
+    return user
 
 
 class TestLogin:
     """Test user login."""
 
-    def test_login_success(self, client, sample_user_data):
+    def test_login_success(self, client, test_db, sample_user_data):
         """Test successful login."""
-        # Register user
-        client.post("/api/v1/auth/register", json=sample_user_data)
-        
+        _create_user(test_db, sample_user_data)
+
         # Login
         login_data = {
             "email": sample_user_data["email"],
             "password": sample_user_data["password"],
         }
         response = client.post("/api/v1/auth/login", json=login_data)
-        
+
         assert response.status_code == 200
         data = response.json()
         assert "access_token" in data
         assert "refresh_token" in data
 
-    def test_login_invalid_password(self, client, sample_user_data):
+    def test_login_invalid_password(self, client, test_db, sample_user_data):
         """Test login with wrong password."""
-        # Register user
-        client.post("/api/v1/auth/register", json=sample_user_data)
-        
+        _create_user(test_db, sample_user_data)
+
         # Try login with wrong password
         login_data = {
             "email": sample_user_data["email"],
@@ -93,9 +89,9 @@ class TestLogin:
 class TestPasswordReset:
     """Test password reset flow."""
 
-    def test_password_reset_request_returns_token(self, client, sample_user_data):
+    def test_password_reset_request_returns_token(self, client, test_db, sample_user_data):
         """Reset request returns a generic message (token delivered via email only)."""
-        client.post("/api/v1/auth/register", json=sample_user_data)
+        _create_user(test_db, sample_user_data)
 
         response = client.post(
             "/api/v1/auth/password-reset/request",
@@ -109,7 +105,7 @@ class TestPasswordReset:
 
     def test_password_reset_confirm_updates_password(self, client, sample_user_data, test_db):
         """Confirm reset should invalidate old password and allow new one."""
-        client.post("/api/v1/auth/register", json=sample_user_data)
+        _create_user(test_db, sample_user_data)
 
         # Token is no longer returned in the API response (security: prevents enumeration).
         # Obtain it directly from the service layer as the email system would.
@@ -149,7 +145,7 @@ class TestPasswordReset:
 
     def test_password_reset_token_is_one_time_use(self, client, sample_user_data, test_db):
         """A reset token may only be used once; a second use must be rejected."""
-        client.post("/api/v1/auth/register", json=sample_user_data)
+        _create_user(test_db, sample_user_data)
         token = AuthService(test_db).request_password_reset(email=sample_user_data["email"])
 
         # First use — succeeds
@@ -171,7 +167,7 @@ class TestPasswordReset:
         self, client, sample_user_data, test_db
     ):
         """Active access tokens must be invalidated when the password changes."""
-        client.post("/api/v1/auth/register", json=sample_user_data)
+        _create_user(test_db, sample_user_data)
 
         login_resp = client.post(
             "/api/v1/auth/login",

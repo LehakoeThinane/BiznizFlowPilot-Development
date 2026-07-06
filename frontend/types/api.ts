@@ -5,19 +5,24 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface RegisterRequest {
-  business_name: string;
-  email: string;
-  password: string;
-  first_name: string;
-  last_name: string;
-}
-
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;
   token_type: string;
   expires_in: number;
+}
+
+export type PlanTier = "starter" | "professional" | "enterprise";
+
+export interface CheckoutRequest {
+  org_name: string;
+  subsidiary_name?: string | null;
+  owner_email: string;
+  plan_tier: PlanTier;
+}
+
+export interface CheckoutResponse {
+  checkout_url: string;
 }
 
 export interface CurrentUser {
