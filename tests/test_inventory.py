@@ -45,7 +45,7 @@ class TestLocationCreate:
         service = InventoryService(test_db)
         data = _make_location_data()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.create_location(staff_user.business_id, staff_user, data)
 
 
@@ -88,7 +88,7 @@ class TestLocationUpdate:
         sample_location.business_id = staff_user.business_id
         test_db.commit()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.update_location(staff_user.business_id, staff_user, sample_location.id, LocationUpdate(name="Hack"))
 
     def test_update_nonexistent_returns_none(self, test_db: Session, owner_user: CurrentUser):
@@ -113,7 +113,7 @@ class TestLocationDelete:
         sample_location.business_id = manager_user.business_id
         test_db.commit()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.delete_location(manager_user.business_id, manager_user, sample_location.id)
 
 

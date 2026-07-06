@@ -3,8 +3,11 @@
 import pytest
 from decimal import Decimal
 from uuid import uuid4
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from app.models.inventory import InventoryLocation, StockLevel
+from app.models.product import Product
 from app.models.sales_order import SalesOrder
 from app.services.sales_order import SalesOrderService
 from app.schemas.sales_order import LineItemCreate, OrderCreate, OrderUpdate
@@ -126,7 +129,7 @@ class TestSalesOrderUpdate:
         service = SalesOrderService(test_db)
         order = service.create(staff_user.business_id, staff_user, _make_order_data())
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.update(staff_user.business_id, staff_user, order.id, OrderUpdate(status="confirmed"))
 
     def test_update_nonexistent_returns_none(self, test_db: Session, owner_user: CurrentUser):
@@ -158,6 +161,91 @@ class TestSalesOrderStatusEvents:
 
         emitted = mock_event_service.create_event.call_args.kwargs["event_type"].value
         assert emitted == expected_event
+
+
+def _make_stock(test_db: Session, product: Product, location: InventoryLocation, quantity: int, reserved: int = 0) -> StockLevel:
+    stock = StockLevel(
+        id=uuid4(),
+        product_id=product.id,
+        location_id=location.id,
+        quantity=quantity,
+        reserved=reserved,
+    )
+    test_db.add(stock)
+    test_db.commit()
+    test_db.refresh(stock)
+    return stock
+
+
+class TestStockReservation:
+    """Stock reservation is the authoritative, lock-protected check - not
+    just the earlier _validate_stock pre-check - so it must reject an
+    over-quantity reservation even when called directly."""
+
+    def test_reserve_within_stock_succeeds(
+        self, test_db: Session, owner_user: CurrentUser, sample_product: Product, sample_location: InventoryLocation
+    ):
+        _make_stock(test_db, sample_product, sample_location, quantity=10)
+        service = SalesOrderService(test_db)
+        data = _make_order_data(line_items=[
+            LineItemCreate(product_id=sample_product.id, quantity=4, unit_price=Decimal("50.00"), subtotal=Decimal("200.00"))
+        ])
+
+        order = service.create(owner_user.business_id, owner_user, data)
+
+        stock = test_db.query(StockLevel).filter(StockLevel.product_id == sample_product.id).first()
+        assert order is not None
+        assert stock.reserved == 4
+        assert stock.available == 6
+
+    def test_reserve_more_than_available_raises_even_if_prevalidation_is_bypassed(
+        self, test_db: Session, owner_user: CurrentUser, sample_product: Product, sample_location: InventoryLocation
+    ):
+        """Simulates the race: by the time _reserve_stock takes its lock, less
+        stock is available than an earlier read (_validate_stock) assumed."""
+        _make_stock(test_db, sample_product, sample_location, quantity=5)
+        service = SalesOrderService(test_db)
+
+        with pytest.raises(HTTPException) as exc_info:
+            service._reserve_stock(owner_user.business_id, sample_product.id, 999)
+
+        assert exc_info.value.status_code == 400
+
+        stock = test_db.query(StockLevel).filter(StockLevel.product_id == sample_product.id).first()
+        assert stock.reserved == 0  # rejected reservation must not partially allocate
+
+    def test_reserve_allocates_across_multiple_locations(
+        self, test_db: Session, owner_user: CurrentUser, sample_product: Product, sample_location: InventoryLocation
+    ):
+        second_location = InventoryLocation(
+            id=uuid4(), business_id=sample_location.business_id, name="Overflow", code="WH-02",
+            location_type="warehouse", is_active=True, meta_data={},
+        )
+        test_db.add(second_location)
+        test_db.commit()
+        _make_stock(test_db, sample_product, sample_location, quantity=3)
+        _make_stock(test_db, sample_product, second_location, quantity=10)
+        service = SalesOrderService(test_db)
+
+        service._reserve_stock(owner_user.business_id, sample_product.id, 8)
+
+        total_reserved = sum(
+            s.reserved for s in test_db.query(StockLevel).filter(StockLevel.product_id == sample_product.id).all()
+        )
+        assert total_reserved == 8
+
+    def test_release_stock_restores_availability(
+        self, test_db: Session, owner_user: CurrentUser, sample_product: Product, sample_location: InventoryLocation
+    ):
+        _make_stock(test_db, sample_product, sample_location, quantity=10, reserved=6)
+        service = SalesOrderService(test_db)
+
+        service._release_stock(owner_user.business_id, sample_product.id, 4)
+        test_db.commit()
+
+        stock = test_db.query(StockLevel).filter(StockLevel.product_id == sample_product.id).first()
+        assert stock.reserved == 2
+        assert stock.available == 8
 
 
 class TestSalesOrderMultiTenancy:

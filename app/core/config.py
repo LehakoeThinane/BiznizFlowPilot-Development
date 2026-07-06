@@ -1,8 +1,10 @@
 """Application configuration and settings."""
 
+import warnings
 from functools import lru_cache
 from typing import Any
 
+from pydantic import model_validator
 from pydantic_settings import (
     BaseSettings,
     DotEnvSettingsSource,
@@ -59,6 +61,32 @@ class Settings(BaseSettings):
     def effective_platform_secret_key(self) -> str:
         """The signing key actually used for platform tokens."""
         return self.platform_secret_key or self.secret_key
+
+    @model_validator(mode="after")
+    def _guard_platform_secret_key_fallback(self) -> "Settings":
+        """Fail closed in production instead of silently sharing keys.
+
+        The empty-string fallback above exists so a fresh dev/staging
+        checkout doesn't need a second required env var - but shipping that
+        fallback to production silently signs platform-admin tokens with the
+        same key as ordinary tenant tokens, collapsing the "separate auth
+        boundary" the two token types are meant to provide. Refuse to boot
+        rather than degrade silently once it matters.
+        """
+        if not self.platform_secret_key:
+            if self.environment == "production":
+                raise ValueError(
+                    "PLATFORM_SECRET_KEY must be set explicitly in production - it "
+                    "cannot silently fall back to SECRET_KEY once platform-admin "
+                    "auth is protecting real tenant data."
+                )
+            warnings.warn(
+                "PLATFORM_SECRET_KEY is not set; platform-admin tokens are "
+                "signed with SECRET_KEY as a dev/staging convenience. Set "
+                "PLATFORM_SECRET_KEY before deploying to production.",
+                stacklevel=2,
+            )
+        return self
 
     # API
     api_base_url: str = "http://localhost:8000"

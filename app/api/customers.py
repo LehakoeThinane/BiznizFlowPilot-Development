@@ -39,6 +39,8 @@ def create_customer(
         customer = service.create(current_user.business_id, current_user, data)
         db.commit()
         return customer
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -111,6 +113,8 @@ def update_customer(
 
         db.commit()
         return customer
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -139,6 +143,8 @@ def delete_customer(
 
         db.commit()
         return {"message": "Customer deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

@@ -39,6 +39,8 @@ def create_lead(
         lead = service.create(current_user.business_id, current_user, data)
         db.commit()
         return lead
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -114,6 +116,8 @@ def update_lead(
 
         db.commit()
         return lead
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -143,6 +147,8 @@ def assign_lead(
 
         db.commit()
         return lead
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -171,6 +177,8 @@ def delete_lead(
 
         db.commit()
         return {"message": "Lead deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
+from app.core.permissions import OWNER_ONLY, PRIVILEGED_ROLES, require_role
 from app.models.lead import Lead
 from app.repositories.lead import LeadRepository
 from app.schemas.lead import LeadCreate, LeadUpdate
@@ -73,8 +74,7 @@ class LeadService:
         
         🧨 RBAC: Only owner/manager can create.
         """
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can create leads")
+        require_role(current_user, PRIVILEGED_ROLES, "create leads")
 
         lead = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
@@ -182,8 +182,7 @@ class LeadService:
         
         🧨 RBAC: Only owner/manager can assign.
         """
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can assign leads")
+        require_role(current_user, PRIVILEGED_ROLES, "assign leads")
 
         lead = self.repo.get(business_id=business_id, entity_id=lead_id)
         if not lead:
@@ -214,8 +213,7 @@ class LeadService:
         
         🧨 RBAC: Only owner can permanently delete.
         """
-        if current_user.role != "owner":
-            raise ValueError("Permission denied: Only owner can delete leads")
+        require_role(current_user, OWNER_ONLY, "delete leads")
 
         lead = self.repo.get(business_id=business_id, entity_id=lead_id)
         if not lead:

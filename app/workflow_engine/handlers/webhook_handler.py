@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx  # Uses synchronous API; safe in Celery workers only.
 from sqlalchemy.orm import Session
@@ -12,6 +15,72 @@ from app.workflow_engine.action_config import ActionResult, BaseActionConfig, We
 from app.workflow_engine.action_handlers import ActionHandler
 from app.workflow_engine.context import MissingTemplateValueError, render_template_with_context
 from app.workflow_engine.template_renderer import render_template_value
+
+
+class WebhookSSRFError(ValueError):
+    """Raised when a tenant-configured webhook URL resolves to a destination
+    that must not be reachable from a backend worker (private network,
+    loopback, link-local/metadata, multicast, or an unsupported scheme)."""
+
+
+def _is_disallowed_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def resolve_pinned_request(url: str) -> tuple[str, dict[str, str], dict[str, Any]]:
+    """Resolve a webhook URL's host, reject disallowed destinations, and
+    return (pinned_url, extra_headers, extensions) that connect directly to
+    the validated IP instead of letting httpx re-resolve the hostname at
+    connect time.
+
+    Validating the hostname and then letting the HTTP client re-resolve it
+    itself is a DNS-rebinding gap: the name can resolve to a public IP for
+    this check and to a private/metadata IP a moment later when the actual
+    connection is made. Pinning to the IP we just validated closes that
+    window. The original Host header and TLS SNI are preserved via the
+    sni_hostname extension so name-based virtual hosting and certificate
+    validation still work correctly against the real target.
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise WebhookSSRFError(f"Unsupported webhook URL protocol: {parts.scheme!r}")
+
+    hostname = parts.hostname
+    if not hostname:
+        raise WebhookSSRFError("Webhook URL has no host")
+
+    port = parts.port or (443 if parts.scheme == "https" else 80)
+
+    try:
+        addr_infos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as exc:
+        raise WebhookSSRFError(f"Could not resolve webhook host {hostname!r}: {exc}") from exc
+
+    resolved: list[tuple[int, str]] = []
+    for family, _type, _proto, _canonname, sockaddr in addr_infos:
+        ip = ipaddress.ip_address(sockaddr[0])
+        if _is_disallowed_ip(ip):
+            raise WebhookSSRFError(
+                f"Webhook host {hostname!r} resolves to a disallowed address ({ip})"
+            )
+        resolved.append((family, sockaddr[0]))
+
+    family, ip_literal = resolved[0]
+    netloc_host = f"[{ip_literal}]" if family == socket.AF_INET6 else ip_literal
+    pinned_url = urlunsplit(
+        (parts.scheme, f"{netloc_host}:{port}", parts.path or "/", parts.query, parts.fragment)
+    )
+
+    extra_headers = {"Host": hostname}
+    extensions: dict[str, Any] = {"sni_hostname": hostname} if parts.scheme == "https" else {}
+    return pinned_url, extra_headers, extensions
 
 
 class WebhookHandler(ActionHandler):
@@ -38,6 +107,7 @@ class WebhookHandler(ActionHandler):
                 for key, value in config.headers.items()
             }
             payload = render_template_value(db, context, config.payload_template)
+            pinned_url, pin_headers, extensions = resolve_pinned_request(url)
         except (MissingTemplateValueError, ValueError) as exc:
             return ActionResult(
                 status="failure",
@@ -45,16 +115,29 @@ class WebhookHandler(ActionHandler):
                 failure_type=ActionFailureType.TERMINAL,
             )
 
+        # A stable per-action key lets a receiver that honors this de-facto
+        # convention (Stripe/GitHub-style Idempotency-Key) recognize a
+        # retried delivery - after a timeout where the first attempt actually
+        # reached the endpoint - as the same request rather than a new one.
+        # We don't control the receiving server, so this is best-effort, not
+        # a guarantee; it's the correct mechanism available for an outbound
+        # call we don't own both ends of.
+        action_id = context.get("action_id")
+        idempotency_headers = {"Idempotency-Key": action_id} if action_id else {}
+        headers = {**headers, **pin_headers, **idempotency_headers}
         timeout_seconds = float(config.timeout_seconds or self.DEFAULT_TIMEOUT_SECONDS)
 
         try:
-            response = httpx.request(
-                method=config.method,
-                url=url,
-                headers=headers or None,
-                json=payload,
-                timeout=timeout_seconds,
-            )
+            with httpx.Client() as client:
+                request = client.build_request(
+                    method=config.method,
+                    url=pinned_url,
+                    headers=headers,
+                    json=payload,
+                    timeout=timeout_seconds,
+                    extensions=extensions,
+                )
+                response = client.send(request)
         except httpx.InvalidURL as exc:
             return ActionResult(
                 status="failure",

@@ -35,6 +35,8 @@ def create_supplier(
         supplier = service.create(current_user.business_id, current_user, data)
         db.commit()
         return supplier
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -91,6 +93,8 @@ def update_supplier(
             raise HTTPException(status_code=404, detail="Supplier not found")
         db.commit()
         return supplier
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -114,6 +118,8 @@ def delete_supplier(
             raise HTTPException(status_code=404, detail="Supplier not found")
         db.commit()
         return {"message": "Supplier deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

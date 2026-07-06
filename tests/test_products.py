@@ -47,7 +47,7 @@ class TestProductCreate:
         service = ProductService(test_db)
         data = _make_product_data()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.create(staff_user.business_id, staff_user, data)
 
 
@@ -99,7 +99,7 @@ class TestProductUpdate:
         sample_product.business_id = staff_user.business_id
         test_db.commit()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.update(staff_user.business_id, staff_user, sample_product.id, ProductUpdate(name="Hack"))
 
     def test_update_nonexistent_returns_none(self, test_db: Session, owner_user: CurrentUser):
@@ -124,7 +124,7 @@ class TestProductDelete:
         sample_product.business_id = manager_user.business_id
         test_db.commit()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.delete(manager_user.business_id, manager_user, sample_product.id)
 
     def test_delete_nonexistent_returns_false(self, test_db: Session, owner_user: CurrentUser):

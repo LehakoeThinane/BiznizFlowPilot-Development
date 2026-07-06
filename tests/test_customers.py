@@ -43,7 +43,7 @@ class TestCustomerCreate:
         service = CustomerService(test_db)
         data = CustomerCreate(name="NoAccess")
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.create(staff_user.business_id, staff_user, data)
 
 
@@ -120,7 +120,7 @@ class TestCustomerUpdate:
 
         data = CustomerUpdate(name="Hacked")
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.update(staff_user.business_id, staff_user, sample_customer.id, data)
 
 
@@ -142,7 +142,7 @@ class TestCustomerDelete:
         sample_customer.business_id = manager_user.business_id
         test_db.commit()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.delete(manager_user.business_id, manager_user, sample_customer.id)
 
     def test_delete_nonexistent_customer(self, test_db: Session, owner_user: CurrentUser):

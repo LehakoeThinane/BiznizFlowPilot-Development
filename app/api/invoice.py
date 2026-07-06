@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.enums import EventType
+from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.schemas.auth import CurrentUser
@@ -36,7 +37,7 @@ _INVOICE_PREFIX = "INV"
 
 
 def _require_manager(user: CurrentUser) -> None:
-    if user.role not in ("owner", "manager"):
+    if user.role not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Owner or manager required")
 
 

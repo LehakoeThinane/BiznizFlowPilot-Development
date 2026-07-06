@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.enums import EventType
+from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.finance import Expense, ExpenseCategory
 from app.models.sales_order import SalesOrder
@@ -39,7 +40,7 @@ _REVENUE_STATUSES = ("confirmed", "processing", "shipped", "delivered")
 
 
 def _require_manager(user: CurrentUser) -> None:
-    if user.role not in ("owner", "manager"):
+    if user.role not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Owner or manager required")
 
 

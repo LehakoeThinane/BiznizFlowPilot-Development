@@ -35,6 +35,8 @@ def create_product(
         product = service.create(current_user.business_id, current_user, data)
         db.commit()
         return product
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -91,6 +93,8 @@ def update_product(
             raise HTTPException(status_code=404, detail="Product not found")
         db.commit()
         return product
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -114,6 +118,8 @@ def delete_product(
             raise HTTPException(status_code=404, detail="Product not found")
         db.commit()
         return {"message": "Product deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

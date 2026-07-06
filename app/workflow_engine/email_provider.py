@@ -58,8 +58,17 @@ class EmailProvider(ABC):
         from_name: str | None = None,
         metadata: dict[str, Any] | None = None,
         timeout_seconds: int | None = None,
+        idempotency_key: str | None = None,
     ) -> EmailSendResult:
-        """Send one email and return provider acceptance details."""
+        """Send one email and return provider acceptance details.
+
+        idempotency_key, when given, should make the outbound Message-ID
+        deterministic instead of random, so a retried send (after a timeout
+        where the first attempt actually reached the mail server) carries
+        the same Message-ID both times - best-effort dedup/correlation for
+        any downstream system that logs or checks it, since SMTP itself has
+        no native at-most-once delivery guarantee.
+        """
 
 
 class SMTPEmailProvider(EmailProvider):
@@ -103,6 +112,7 @@ class SMTPEmailProvider(EmailProvider):
         from_name: str | None = None,
         metadata: dict[str, Any] | None = None,
         timeout_seconds: int | None = None,
+        idempotency_key: str | None = None,
     ) -> EmailSendResult:
         timeout = int(timeout_seconds or self.default_timeout_seconds)
         sender_email = (from_email or self.default_from_email or "").strip()
@@ -116,7 +126,11 @@ class SMTPEmailProvider(EmailProvider):
         message["To"] = recipient
         message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
-        message["Message-ID"] = make_msgid(domain=sender_email.split("@")[-1])
+        domain = sender_email.split("@")[-1]
+        # make_msgid() mixes in a timestamp/pid/random component even when
+        # given the same idstring twice, so it can't be relied on for
+        # dedup - build the Message-ID directly from the caller's stable key.
+        message["Message-ID"] = f"<{idempotency_key}@{domain}>" if idempotency_key else make_msgid(domain=domain)
         message.set_content(body)
 
         request_metadata = {

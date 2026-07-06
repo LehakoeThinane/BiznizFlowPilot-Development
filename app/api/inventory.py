@@ -46,6 +46,8 @@ def create_location(
         location = service.create_location(current_user.business_id, current_user, data)
         db.commit()
         return location
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -97,6 +99,8 @@ def update_location(
             raise HTTPException(status_code=404, detail="Location not found")
         db.commit()
         return location
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -120,6 +124,8 @@ def delete_location(
             raise HTTPException(status_code=404, detail="Location not found")
         db.commit()
         return {"message": "Location deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -146,6 +152,8 @@ def adjust_stock(
         stock = service.adjust_stock(current_user.business_id, current_user, data)
         db.commit()
         return StockLevelResponse.model_validate(stock)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

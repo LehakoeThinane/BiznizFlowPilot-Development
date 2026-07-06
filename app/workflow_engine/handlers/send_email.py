@@ -98,6 +98,7 @@ class SendEmailHandler(ActionHandler):
                     "workflow_definition_id": context.get("workflow_definition_id"),
                 },
                 timeout_seconds=config.timeout_seconds,
+                idempotency_key=context.get("action_id"),
             )
         except RetryableEmailProviderError as exc:
             return ActionResult(

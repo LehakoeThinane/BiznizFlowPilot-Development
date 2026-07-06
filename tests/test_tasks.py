@@ -45,7 +45,7 @@ class TestTaskCreate:
         service = TaskService(test_db)
         data = TaskCreate(title="Test task")
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.create(staff_user.business_id, staff_user, data)
 
 
@@ -215,7 +215,7 @@ class TestTaskRBAC:
         assert task.assigned_to is not None
 
         # Staff cannot assign
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.assign(staff_user.business_id, staff_user, sample_task.id, uuid4())
 
     def test_only_owner_can_delete(self, test_db: Session, owner_user: CurrentUser, manager_user: CurrentUser):
@@ -234,7 +234,7 @@ class TestTaskRBAC:
         task2 = service.repo.create(business_id=manager_user.business_id, title="Task 2")
         test_db.commit()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.delete(manager_user.business_id, manager_user, task2.id)
 
 

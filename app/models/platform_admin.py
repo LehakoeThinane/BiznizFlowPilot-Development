@@ -6,7 +6,7 @@ which gated on an unconstrained users.role string that could never
 legitimately be set to "superadmin".
 """
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, Integer, String
 
 from app.models.base import BaseModel
 
@@ -15,6 +15,12 @@ class PlatformAdmin(BaseModel):
     """Vendor-side staff account - cross-tenant, own auth boundary."""
 
     __tablename__ = "platform_admins"
+    __table_args__ = (
+        CheckConstraint(
+            "platform_role IN ('support', 'billing_ops', 'admin', 'super_admin')",
+            name="ck_platform_admins_platform_role_valid",
+        ),
+    )
 
     email = Column(
         String(255),
@@ -39,7 +45,8 @@ class PlatformAdmin(BaseModel):
         String(20),
         nullable=False,
         server_default="support",
-        doc="support | billing_ops | admin | super_admin",
+        doc="support | billing_ops | admin | super_admin. Enforced at the "
+            "database level - see ck_platform_admins_platform_role_valid.",
     )
 
     is_active = Column(

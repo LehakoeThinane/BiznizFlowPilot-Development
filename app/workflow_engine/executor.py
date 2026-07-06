@@ -98,10 +98,15 @@ class WorkflowExecutor:
                     "attempt_count": action.attempt_count,
                 },
             )
+            # action_id lets handlers derive a stable idempotency key so a
+            # retried attempt (after an ambiguous outcome - e.g. the
+            # downstream side effect actually succeeded but the response was
+            # lost) doesn't double-create/double-send/double-deliver.
+            action_context = {**context, "action_id": str(action.id)}
             result = handler.execute(
                 db=self.db,
                 action_config=action_config,
-                context=context,
+                context=action_context,
             )
             attempt_finished_at = datetime.now(timezone.utc)
             action.finished_at = attempt_finished_at

@@ -88,8 +88,9 @@ class _FakeEmailProvider(EmailProvider):
         from_name: str | None = None,
         metadata: dict | None = None,
         timeout_seconds: int | None = None,
+        idempotency_key: str | None = None,
     ) -> EmailSendResult:
-        _ = body, from_email, from_name, metadata, timeout_seconds
+        _ = body, from_email, from_name, metadata, timeout_seconds, idempotency_key
         self.send_count += 1
         return EmailSendResult(
             provider=self.name,
@@ -389,14 +390,17 @@ class TestWorkflowExecutorDispatch:
                 self.status_code = status_code
                 self.text = text
 
-        def _fake_request(*, method, url, headers=None, json=None, timeout=None):
-            _ = method, url, headers, json, timeout
+        def _fake_send(self, request, **kwargs):
             request_counter["count"] += 1
             if request_counter["count"] == 1:
                 raise httpx.ReadTimeout("timeout")
             return _FakeResponse(status_code=200, text="ok")
 
-        monkeypatch.setattr("app.workflow_engine.handlers.webhook_handler.httpx.request", _fake_request)
+        monkeypatch.setattr(
+            "app.workflow_engine.handlers.webhook_handler.resolve_pinned_request",
+            lambda url: (url, {"Host": "example.test"}, {"sni_hostname": "example.test"}),
+        )
+        monkeypatch.setattr(httpx.Client, "send", _fake_send)
 
         first_result = WorkflowExecutor(test_db).execute_next_run(owner_user.business_id)
         test_db.commit()
