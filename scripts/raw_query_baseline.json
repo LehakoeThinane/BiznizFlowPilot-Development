@@ -1,0 +1,209 @@
+{
+  "app/ai/mention_resolver.py": [
+    "db.query(Customer)",
+    "db.query(Lead)",
+    "row = db.query(Lead).filter(Lead.business_id == business_id, Lead.id.cast(db.bind.dialect.name and __import__(\"sqlalchemy\").String).ilike(f\"{value}%\")).first()",
+    "db.query(Task)",
+    "db.query(User)",
+    "db.query(Product)",
+    "db.query(Supplier)",
+    "db.query(Customer)",
+    "db.query(Lead)",
+    "db.query(Task)",
+    "db.query(User)",
+    "db.query(Product)",
+    "db.query(Supplier)"
+  ],
+  "app/api/finance.py": [
+    "db.query(sa.func.coalesce(sa.func.sum(SalesOrder.total_amount), 0))",
+    "db.query(sa.func.coalesce(sa.func.sum(Expense.amount), 0))",
+    "db.query(",
+    "return db.query(ExpenseCategory).filter(",
+    "cat = db.query(ExpenseCategory).filter(",
+    "q = db.query(Expense).filter(Expense.business_id == current_user.business_id)",
+    "q = db.query(Expense).filter(Expense.business_id == current_user.business_id)",
+    "exp = db.query(Expense).filter(",
+    "exp = db.query(Expense).filter("
+  ],
+  "app/api/hr.py": [
+    "mgr = db.query(Employee.manager_id).filter(Employee.id == current_id).first()",
+    "rows = db.query(Department).filter(",
+    "db.query(Employee.department_id, sa.func.count(Employee.id).label(\"cnt\"))",
+    "dept = db.query(Department).filter(",
+    "db.query(sa.func.count(Employee.id))",
+    "q = db.query(Employee).filter(Employee.business_id == current_user.business_id)",
+    "q = db.query(Employee).filter(Employee.business_id == current_user.business_id)",
+    "emp = db.query(Employee).filter(",
+    "emp = db.query(Employee).filter(",
+    "emp = db.query(Employee).filter(",
+    "return db.query(LeaveType).filter(",
+    "db.query(LeaveRequest)",
+    "emp = db.query(Employee).filter(",
+    "db.query(LeaveRequest)",
+    "existing = db.query(PayrollPeriod).filter(",
+    "employees = db.query(Employee).filter(",
+    "slips = db.query(Payslip).filter(Payslip.payroll_period_id == period.id).all()",
+    "periods = db.query(PayrollPeriod).filter(",
+    "period = db.query(PayrollPeriod).filter(",
+    "slips = db.query(Payslip).filter(Payslip.payroll_period_id == period_id).all()",
+    "for emp in db.query(Employee).filter(Employee.id.in_(emp_ids)).all()",
+    "period = db.query(PayrollPeriod).filter(",
+    "db.query(Payslip).filter(Payslip.payroll_period_id == period_id).update({\"status\": \"finalized\"})"
+  ],
+  "app/api/invites.py": [
+    "target_business = db.query(Business).filter(Business.id == target_business_id).first()"
+  ],
+  "app/api/invoice.py": [
+    "count = db.query(sa.func.count(Invoice.id)).filter(",
+    "q = db.query(Invoice).filter(Invoice.business_id == current_user.business_id)",
+    "q = db.query(Invoice).filter(Invoice.business_id == current_user.business_id)",
+    "inv = db.query(Invoice).filter(",
+    "inv = db.query(Invoice).filter(",
+    "inv = db.query(Invoice).filter(",
+    "inv = db.query(Invoice).filter(",
+    "inv = db.query(Invoice).filter("
+  ],
+  "app/api/notification.py": [
+    "q = db.query(Notification).filter(",
+    "unread = db.query(sa.func.count(Notification.id)).filter(",
+    "unread = db.query(sa.func.count(Notification.id)).filter(",
+    "total = db.query(sa.func.count(Notification.id)).filter(",
+    "notif = db.query(Notification).filter(",
+    "db.query(Notification).filter("
+  ],
+  "app/api/organizations.py": [
+    "org = db.query(Organization).filter(Organization.id == organization_id).first()",
+    "db.query(OrganizationDomain)",
+    "db.query(OrganizationDomain).filter(",
+    "db.query(OrganizationDomain)",
+    "db.query(Business, func.count(User.id).label(\"user_count\"))",
+    "db.query(Business)",
+    "business = db.query(Business).filter(Business.id == business_id).first()",
+    "user_count = db.query(func.count(User.id)).filter(User.business_id == business.id).scalar() or 0",
+    "business = db.query(Business).filter(Business.id == business_id).first()",
+    "user_count = db.query(func.count(User.id)).filter(User.business_id == business.id).scalar() or 0",
+    "business = db.query(Business).filter(Business.id == business_id).first()"
+  ],
+  "app/api/platform_admin.py": [
+    "total_organizations = db.query(func.count(Organization.id)).scalar() or 0",
+    "total_tenants = db.query(func.count(Business.id)).scalar() or 0",
+    "total_users = db.query(func.count(User.id)).scalar() or 0",
+    "active_users = db.query(func.count(User.id)).filter(User.is_active.is_(True)).scalar() or 0",
+    "total_events = db.query(func.count(Event.id)).scalar() or 0",
+    "total_runs = db.query(func.count(WorkflowRun.id)).scalar() or 0",
+    "db.query(func.count(WorkflowRun.id))",
+    "db.query(Business, func.count(User.id).label(\"user_count\"))",
+    "biz = db.query(Business).filter(Business.id == tenant_id).first()",
+    "users = db.query(User).filter(User.business_id == tenant_id).all()",
+    "event_count = db.query(func.count(Event.id)).filter(Event.business_id == tenant_id).scalar() or 0",
+    "run_count = db.query(func.count(WorkflowRun.id)).filter(WorkflowRun.business_id == tenant_id).scalar() or 0",
+    "user = db.query(User).filter(User.id == user_id).first()",
+    "q = db.query(Event)",
+    "q = db.query(WorkflowRun)",
+    "db.query(func.count(Business.id)).filter(Business.organization_id == org.id).scalar() or 0",
+    "db.query(func.count(User.id))",
+    "org = db.query(Organization).filter(Organization.id == organization_id).first()",
+    "org = db.query(Organization).filter(Organization.id == organization_id).first()",
+    "db.query(Business)",
+    "admin = db.query(PlatformAdmin).filter(PlatformAdmin.id == current_admin.platform_admin_id).first()"
+  ],
+  "app/api/search.py": [
+    "db.query(Customer)",
+    "db.query(Product)",
+    "db.query(Invoice)",
+    "db.query(Task)"
+  ],
+  "app/api/users.py": [
+    "query = db.query(User).filter("
+  ],
+  "app/dependencies.py": [
+    "db.query(User, Business.organization_id)"
+  ],
+  "app/dependencies_platform.py": [
+    "db.query(PlatformAdmin)"
+  ],
+  "app/main.py": [
+    "user = db.query(User).filter(User.id == current_user.user_id).first()",
+    "user = db.query(User).filter(User.id == current_user.user_id).first()"
+  ],
+  "app/services/chat.py": [
+    "business = self.db.query(Business).filter(Business.id == business_id).first()",
+    "user = self.db.query(User).filter(User.id == user_id).first()"
+  ],
+  "app/services/dashboard.py": [
+    "base = self.db.query(SalesOrder).filter(SalesOrder.business_id == business_id)",
+    "base = self.db.query(Lead).filter(Lead.business_id == business_id)",
+    "self.db.query(Task)",
+    "self.db.query(Product)",
+    "self.db.query(Supplier)",
+    "self.db.query(sa.func.count(sa.func.distinct(StockLevel.product_id)))",
+    "self.db.query(sa.func.count(sa.func.distinct(StockLevel.product_id)))",
+    "self.db.query(WorkflowDefinition)",
+    "self.db.query(WorkflowRun)",
+    "self.db.query(WorkflowRun)"
+  ],
+  "app/services/followup.py": [
+    "self.db.query(Lead)",
+    "self.db.query(Event)",
+    "self.db.query(Task)",
+    "self.db.query(Task)",
+    "businesses = self.db.query(Business).all()"
+  ],
+  "app/services/inventory.py": [
+    "self.db.query(StockLevel)"
+  ],
+  "app/services/invitation.py": [
+    "existing_user = self.db.query(User).filter(User.email == email).first()",
+    "query = self.db.query(UserInvitation).filter(UserInvitation.id == invitation_id)",
+    "existing_user = self.db.query(User).filter(User.email == invitation.email).first()",
+    "business = self.db.query(Business).filter(Business.id == invitation.business_id).first()",
+    "self.db.query(Organization)"
+  ],
+  "app/services/meeting.py": [
+    "self.db.query(User.id)"
+  ],
+  "app/services/messaging.py": [
+    "self.db.query(User)"
+  ],
+  "app/services/metrics.py": [
+    "self.db.query(WorkflowRun)",
+    "self.db.query(WorkflowRun)",
+    "self.db.query(WorkflowRun)",
+    "self.db.query(WorkflowRun)",
+    "self.db.query(WorkflowAction)",
+    "self.db.query(WorkflowDefinition)",
+    "self.db.query(WorkflowDefinition)"
+  ],
+  "app/services/organization.py": [
+    "existing_user = self.db.query(User).filter(User.email == owner_email).first()"
+  ],
+  "app/services/recovery.py": [
+    "self.db.query(Event)",
+    "self.db.query(WorkflowAction.run_id)",
+    "self.db.query(WorkflowAction)",
+    "self.db.query(WorkflowRun)",
+    "self.db.query(WorkflowRun)"
+  ],
+  "app/services/sales_order.py": [
+    "self.db.query(func.sum(StockLevel.available))",
+    "self.db.query(StockLevel)",
+    "self.db.query(StockLevel)",
+    "self.db.query(func.count(SalesOrder.id))"
+  ],
+  "app/utils/notify.py": [
+    "db.query(User)"
+  ],
+  "app/workflow_engine/context.py": [
+    "db.query(model)"
+  ],
+  "app/workflow_engine/definition_provider.py": [
+    "self.db.query(WorkflowDefinition)"
+  ],
+  "app/workflow_engine/executor.py": [
+    "self.db.query(Event)"
+  ],
+  "app/workflow_engine/handlers/create_task.py": [
+    "db.query(Task)",
+    "db.query(Task)"
+  ]
+}

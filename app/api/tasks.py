@@ -40,6 +40,8 @@ def create_task(
         task = service.create(current_user.business_id, current_user, data)
         db.commit()
         return task
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -97,6 +99,8 @@ def get_task(
             raise HTTPException(status_code=404, detail="Task not found")
 
         return task
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -125,6 +129,8 @@ def update_task(
 
         db.commit()
         return task
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ConcurrencyConflictError as e:
@@ -157,6 +163,8 @@ def assign_task(
 
         db.commit()
         return task
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except ConcurrencyConflictError as e:
@@ -188,6 +196,8 @@ def delete_task(
 
         db.commit()
         return {"message": "Task deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

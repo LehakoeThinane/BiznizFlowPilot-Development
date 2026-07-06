@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
+from app.core.permissions import OWNER_ONLY, PRIVILEGED_ROLES, require_role
 from app.models.customer import Customer
 from app.repositories.customer import CustomerRepository
 from app.schemas.customer import CustomerCreate, CustomerUpdate
@@ -63,8 +64,7 @@ class CustomerService:
         
         🧨 RBAC: Only owner/manager can create.
         """
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can create customers")
+        require_role(current_user, PRIVILEGED_ROLES, "create customers")
 
         customer = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
@@ -111,8 +111,7 @@ class CustomerService:
         
         🧨 RBAC: Only owner/manager can edit.
         """
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can edit customers")
+        require_role(current_user, PRIVILEGED_ROLES, "edit customers")
 
         # Verify customer exists in business before updating
         customer = self.repo.get(business_id=business_id, entity_id=customer_id)
@@ -141,8 +140,7 @@ class CustomerService:
         
         🧨 RBAC: Only owner can permanently delete.
         """
-        if current_user.role != "owner":
-            raise ValueError("Permission denied: Only owner can delete customers")
+        require_role(current_user, OWNER_ONLY, "delete customers")
 
         # Verify customer exists in business before deleting
         customer = self.repo.get(business_id=business_id, entity_id=customer_id)
@@ -163,3 +161,4 @@ class CustomerService:
         self.repo.delete(business_id=business_id, entity_id=customer_id, commit=False)
         self.db.commit()
         return True
+

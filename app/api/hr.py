@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.enums import EventType
+from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
 from app.schemas.auth import CurrentUser
@@ -43,7 +44,7 @@ router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
 
 
 def _require_manager(user: CurrentUser) -> None:
-    if user.role not in ("owner", "manager"):
+    if user.role not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Owner or manager required")
 
 

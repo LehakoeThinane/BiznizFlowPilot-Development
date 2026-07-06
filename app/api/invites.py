@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.enums import EventType
+from app.core.permissions import INVITE_MANAGERS
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.invitation import InvitationCreate, InvitationListResponse, InvitationResponse
@@ -39,7 +40,7 @@ def create_invitation(
     db: Annotated[Session, Depends(get_db)],
 ) -> InvitationResponse:
     """Invite someone to join a business. Owner/manager/it_admin only."""
-    if current_user.role not in ("owner", "manager", "it_admin"):
+    if current_user.role not in INVITE_MANAGERS:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only owner, manager, or IT Admin can send invitations",
@@ -135,7 +136,7 @@ def revoke_invitation(
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     """Revoke a pending invitation."""
-    if current_user.role not in ("owner", "manager", "it_admin"):
+    if current_user.role not in INVITE_MANAGERS:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
     service = InvitationService(db)

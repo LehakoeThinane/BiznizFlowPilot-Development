@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
+from app.core.permissions import PRIVILEGED_ROLES, require_role
 from app.models.purchase_order import PurchaseOrder
 from app.repositories.purchase_order import PurchaseOrderRepository
 from app.schemas.purchase_order import POCreate, POUpdate
@@ -34,8 +35,7 @@ class PurchaseOrderService:
         )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: POCreate) -> PurchaseOrder:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied")
+        require_role(current_user, PRIVILEGED_ROLES, "create purchase orders")
 
         po_data = data.model_dump(exclude={"line_items"})
         po = self.repo.create(business_id=business_id, commit=False, **po_data)
@@ -63,8 +63,7 @@ class PurchaseOrderService:
         return self.repo.list(business_id=business_id, skip=skip, limit=limit), self.repo.count(business_id=business_id)
 
     def update(self, business_id: UUID, current_user: CurrentUser, po_id: UUID, data: POUpdate) -> PurchaseOrder | None:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied")
+        require_role(current_user, PRIVILEGED_ROLES, "update purchase orders")
 
         po = self.repo.get(business_id=business_id, entity_id=po_id)
         if not po:

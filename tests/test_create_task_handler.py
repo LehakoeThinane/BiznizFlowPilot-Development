@@ -1,8 +1,9 @@
 """Tests for CreateTaskHandler workflow action handler."""
 
 import pytest
-from uuid import uuid4
+from uuid import UUID, uuid4
 
+from app.models.task import Task
 from app.workflow_engine.action_config import CreateTaskActionConfig
 from app.workflow_engine.handlers.create_task import CreateTaskHandler
 
@@ -121,3 +122,43 @@ class TestCreateTaskHandlerTemplateMissing:
         result = handler.execute(db=test_db, action_config=cfg, context=ctx)
         # Invalid UUID for entity_id should log warning but still create the task
         assert result.status == "success"
+
+
+# ── idempotency: retrying the same action must not duplicate the task ────────
+
+class TestCreateTaskHandlerIdempotency:
+    def test_retry_with_same_action_id_does_not_duplicate(self, handler, test_db, base_context):
+        action_id = str(uuid4())
+        ctx = {**base_context, "action_id": action_id}
+        cfg = _config(title="Follow up task")
+
+        first = handler.execute(db=test_db, action_config=cfg, context=ctx)
+        assert first.status == "success"
+        assert first.data.get("idempotent_replay") is None
+
+        second = handler.execute(db=test_db, action_config=cfg, context=ctx)
+        assert second.status == "success"
+        assert second.data["idempotent_replay"] is True
+        assert second.data["task_id"] == first.data["task_id"]
+
+        count = test_db.query(Task).filter(Task.source_workflow_action_id == UUID(action_id)).count()
+        assert count == 1
+
+    def test_different_action_ids_each_create_their_own_task(self, handler, test_db, base_context):
+        cfg = _config(title="Follow up task")
+
+        first = handler.execute(db=test_db, action_config=cfg, context={**base_context, "action_id": str(uuid4())})
+        second = handler.execute(db=test_db, action_config=cfg, context={**base_context, "action_id": str(uuid4())})
+
+        assert first.data["task_id"] != second.data["task_id"]
+
+    def test_no_action_id_skips_idempotency_check(self, handler, test_db, base_context):
+        """Direct invocations without an action_id (e.g. ad-hoc calls outside
+        the executor) fall back to always creating a new task - there's no
+        stable key to dedupe on."""
+        cfg = _config(title="Follow up task")
+
+        first = handler.execute(db=test_db, action_config=cfg, context=base_context)
+        second = handler.execute(db=test_db, action_config=cfg, context=base_context)
+
+        assert first.data["task_id"] != second.data["task_id"]

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
+from app.core.permissions import OWNER_ONLY, PRIVILEGED_ROLES, require_role
 from app.models.product import Product
 from app.repositories.product import ProductRepository
 from app.schemas.product import ProductCreate, ProductUpdate
@@ -47,8 +48,7 @@ class ProductService:
         )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: ProductCreate) -> Product:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can create products")
+        require_role(current_user, PRIVILEGED_ROLES, "create products")
 
         product = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
@@ -74,8 +74,7 @@ class ProductService:
         return products, total
 
     def update(self, business_id: UUID, current_user: CurrentUser, product_id: UUID, data: ProductUpdate) -> Product | None:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can update products")
+        require_role(current_user, PRIVILEGED_ROLES, "update products")
 
         update_data = data.model_dump(exclude_unset=True)
         product = self.repo.update(business_id=business_id, entity_id=product_id, commit=False, **update_data)
@@ -95,8 +94,7 @@ class ProductService:
         return product
 
     def delete(self, business_id: UUID, current_user: CurrentUser, product_id: UUID) -> bool:
-        if current_user.role != "owner":
-            raise ValueError("Permission denied: Only owner can delete products")
+        require_role(current_user, OWNER_ONLY, "delete products")
 
         product = self.repo.get(business_id=business_id, entity_id=product_id)
         if not product:

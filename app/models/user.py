@@ -1,6 +1,6 @@
 """User model - represents a person with access to the system."""
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Uuid
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -10,6 +10,12 @@ class User(BaseModel):
     """User entity - belongs to a business (multi-tenant)."""
 
     __tablename__ = "users"
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('owner', 'manager', 'staff', 'it_admin')",
+            name="ck_users_role_valid",
+        ),
+    )
 
     business_id = Column(
         Uuid,
@@ -49,7 +55,10 @@ class User(BaseModel):
         default="staff",
         nullable=False,
         index=True,
-        doc="User role: owner, manager, staff",
+        doc="User role: owner, manager, staff (business-scoped), or "
+            "it_admin (organization-wide, spans every subsidiary business). "
+            "Enforced at the database level since migration 20260702_06 - "
+            "see ck_users_role_valid.",
     )
 
     is_active = Column(

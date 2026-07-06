@@ -10,6 +10,7 @@ from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.enums import EventType
 from app.core.exceptions import ConcurrencyConflictError
+from app.core.permissions import OWNER_ONLY, PRIVILEGED_ROLES, require_role
 from app.models.task import Task
 from app.repositories.task import TaskRepository
 from app.schemas.task import TaskCreate, TaskUpdate
@@ -78,8 +79,7 @@ class TaskService:
         
         🧨 RBAC: Only owner/manager can create.
         """
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can create tasks")
+        require_role(current_user, PRIVILEGED_ROLES, "create tasks")
 
         task = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
@@ -237,8 +237,7 @@ class TaskService:
         
         🧨 RBAC: Only owner/manager can assign.
         """
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can assign tasks")
+        require_role(current_user, PRIVILEGED_ROLES, "assign tasks")
 
         task = self.repo.get(business_id=business_id, entity_id=task_id)
         if not task:
@@ -276,8 +275,7 @@ class TaskService:
         
         🧨 RBAC: Only owner can permanently delete.
         """
-        if current_user.role != "owner":
-            raise ValueError("Permission denied: Only owner can delete tasks")
+        require_role(current_user, OWNER_ONLY, "delete tasks")
 
         task = self.repo.get(business_id=business_id, entity_id=task_id)
         if not task:

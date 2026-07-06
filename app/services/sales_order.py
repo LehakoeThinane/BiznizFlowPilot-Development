@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
+from app.core.permissions import ALL_BUSINESS_ROLES, PRIVILEGED_ROLES, require_role
 from app.models.inventory import InventoryLocation, StockLevel
 from app.models.sales_order import SalesOrder
 from app.repositories.sales_order import SalesOrderRepository
@@ -53,7 +54,16 @@ class SalesOrderService:
         return int(result or 0)
 
     def _reserve_stock(self, business_id: UUID, product_id: UUID, quantity: int) -> None:
-        """Increment reserved count across locations (oldest stock first)."""
+        """Increment reserved count across locations (oldest stock first).
+
+        Row-locks the matching StockLevel rows before reading them
+        (with_for_update) so two concurrent orders against the same
+        low-stock product can't both read the same available count and both
+        reserve past it: the second order's transaction blocks until the
+        first commits or rolls back, then re-reads the now-current numbers.
+        _validate_stock's earlier check is only a fast pre-check for a nicer
+        error message - this is the check that's actually race-safe.
+        """
         remaining = quantity
         stock_rows = (
             self.db.query(StockLevel)
@@ -65,8 +75,21 @@ class SalesOrderService:
                 StockLevel.available > 0,
             )
             .order_by(StockLevel.last_counted_at.asc().nullsfirst())
+            .with_for_update()
             .all()
         )
+        total_available = sum(int(row.available) for row in stock_rows)
+        if total_available < quantity:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "message": "Insufficient stock for one or more products",
+                    "errors": [
+                        f"Product {product_id}: requested {quantity}, "
+                        f"only {total_available} available"
+                    ],
+                },
+            )
         for row in stock_rows:
             if remaining <= 0:
                 break
@@ -75,7 +98,12 @@ class SalesOrderService:
             remaining -= allocate
 
     def _release_stock(self, business_id: UUID, product_id: UUID, quantity: int) -> None:
-        """Decrement reserved count when an order is cancelled."""
+        """Decrement reserved count when an order is cancelled.
+
+        Row-locked for the same reason as _reserve_stock: two concurrent
+        cancellations touching the same StockLevel row would otherwise
+        lost-update each other's decrement.
+        """
         remaining = quantity
         stock_rows = (
             self.db.query(StockLevel)
@@ -87,6 +115,7 @@ class SalesOrderService:
                 StockLevel.reserved > 0,
             )
             .order_by(StockLevel.last_counted_at.asc().nullsfirst())
+            .with_for_update()
             .all()
         )
         for row in stock_rows:
@@ -124,8 +153,7 @@ class SalesOrderService:
             )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: OrderCreate) -> SalesOrder:
-        if current_user.role not in ["owner", "manager", "staff"]:
-            raise ValueError("Permission denied")
+        require_role(current_user, ALL_BUSINESS_ROLES, "create sales orders")
 
         # Block if any line item exceeds available stock
         self._validate_stock(business_id, data)
@@ -173,8 +201,7 @@ class SalesOrderService:
         return self.repo.list(business_id=business_id, skip=skip, limit=limit), self.repo.count(business_id=business_id)
 
     def update(self, business_id: UUID, current_user: CurrentUser, order_id: UUID, data: OrderUpdate) -> SalesOrder | None:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied")
+        require_role(current_user, PRIVILEGED_ROLES, "update sales orders")
 
         order = self.repo.get(business_id=business_id, entity_id=order_id)
         if not order:

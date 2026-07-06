@@ -43,6 +43,7 @@ class _FakeEmailProvider(EmailProvider):
         from_name: str | None = None,
         metadata: dict[str, Any] | None = None,
         timeout_seconds: int | None = None,
+        idempotency_key: str | None = None,
     ) -> EmailSendResult:
         self.calls.append(
             {
@@ -53,6 +54,7 @@ class _FakeEmailProvider(EmailProvider):
                 "from_name": from_name,
                 "metadata": metadata,
                 "timeout_seconds": timeout_seconds,
+                "idempotency_key": idempotency_key,
             }
         )
 
@@ -275,3 +277,57 @@ def test_send_email_handler_terminal_provider_failure(test_db: Session, owner_us
     assert result.failure_type == ActionFailureType.TERMINAL
     assert result.data["provider"] == "fake-email"
     assert result.data["provider_code"] == "INVALID_SENDER"
+
+
+def test_send_email_handler_passes_action_id_as_idempotency_key(test_db: Session, owner_user, sample_lead, sample_customer):
+    provider = _FakeEmailProvider()
+    provider.queue_result(
+        EmailSendResult(provider="fake-email", recipient=sample_customer.email, subject="Follow up", message_id="msg-1")
+    )
+    handler = SendEmailHandler(provider=provider)
+    config = parse_action_config(
+        {
+            "action_type": "send_email",
+            "recipient": "{customer.email}",
+            "subject": "Follow up",
+            "body_template": "Body",
+            "from_email": "ops@biznizflowpilot.local",
+        }
+    )
+    action_id = "9d8c7b6a-5e4f-4a3b-8c1d-2e3f4a5b6c7d"
+    context = {
+        "business_id": owner_user.business_id,
+        "entity_type": "lead",
+        "entity_id": str(sample_lead.id),
+        "action_id": action_id,
+    }
+
+    handler.execute(db=test_db, action_config=config, context=context)
+
+    assert provider.calls[0]["idempotency_key"] == action_id
+
+
+def test_send_email_handler_no_action_id_passes_none(test_db: Session, owner_user, sample_lead, sample_customer):
+    provider = _FakeEmailProvider()
+    provider.queue_result(
+        EmailSendResult(provider="fake-email", recipient=sample_customer.email, subject="Follow up", message_id="msg-1")
+    )
+    handler = SendEmailHandler(provider=provider)
+    config = parse_action_config(
+        {
+            "action_type": "send_email",
+            "recipient": "{customer.email}",
+            "subject": "Follow up",
+            "body_template": "Body",
+            "from_email": "ops@biznizflowpilot.local",
+        }
+    )
+    context = {
+        "business_id": owner_user.business_id,
+        "entity_type": "lead",
+        "entity_id": str(sample_lead.id),
+    }
+
+    handler.execute(db=test_db, action_config=config, context=context)
+
+    assert provider.calls[0]["idempotency_key"] is None

@@ -7,6 +7,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
+from app.core.permissions import ALL_BUSINESS_ROLES, OWNER_ONLY, PRIVILEGED_ROLES, require_role
 from app.models.inventory import InventoryLocation, StockLevel
 from app.repositories.inventory import InventoryLocationRepository, StockLevelRepository
 from app.schemas.inventory import LocationCreate, LocationUpdate, StockAdjustment
@@ -36,8 +37,7 @@ class InventoryService:
 
     # Locations
     def create_location(self, business_id: UUID, current_user: CurrentUser, data: LocationCreate) -> InventoryLocation:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can create locations")
+        require_role(current_user, PRIVILEGED_ROLES, "create locations")
         location = self.location_repo.create(business_id=business_id, **data.model_dump())
         return location
 
@@ -48,20 +48,16 @@ class InventoryService:
         return self.location_repo.list(business_id=business_id, skip=skip, limit=limit), self.location_repo.count(business_id=business_id)
 
     def update_location(self, business_id: UUID, current_user: CurrentUser, location_id: UUID, data: LocationUpdate) -> InventoryLocation | None:
-        if current_user.role not in ["owner", "manager"]:
-            raise ValueError("Permission denied: Only owner/manager can update locations")
+        require_role(current_user, PRIVILEGED_ROLES, "update locations")
         return self.location_repo.update(business_id=business_id, entity_id=location_id, **data.model_dump(exclude_unset=True))
 
     def delete_location(self, business_id: UUID, current_user: CurrentUser, location_id: UUID) -> bool:
-        if current_user.role != "owner":
-            raise ValueError("Permission denied: Only owner can delete locations")
+        require_role(current_user, OWNER_ONLY, "delete locations")
         return self.location_repo.delete(business_id=business_id, entity_id=location_id)
 
     # Stock Levels
     def adjust_stock(self, business_id: UUID, current_user: CurrentUser, data: StockAdjustment) -> StockLevel:
-        # Check permissions
-        if current_user.role not in ["owner", "manager", "staff"]:
-            raise ValueError("Permission denied")
+        require_role(current_user, ALL_BUSINESS_ROLES, "adjust stock")
 
         # Verify the location belongs to this business before touching any stock.
         location = self.location_repo.get(business_id=business_id, entity_id=data.location_id)

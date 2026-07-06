@@ -52,7 +52,7 @@ class TestPurchaseOrderCreate:
         service = PurchaseOrderService(test_db)
         data = _make_po_data()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.create(staff_user.business_id, staff_user, data)
 
     def test_create_with_line_items(self, test_db: Session, owner_user: CurrentUser):
@@ -136,7 +136,7 @@ class TestPurchaseOrderUpdate:
 
         service = PurchaseOrderService(test_db)
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.update(staff_user.business_id, staff_user, po_obj.id, POUpdate(status="sent"))
 
     def test_update_nonexistent_returns_none(self, test_db: Session, owner_user: CurrentUser):

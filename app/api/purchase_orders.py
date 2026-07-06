@@ -35,6 +35,8 @@ def create_purchase_order(
         po = service.create(current_user.business_id, current_user, data)
         db.commit()
         return POResponse.model_validate(po)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:
@@ -91,6 +93,8 @@ def update_purchase_order(
             raise HTTPException(status_code=404, detail="Purchase order not found")
         db.commit()
         return POResponse.model_validate(po)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
     except HTTPException:

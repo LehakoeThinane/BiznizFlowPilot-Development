@@ -51,6 +51,9 @@ jobs:
       - name: Lint (ruff)
         run: ruff check app/
 
+      - name: No new raw ORM queries outside repositories/
+        run: python scripts/check_raw_queries.py
+
       - name: Run migrations
         run: python -m alembic -c migrations/alembic.ini upgrade head
 

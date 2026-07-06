@@ -44,7 +44,7 @@ class TestLeadCreate:
         service = LeadService(test_db)
         data = LeadCreate()
 
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.create(staff_user.business_id, staff_user, data)
 
 
@@ -203,7 +203,7 @@ class TestLeadRBAC:
         assert lead.assigned_to is not None
 
         # Staff cannot assign
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.assign(staff_user.business_id, staff_user, sample_lead.id, uuid4())
 
 
@@ -221,13 +221,13 @@ class TestLeadDeletion:
         # Manager cannot delete
         lead2 = service.repo.create(business_id=manager_user.business_id)
         test_db.commit()
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.delete(manager_user.business_id, manager_user, lead2.id)
 
         # Staff cannot delete
         lead3 = service.repo.create(business_id=staff_user.business_id)
         test_db.commit()
-        with pytest.raises(ValueError, match="Permission denied"):
+        with pytest.raises(PermissionError, match="cannot"):
             service.delete(staff_user.business_id, staff_user, lead3.id)
 
 

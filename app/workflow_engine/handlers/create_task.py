@@ -97,18 +97,45 @@ class CreateTaskHandler(ActionHandler):
                     entity_id_raw,
                 )
 
-        try:
-            task = Task(
-                business_id=business_id,
-                title=rendered_title,
-                description=rendered_description,
-                assigned_to=assigned_to_id,
-                lead_id=lead_id,
-                status="pending",
-                priority="medium",
+        action_id_raw = context.get("action_id")
+        source_action_id = UUID(str(action_id_raw)) if action_id_raw else None
+
+        if source_action_id is not None:
+            existing = (
+                db.query(Task)
+                .filter(Task.source_workflow_action_id == source_action_id)
+                .first()
             )
-            db.add(task)
-            db.flush()
+            if existing is not None:
+                # A prior attempt for this exact action already created the
+                # task (this run is a retry after an ambiguous outcome, e.g.
+                # the insert committed but the executor never got to record
+                # it before a crash). Report the existing task instead of
+                # creating a second one.
+                return ActionResult(
+                    status="success",
+                    message=f"Task already created by a previous attempt: {existing.title}",
+                    data={"task_id": str(existing.id), "idempotent_replay": True},
+                )
+
+        try:
+            # Scoped to a SAVEPOINT rather than the outer session: if this
+            # insert collides on the idempotency constraint below, only this
+            # attempt is undone - not the rest of the run's already-flushed
+            # bookkeeping, which shares this same session/transaction.
+            with db.begin_nested():
+                task = Task(
+                    business_id=business_id,
+                    title=rendered_title,
+                    description=rendered_description,
+                    assigned_to=assigned_to_id,
+                    lead_id=lead_id,
+                    status="pending",
+                    priority="medium",
+                    source_workflow_action_id=source_action_id,
+                )
+                db.add(task)
+                db.flush()
 
             return ActionResult(
                 status="success",
@@ -116,6 +143,20 @@ class CreateTaskHandler(ActionHandler):
                 data={"task_id": str(task.id)},
             )
         except IntegrityError as e:
+            if source_action_id is not None:
+                existing = (
+                    db.query(Task)
+                    .filter(Task.source_workflow_action_id == source_action_id)
+                    .first()
+                )
+                if existing is not None:
+                    # Lost the race against another concurrent attempt for
+                    # the same action - not a real failure, the task exists.
+                    return ActionResult(
+                        status="success",
+                        message=f"Task already created by a previous attempt: {existing.title}",
+                        data={"task_id": str(existing.id), "idempotent_replay": True},
+                    )
             logger.exception("Constraint violation while creating task from workflow action")
             return ActionResult(
                 status="failure",

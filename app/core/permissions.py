@@ -5,6 +5,9 @@ from collections.abc import Collection
 from app.schemas.auth import CurrentUser
 
 PRIVILEGED_ROLES = frozenset({"owner", "manager"})
+OWNER_ONLY = frozenset({"owner"})
+ALL_BUSINESS_ROLES = frozenset({"owner", "manager", "staff"})
+INVITE_MANAGERS = frozenset({"owner", "manager", "it_admin"})
 
 
 def require_role(current_user: CurrentUser, roles: Collection[str], action: str) -> None:

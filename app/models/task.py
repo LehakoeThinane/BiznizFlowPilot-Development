@@ -104,6 +104,19 @@ class Task(BaseModel):
         doc="When the task was completed",
     )
 
+    source_workflow_action_id = Column(
+        Uuid,
+        ForeignKey("workflow_actions.id", ondelete="SET NULL"),
+        nullable=True,
+        unique=True,
+        index=True,
+        doc="Workflow action that created this task, if any. The unique "
+            "constraint gives CreateTaskHandler real idempotency: if a retry "
+            "runs after an earlier attempt already succeeded, the second "
+            "INSERT hits this constraint instead of silently duplicating "
+            "the task.",
+    )
+
     def __repr__(self) -> str:
         """String representation."""
         return f"<Task id={self.id} title='{self.title}' status='{self.status}'>"
