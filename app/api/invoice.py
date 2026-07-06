@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Annotated
@@ -31,8 +30,6 @@ from app.services.email import send_invoice_email
 from app.services.event import EventService
 from app.utils.notify import notify_business
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/v1/invoices", tags=["invoices"])
 
 _INVOICE_PREFIX = "INV"
@@ -53,22 +50,19 @@ def _emit(
     description: str | None = None,
     data: dict | None = None,
 ) -> None:
-    try:
-        EventService(db).create_event(
-            business_id=UUID(str(business_id)),
-            event_type=event_type,
-            entity_type=entity_type,
-            entity_id=UUID(str(entity_id)),
-            actor_id=UUID(str(actor_id)) if actor_id else None,
-            description=description,
-            data=data,
-        )
-    except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning("Failed to emit %s for %s %s", event_type, entity_type, entity_id, exc_info=True)
+    """Queue an event row in the same (not-yet-committed) transaction as the
+    caller's pending business-row change - the caller commits once, after
+    this call, so both persist atomically or neither does."""
+    EventService(db).create_event(
+        business_id=UUID(str(business_id)),
+        event_type=event_type,
+        entity_type=entity_type,
+        entity_id=UUID(str(entity_id)),
+        actor_id=UUID(str(actor_id)) if actor_id else None,
+        description=description,
+        data=data,
+        commit=False,
+    )
 
 
 def _next_invoice_number(db: Session, business_id: UUID) -> str:
@@ -347,6 +341,7 @@ def send_invoice_by_email(
           description=f"Invoice {inv.invoice_number} emailed to {inv.customer.email}",
           data={"invoice_number": inv.invoice_number, "to_email": inv.customer.email,
                 "total_amount": float(inv.total_amount)})
+    db.commit()
     return {"message": f"Invoice {inv.invoice_number} sent to {inv.customer.email}"}
 
 
@@ -383,13 +378,13 @@ def create_invoice(
     db.flush()
     for li in line_items:
         db.add(li)
-    db.commit()
-    db.refresh(inv)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.INVOICE_CREATED, "invoice", inv.id,
           description=f"Invoice created: {inv.invoice_number} — R{float(inv.total_amount):,.2f}",
           data={"invoice_number": inv.invoice_number, "total_amount": float(inv.total_amount),
                 "customer_id": str(inv.customer_id) if inv.customer_id else None})
+    db.commit()
+    db.refresh(inv)
     return _invoice_out(inv, db)
 
 
@@ -447,8 +442,8 @@ def delete_invoice(
     inv_number = inv.invoice_number
     inv_total = float(inv.total_amount)
     db.delete(inv)
-    db.commit()
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.INVOICE_DELETED, "invoice", inv_id,
           description=f"Invoice deleted: {inv_number} — R{inv_total:,.2f}",
           data={"invoice_number": inv_number, "total_amount": inv_total})
+    db.commit()

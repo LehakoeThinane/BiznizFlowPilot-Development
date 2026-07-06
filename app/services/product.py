@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,8 +11,6 @@ from app.models.product import Product
 from app.repositories.product import ProductRepository
 from app.schemas.product import ProductCreate, ProductUpdate
 from app.schemas.auth import CurrentUser
-
-logger = logging.getLogger(__name__)
 
 
 class ProductService:
@@ -38,29 +35,22 @@ class ProductService:
     ) -> None:
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id,
-                event_type=event_type,
-                entity_type="product",
-                entity_id=entity_id,
-                actor_id=actor_id,
-                description=description,
-                data=data,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to emit %s event for product %s",
-                event_type.value,
-                entity_id,
-                exc_info=True,
-            )
+        self._event_service.create_event(
+            business_id=business_id,
+            event_type=event_type,
+            entity_type="product",
+            entity_id=entity_id,
+            actor_id=actor_id,
+            description=description,
+            data=data,
+            commit=False,
+        )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: ProductCreate) -> Product:
         if current_user.role not in ["owner", "manager"]:
             raise ValueError("Permission denied: Only owner/manager can create products")
 
-        product = self.repo.create(business_id=business_id, **data.model_dump())
+        product = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
         self._emit_event(
             event_type=EventType.PRODUCT_CREATED,
@@ -71,6 +61,8 @@ class ProductService:
             data={"sku": product.sku, "category": product.category},
         )
 
+        self.db.commit()
+        self.db.refresh(product)
         return product
 
     def get(self, business_id: UUID, current_user: CurrentUser, product_id: UUID) -> Product | None:
@@ -86,7 +78,7 @@ class ProductService:
             raise ValueError("Permission denied: Only owner/manager can update products")
 
         update_data = data.model_dump(exclude_unset=True)
-        product = self.repo.update(business_id=business_id, entity_id=product_id, **update_data)
+        product = self.repo.update(business_id=business_id, entity_id=product_id, commit=False, **update_data)
 
         if product:
             self._emit_event(
@@ -97,6 +89,8 @@ class ProductService:
                 description="Product updated",
                 data={"updated_fields": list(update_data.keys())},
             )
+            self.db.commit()
+            self.db.refresh(product)
 
         return product
 
@@ -117,5 +111,6 @@ class ProductService:
             data={"sku": product.sku},
         )
 
-        self.repo.delete(business_id=business_id, entity_id=product_id)
+        self.repo.delete(business_id=business_id, entity_id=product_id, commit=False)
+        self.db.commit()
         return True

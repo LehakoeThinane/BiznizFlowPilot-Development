@@ -415,16 +415,14 @@ def provision_organization(
         meta_data={"org_name": body.org_name, "owner_email": body.owner_email, "invitation_id": str(invitation.id)},
     )
 
-    try:
-        EventService(db).create_event(
-            business_id=shell.business.id,
-            event_type=EventType.ORGANIZATION_PROVISIONED,
-            entity_type="organization",
-            entity_id=shell.organization.id,
-            description=f"Organization '{shell.organization.name}' provisioned by platform admin; owner invited",
-        )
-    except Exception:
-        pass
+    EventService(db).create_event(
+        business_id=shell.business.id,
+        event_type=EventType.ORGANIZATION_PROVISIONED,
+        entity_type="organization",
+        entity_id=shell.organization.id,
+        description=f"Organization '{shell.organization.name}' provisioned by platform admin; owner invited",
+        commit=False,
+    )
 
     db.commit()
     db.refresh(shell.organization)
@@ -482,8 +480,6 @@ def update_organization(
         target_id=org.id,
         meta_data={"updated_fields": updated_fields},
     )
-    db.commit()
-    db.refresh(org)
 
     primary_business = (
         db.query(Business)
@@ -491,18 +487,18 @@ def update_organization(
         .first()
     )
     if primary_business:
-        try:
-            EventService(db).create_event(
-                business_id=primary_business.id,
-                event_type=EventType.ORGANIZATION_UPDATED,
-                entity_type="organization",
-                entity_id=org.id,
-                description=f"Organization '{org.name}' updated by platform admin",
-                data={"updated_fields": updated_fields},
-            )
-            db.commit()
-        except Exception:
-            db.rollback()
+        EventService(db).create_event(
+            business_id=primary_business.id,
+            event_type=EventType.ORGANIZATION_UPDATED,
+            entity_type="organization",
+            entity_id=org.id,
+            description=f"Organization '{org.name}' updated by platform admin",
+            data={"updated_fields": updated_fields},
+            commit=False,
+        )
+
+    db.commit()
+    db.refresh(org)
 
     return _org_to_admin_response(db, org)
 

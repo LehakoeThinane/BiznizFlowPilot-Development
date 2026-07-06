@@ -52,11 +52,18 @@ class EventService:
         description: Optional[str] = None,
         data: Optional[dict[str, Any]] = None,
         status: EventStatus = EventStatus.PENDING,
+        commit: bool = True,
     ) -> Event:
         """Create event from internal service methods.
-        
+
         Called by other services (LeadService, TaskService) when business actions occur.
         This allows services to emit events without requiring a request context.
+
+        Args:
+            commit: When False, flush instead of commit - lets the caller
+                batch this event row into the same transaction as the
+                business-data change it describes (outbox-style atomicity:
+                either both persist, or neither does). Defaults to True.
         """
         normalized_event_type = EventType(event_type) if isinstance(event_type, str) else event_type
         return self.repo.create(
@@ -70,6 +77,7 @@ class EventService:
             status=status,
             locked_at=None,
             claimed_by=None,
+            commit=commit,
         )
 
     def get(self, business_id: UUID, current_user: CurrentUser, event_id: UUID) -> Event | None:

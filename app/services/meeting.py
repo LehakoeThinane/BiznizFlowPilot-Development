@@ -2,23 +2,22 @@
 
 from __future__ import annotations
 
-import logging
 import time
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.config import settings
 from app.core.enums import EventType
+from app.core.exceptions import ConcurrencyConflictError
 from app.models.meeting import Meeting
 from app.models.notification import Notification
 from app.models.user import User
 from app.repositories.meeting import MeetingRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.meeting import MeetingCreate, MeetingUpdate
-
-logger = logging.getLogger(__name__)
 
 _AGORA_ROLE_PUBLISHER = 1
 
@@ -57,24 +56,21 @@ class MeetingService:
         description: str | None = None,
         data: dict | None = None,
     ) -> None:
+        """Queue an event row in the same (not-yet-committed) transaction as
+        the caller's pending business-row change - the caller commits once,
+        after this call, so both persist atomically or neither does."""
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id,
-                event_type=event_type,
-                entity_type="meeting",
-                entity_id=entity_id,
-                actor_id=actor_id,
-                description=description,
-                data=data,
-            )
-        except Exception:
-            try:
-                self.db.rollback()
-            except Exception:
-                pass
-            logger.warning("Failed to emit %s event for meeting %s", event_type.value, entity_id, exc_info=True)
+        self._event_service.create_event(
+            business_id=business_id,
+            event_type=event_type,
+            entity_type="meeting",
+            entity_id=entity_id,
+            actor_id=actor_id,
+            description=description,
+            data=data,
+            commit=False,
+        )
 
     def _notify_users(self, business_id: UUID, user_ids: list[UUID], title: str, message: str, meeting_id: UUID) -> None:
         """Insert a Notification per specific user_id, regardless of role.
@@ -136,9 +132,6 @@ class MeetingService:
             meeting_id,
         )
 
-        self.db.commit()
-        self.db.refresh(meeting)
-
         self._emit_event(
             event_type=EventType.MEETING_SCHEDULED,
             business_id=business_id,
@@ -147,6 +140,9 @@ class MeetingService:
             description=f"Meeting scheduled: '{meeting.title}'",
             data={"call_type": meeting.call_type, "participant_count": len(invitee_ids)},
         )
+
+        self.db.commit()
+        self.db.refresh(meeting)
         return meeting
 
     def get(self, business_id: UUID, meeting_id: UUID) -> Meeting | None:
@@ -170,8 +166,6 @@ class MeetingService:
         update_data = data.model_dump(exclude_unset=True)
         for key, value in update_data.items():
             setattr(meeting, key, value)
-        self.db.commit()
-        self.db.refresh(meeting)
 
         participant_ids = [p.user_id for p in meeting.participants if p.user_id != current_user.user_id]
         if data.status == "cancelled":
@@ -179,7 +173,6 @@ class MeetingService:
                 business_id, participant_ids, "Meeting cancelled",
                 f"\"{meeting.title}\" has been cancelled.", meeting.id,
             )
-            self.db.commit()
             self._emit_event(
                 EventType.MEETING_CANCELLED, business_id, meeting.id, current_user.user_id,
                 description=f"Meeting cancelled: '{meeting.title}'",
@@ -189,12 +182,20 @@ class MeetingService:
                 business_id, participant_ids, "Meeting updated",
                 f"\"{meeting.title}\" has been updated.", meeting.id,
             )
-            self.db.commit()
             self._emit_event(
                 EventType.MEETING_UPDATED, business_id, meeting.id, current_user.user_id,
                 description=f"Meeting updated: '{meeting.title}'",
                 data={"updated_fields": list(update_data.keys())},
             )
+
+        try:
+            self.db.commit()
+        except StaleDataError as e:
+            self.db.rollback()
+            raise ConcurrencyConflictError(
+                "This meeting was changed by someone else - refresh and try again"
+            ) from e
+        self.db.refresh(meeting)
         return meeting
 
     def respond(self, business_id: UUID, current_user: CurrentUser, meeting_id: UUID, response_status: str) -> Meeting | None:
@@ -216,19 +217,25 @@ class MeetingService:
         if meeting.organizer_id != current_user.user_id:
             raise ValueError("Permission denied: Only the organizer can start this call")
         meeting.status = "in_progress"
-        self.db.commit()
-        self.db.refresh(meeting)
 
         participant_ids = [p.user_id for p in meeting.participants if p.user_id != current_user.user_id]
         self._notify_users(
             business_id, participant_ids, "Call starting",
             f"{current_user.full_name} started the call for \"{meeting.title}\".", meeting.id,
         )
-        self.db.commit()
         self._emit_event(
             EventType.MEETING_STARTED, business_id, meeting.id, current_user.user_id,
             description=f"Meeting call started: '{meeting.title}'",
         )
+
+        try:
+            self.db.commit()
+        except StaleDataError as e:
+            self.db.rollback()
+            raise ConcurrencyConflictError(
+                "This meeting was changed by someone else - refresh and try again"
+            ) from e
+        self.db.refresh(meeting)
         return meeting
 
     def end_call(self, business_id: UUID, current_user: CurrentUser, meeting_id: UUID) -> Meeting | None:
@@ -238,7 +245,13 @@ class MeetingService:
         if meeting.organizer_id != current_user.user_id:
             raise ValueError("Permission denied: Only the organizer can end this call")
         meeting.status = "completed"
-        self.db.commit()
+        try:
+            self.db.commit()
+        except StaleDataError as e:
+            self.db.rollback()
+            raise ConcurrencyConflictError(
+                "This meeting was changed by someone else - refresh and try again"
+            ) from e
         self.db.refresh(meeting)
         return meeting
 

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,8 +11,6 @@ from app.models.lead import Lead
 from app.repositories.lead import LeadRepository
 from app.schemas.lead import LeadCreate, LeadUpdate
 from app.schemas.auth import CurrentUser
-
-logger = logging.getLogger(__name__)
 
 
 class LeadService:
@@ -55,26 +52,21 @@ class LeadService:
         description: str | None = None,
         data: dict | None = None,
     ) -> None:
-        """Emit an event if event_service is available. Never raises."""
+        """Queue an event row in the same (not-yet-committed) transaction as
+        the caller's pending business-row change - the caller commits once,
+        after this call, so both persist atomically or neither does."""
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id,
-                event_type=event_type,
-                entity_type="lead",
-                entity_id=entity_id,
-                actor_id=actor_id,
-                description=description,
-                data=data,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to emit %s event for lead %s",
-                event_type.value,
-                entity_id,
-                exc_info=True,
-            )
+        self._event_service.create_event(
+            business_id=business_id,
+            event_type=event_type,
+            entity_type="lead",
+            entity_id=entity_id,
+            actor_id=actor_id,
+            description=description,
+            data=data,
+            commit=False,
+        )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: LeadCreate) -> Lead:
         """Create lead.
@@ -84,7 +76,7 @@ class LeadService:
         if current_user.role not in ["owner", "manager"]:
             raise ValueError("Permission denied: Only owner/manager can create leads")
 
-        lead = self.repo.create(business_id=business_id, **data.model_dump())
+        lead = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
         self._emit_event(
             event_type=EventType.LEAD_CREATED,
@@ -95,6 +87,8 @@ class LeadService:
             data={"status": lead.status, "source": lead.source},
         )
 
+        self.db.commit()
+        self.db.refresh(lead)
         return lead
 
     def get(self, business_id: UUID, current_user: CurrentUser, lead_id: UUID) -> Lead | None:
@@ -156,7 +150,7 @@ class LeadService:
                 raise ValueError(f"Invalid state transition: {lead.status} → {data.status}")
 
         update_data = data.model_dump(exclude_unset=True)
-        updated_lead = self.repo.update(business_id=business_id, entity_id=lead_id, **update_data)
+        updated_lead = self.repo.update(business_id=business_id, entity_id=lead_id, commit=False, **update_data)
 
         if updated_lead:
             # Determine the most specific event type
@@ -178,6 +172,8 @@ class LeadService:
                     description="Lead updated",
                     data={"updated_fields": list(update_data.keys())},
                 )
+            self.db.commit()
+            self.db.refresh(updated_lead)
 
         return updated_lead
 
@@ -194,7 +190,7 @@ class LeadService:
             return None
 
         old_assigned = lead.assigned_to
-        updated_lead = self.repo.update(business_id=business_id, entity_id=lead_id, assigned_to=assigned_to)
+        updated_lead = self.repo.update(business_id=business_id, entity_id=lead_id, commit=False, assigned_to=assigned_to)
 
         if updated_lead:
             self._emit_event(
@@ -208,6 +204,8 @@ class LeadService:
                     "new_assigned_to": str(assigned_to),
                 },
             )
+            self.db.commit()
+            self.db.refresh(updated_lead)
 
         return updated_lead
 
@@ -223,7 +221,8 @@ class LeadService:
         if not lead:
             return False
 
-        # Emit event before deletion (entity still exists for context)
+        # Emit event before deletion (entity still exists for context) - same
+        # transaction as the delete itself, committed together below.
         self._emit_event(
             event_type=EventType.LEAD_DELETED,
             business_id=business_id,
@@ -233,7 +232,8 @@ class LeadService:
             data={"status": lead.status, "source": lead.source},
         )
 
-        self.repo.delete(business_id=business_id, entity_id=lead_id)
+        self.repo.delete(business_id=business_id, entity_id=lead_id, commit=False)
+        self.db.commit()
         return True
 
     @staticmethod

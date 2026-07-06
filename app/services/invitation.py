@@ -41,8 +41,15 @@ class InvitationService:
         invited_by: UUID,
         inviter_role: str,
         inviter_name: str,
+        commit: bool = True,
     ) -> tuple[UserInvitation, str]:
         """Create a pending invitation and return (row, raw_token) for emailing.
+
+        Args:
+            commit: When False, flush instead of commit - lets the caller
+                batch this into a larger atomic transaction (e.g. together
+                with an Event row, for outbox-style atomicity). Defaults to
+                True, matching prior behavior exactly.
 
         Raises:
             ValueError: If the email's domain isn't authorized for this
@@ -77,8 +84,11 @@ class InvitationService:
             + timedelta(days=settings.invite_token_expiration_days),
         )
         self.db.add(invitation)
-        self.db.commit()
-        self.db.refresh(invitation)
+        if commit:
+            self.db.commit()
+            self.db.refresh(invitation)
+        else:
+            self.db.flush()
 
         return invitation, raw_token
 

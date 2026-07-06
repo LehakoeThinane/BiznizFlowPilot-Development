@@ -37,10 +37,19 @@ class PurchaseOrderRepository(BaseRepository[PurchaseOrder]):
             PurchaseOrder.supplier_id == supplier_id,
         ).offset(skip).limit(limit).all()
 
-    def create_line_item(self, **kwargs) -> PurchaseOrderLineItem:
-        """Create a line item for a purchase order."""
+    def create_line_item(self, commit: bool = True, **kwargs) -> PurchaseOrderLineItem:
+        """Create a line item for a purchase order.
+
+        Args:
+            commit: When False, flush instead of commit - lets the caller
+                batch this into a larger atomic transaction. Defaults to
+                True, matching prior behavior exactly.
+        """
         line_item = PurchaseOrderLineItem(**kwargs)
         self.db.add(line_item)
-        self.db.commit()
-        self.db.refresh(line_item)
+        if commit:
+            self.db.commit()
+            self.db.refresh(line_item)
+        else:
+            self.db.flush()
         return line_item

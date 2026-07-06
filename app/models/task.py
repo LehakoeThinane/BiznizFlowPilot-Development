@@ -1,19 +1,31 @@
 """Task model - work item entity."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Uuid
 
 from app.models.base import BaseModel
 
 
 class Task(BaseModel):
     """Task entity.
-    
+
     Represents a work item that needs to be done.
     Can be related to a lead or standalone.
     Belongs to a business.
     """
 
     __tablename__ = "tasks"
+
+    version = Column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+        doc="Optimistic-concurrency guard - SQLAlchemy increments this on every "
+            "UPDATE and includes it in the WHERE clause; a stale write raises "
+            "StaleDataError instead of silently overwriting a concurrent change.",
+    )
+
+    __mapper_args__ = {"version_id_col": version}
 
     SAFE_CONTEXT_FIELDS = {
         "id",

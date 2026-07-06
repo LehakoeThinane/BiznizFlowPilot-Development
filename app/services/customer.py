@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,8 +11,6 @@ from app.models.customer import Customer
 from app.repositories.customer import CustomerRepository
 from app.schemas.customer import CustomerCreate, CustomerUpdate
 from app.schemas.auth import CurrentUser
-
-logger = logging.getLogger(__name__)
 
 
 class CustomerService:
@@ -45,26 +42,21 @@ class CustomerService:
         description: str | None = None,
         data: dict | None = None,
     ) -> None:
-        """Emit an event if event_service is available. Never raises."""
+        """Queue an event row in the same (not-yet-committed) transaction as
+        the caller's pending business-row change - the caller commits once,
+        after this call, so both persist atomically or neither does."""
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id,
-                event_type=event_type,
-                entity_type="customer",
-                entity_id=entity_id,
-                actor_id=actor_id,
-                description=description,
-                data=data,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to emit %s event for customer %s",
-                event_type.value,
-                entity_id,
-                exc_info=True,
-            )
+        self._event_service.create_event(
+            business_id=business_id,
+            event_type=event_type,
+            entity_type="customer",
+            entity_id=entity_id,
+            actor_id=actor_id,
+            description=description,
+            data=data,
+            commit=False,
+        )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: CustomerCreate) -> Customer:
         """Create customer.
@@ -74,7 +66,7 @@ class CustomerService:
         if current_user.role not in ["owner", "manager"]:
             raise ValueError("Permission denied: Only owner/manager can create customers")
 
-        customer = self.repo.create(business_id=business_id, **data.model_dump())
+        customer = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
         self._emit_event(
             event_type=EventType.CUSTOMER_CREATED,
@@ -85,6 +77,8 @@ class CustomerService:
             data={"name": customer.name, "email": customer.email, "company": customer.company},
         )
 
+        self.db.commit()
+        self.db.refresh(customer)
         return customer
 
     def get(self, business_id: UUID, current_user: CurrentUser, customer_id: UUID) -> Customer | None:
@@ -126,7 +120,7 @@ class CustomerService:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
-        updated_customer = self.repo.update(business_id=business_id, entity_id=customer_id, **update_data)
+        updated_customer = self.repo.update(business_id=business_id, entity_id=customer_id, commit=False, **update_data)
 
         if updated_customer:
             self._emit_event(
@@ -137,6 +131,8 @@ class CustomerService:
                 description=f"Customer updated: '{updated_customer.name}'",
                 data={"updated_fields": list(update_data.keys())},
             )
+            self.db.commit()
+            self.db.refresh(updated_customer)
 
         return updated_customer
 
@@ -153,7 +149,8 @@ class CustomerService:
         if not customer:
             return False
 
-        # Emit event before deletion (entity still exists for context)
+        # Emit event before deletion (entity still exists for context) - same
+        # transaction as the delete itself, committed together below.
         self._emit_event(
             event_type=EventType.CUSTOMER_DELETED,
             business_id=business_id,
@@ -163,5 +160,6 @@ class CustomerService:
             data={"name": customer.name, "email": customer.email},
         )
 
-        self.repo.delete(business_id=business_id, entity_id=customer_id)
+        self.repo.delete(business_id=business_id, entity_id=customer_id, commit=False)
+        self.db.commit()
         return True

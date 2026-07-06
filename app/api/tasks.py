@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import ConcurrencyConflictError
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.task import TaskCreate, TaskListResponse, TaskResponse, TaskUpdate
@@ -126,6 +127,9 @@ def update_task(
         return task
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ConcurrencyConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -155,6 +159,9 @@ def assign_task(
         return task
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ConcurrencyConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

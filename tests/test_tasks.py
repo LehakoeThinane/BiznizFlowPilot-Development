@@ -3,8 +3,9 @@
 import pytest
 from datetime import datetime, timedelta
 from uuid import uuid4
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.exceptions import ConcurrencyConflictError
 from app.models.task import Task
 from app.services.task import TaskService
 from app.schemas.task import TaskCreate, TaskUpdate
@@ -153,6 +154,47 @@ class TestTaskUpdate:
 
         assert task.status == "completed"
         assert task.completed_at is not None
+
+
+class TestTaskConcurrency:
+    """Test optimistic-concurrency protection on task updates."""
+
+    def test_stale_update_raises_conflict(self, test_db: Session, owner_user: CurrentUser, sample_task: Task):
+        """Updating a task loaded before someone else's concurrent write raises ConcurrencyConflictError."""
+        service = TaskService(test_db)
+
+        # A second, independent session simulates another request/worker that
+        # loads and commits a change to the same row while our session is
+        # still holding the version it originally loaded.
+        OtherSession = sessionmaker(bind=test_db.get_bind())
+        other_session = OtherSession()
+        try:
+            other_task = other_session.query(Task).filter(Task.id == sample_task.id).first()
+            other_task.title = "Changed by someone else"
+            other_session.commit()
+        finally:
+            other_session.close()
+
+        # sample_task is still loaded in test_db's identity map at the old version.
+        data = TaskUpdate(status="in_progress")
+        with pytest.raises(ConcurrencyConflictError):
+            service.update(owner_user.business_id, owner_user, sample_task.id, data)
+
+    def test_stale_assign_raises_conflict(self, test_db: Session, owner_user: CurrentUser, sample_task: Task):
+        """Assigning a task loaded before someone else's concurrent write raises ConcurrencyConflictError."""
+        service = TaskService(test_db)
+
+        OtherSession = sessionmaker(bind=test_db.get_bind())
+        other_session = OtherSession()
+        try:
+            other_task = other_session.query(Task).filter(Task.id == sample_task.id).first()
+            other_task.title = "Changed by someone else"
+            other_session.commit()
+        finally:
+            other_session.close()
+
+        with pytest.raises(ConcurrencyConflictError):
+            service.assign(owner_user.business_id, owner_user, sample_task.id, uuid4())
 
 
 class TestTaskRBAC:
