@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,8 +11,6 @@ from app.models.inventory import InventoryLocation, StockLevel
 from app.repositories.inventory import InventoryLocationRepository, StockLevelRepository
 from app.schemas.inventory import LocationCreate, LocationUpdate, StockAdjustment
 from app.schemas.auth import CurrentUser
-
-logger = logging.getLogger(__name__)
 
 
 class InventoryService:
@@ -26,15 +23,16 @@ class InventoryService:
         self._event_service = event_service
 
     def _emit_event(self, event_type: EventType, business_id: UUID, entity_type: str, entity_id: UUID, actor_id: UUID | None = None, description: str | None = None, data: dict | None = None) -> None:
+        """Queue an event row in the same (not-yet-committed) transaction as
+        the caller's pending business-row change - the caller commits once,
+        after this call, so both persist atomically or neither does."""
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id, event_type=event_type, entity_type=entity_type,
-                entity_id=entity_id, actor_id=actor_id, description=description, data=data
-            )
-        except Exception:
-            logger.warning("Failed to emit %s event", event_type.value, exc_info=True)
+        self._event_service.create_event(
+            business_id=business_id, event_type=event_type, entity_type=entity_type,
+            entity_id=entity_id, actor_id=actor_id, description=description, data=data,
+            commit=False,
+        )
 
     # Locations
     def create_location(self, business_id: UUID, current_user: CurrentUser, data: LocationCreate) -> InventoryLocation:
@@ -88,6 +86,7 @@ class InventoryService:
                 product_id=data.product_id,
                 location_id=data.location_id,
                 quantity=data.quantity_change,
+                commit=False,
             )
         else:
             new_quantity = stock.quantity + data.quantity_change
@@ -95,7 +94,7 @@ class InventoryService:
                 raise ValueError(
                     f"Insufficient stock: adjustment of {data.quantity_change} would result in negative quantity"
                 )
-            stock = self.stock_repo.update(business_id=business_id, entity_id=stock.id, quantity=new_quantity)
+            stock = self.stock_repo.update(business_id=business_id, entity_id=stock.id, quantity=new_quantity, commit=False)
 
         self._emit_event(
             event_type=EventType.STOCK_ADJUSTED,
@@ -118,4 +117,6 @@ class InventoryService:
                 data={"available": stock.available, "reorder_point": stock.reorder_point}
             )
 
+        self.db.commit()
+        self.db.refresh(stock)
         return stock

@@ -73,20 +73,19 @@ def update_organization(
     org = _get_org_or_404(db, UUID(str(current_user.organization_id)))
     if body.name is not None:
         org.name = body.name
+
+    EventService(db).create_event(
+        business_id=current_user.business_id,
+        event_type=EventType.ORGANIZATION_UPDATED,
+        entity_type="organization",
+        entity_id=org.id,
+        actor_id=current_user.user_id,
+        description="Organization settings updated",
+        commit=False,
+    )
+
     db.commit()
     db.refresh(org)
-
-    try:
-        EventService(db).create_event(
-            business_id=current_user.business_id,
-            event_type=EventType.ORGANIZATION_UPDATED,
-            entity_type="organization",
-            entity_id=org.id,
-            actor_id=current_user.user_id,
-            description="Organization settings updated",
-        )
-    except Exception:
-        db.rollback()
 
     org_repo = OrganizationRepository(db)
     domains = [d.domain for d in org_repo.list_domains(org.id)]
@@ -212,20 +211,20 @@ def create_subsidiary(
         is_primary_subsidiary=False,
     )
     db.add(business)
+    db.flush()
+
+    EventService(db).create_event(
+        business_id=business.id,
+        event_type=EventType.SUBSIDIARY_CREATED,
+        entity_type="business",
+        entity_id=business.id,
+        actor_id=current_user.user_id,
+        description=f"Subsidiary '{business.name}' created",
+        commit=False,
+    )
+
     db.commit()
     db.refresh(business)
-
-    try:
-        EventService(db).create_event(
-            business_id=business.id,
-            event_type=EventType.SUBSIDIARY_CREATED,
-            entity_type="business",
-            entity_id=business.id,
-            actor_id=current_user.user_id,
-            description=f"Subsidiary '{business.name}' created",
-        )
-    except Exception:
-        db.rollback()
 
     return SubsidiaryResponse(
         id=business.id, organization_id=business.organization_id, name=business.name,
@@ -273,20 +272,19 @@ def update_subsidiary(
         business.name = body.name
     if body.phone is not None:
         business.phone = body.phone
+
+    EventService(db).create_event(
+        business_id=business.id,
+        event_type=EventType.SUBSIDIARY_UPDATED,
+        entity_type="business",
+        entity_id=business.id,
+        actor_id=current_user.user_id,
+        description=f"Subsidiary '{business.name}' updated",
+        commit=False,
+    )
+
     db.commit()
     db.refresh(business)
-
-    try:
-        EventService(db).create_event(
-            business_id=business.id,
-            event_type=EventType.SUBSIDIARY_UPDATED,
-            entity_type="business",
-            entity_id=business.id,
-            actor_id=current_user.user_id,
-            description=f"Subsidiary '{business.name}' updated",
-        )
-    except Exception:
-        db.rollback()
 
     user_count = db.query(func.count(User.id)).filter(User.business_id == business.id).scalar() or 0
     return SubsidiaryResponse(
@@ -316,16 +314,15 @@ def deactivate_subsidiary(
         )
 
     business.is_active = False
-    db.commit()
 
-    try:
-        EventService(db).create_event(
-            business_id=business.id,
-            event_type=EventType.SUBSIDIARY_DEACTIVATED,
-            entity_type="business",
-            entity_id=business.id,
-            actor_id=current_user.user_id,
-            description=f"Subsidiary '{business.name}' deactivated",
-        )
-    except Exception:
-        db.rollback()
+    EventService(db).create_event(
+        business_id=business.id,
+        event_type=EventType.SUBSIDIARY_DEACTIVATED,
+        entity_type="business",
+        entity_id=business.id,
+        actor_id=current_user.user_id,
+        description=f"Subsidiary '{business.name}' deactivated",
+        commit=False,
+    )
+
+    db.commit()

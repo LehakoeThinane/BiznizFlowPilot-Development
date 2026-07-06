@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import logging
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Annotated
@@ -34,8 +33,6 @@ from app.schemas.finance import (
 )
 from app.services.event import EventService
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/v1/finance", tags=["finance"])
 
 _REVENUE_STATUSES = ("confirmed", "processing", "shipped", "delivered")
@@ -56,22 +53,19 @@ def _emit(
     description: str | None = None,
     data: dict | None = None,
 ) -> None:
-    try:
-        EventService(db).create_event(
-            business_id=UUID(str(business_id)),
-            event_type=event_type,
-            entity_type=entity_type,
-            entity_id=UUID(str(entity_id)),
-            actor_id=UUID(str(actor_id)) if actor_id else None,
-            description=description,
-            data=data,
-        )
-    except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning("Failed to emit %s for %s %s", event_type, entity_type, entity_id, exc_info=True)
+    """Queue an event row in the same (not-yet-committed) transaction as the
+    caller's pending business-row change - the caller commits once, after
+    this call, so both persist atomically or neither does."""
+    EventService(db).create_event(
+        business_id=UUID(str(business_id)),
+        event_type=event_type,
+        entity_type=entity_type,
+        entity_id=UUID(str(entity_id)),
+        actor_id=UUID(str(actor_id)) if actor_id else None,
+        description=description,
+        data=data,
+        commit=False,
+    )
 
 
 def _period_bounds(period: str) -> tuple[date, date, str]:
@@ -286,13 +280,14 @@ def create_expense(
         **data.model_dump(),
     )
     db.add(exp)
-    db.commit()
-    db.refresh(exp)
+    db.flush()
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EXPENSE_CREATED, "expense", exp.id,
           description=f"Expense recorded: {exp.description or 'no description'} — R{float(exp.amount):,.2f}",
           data={"amount": float(exp.amount), "category_id": str(exp.category_id) if exp.category_id else None,
                 "date": str(exp.date)})
+    db.commit()
+    db.refresh(exp)
     return _expense_out(exp)
 
 
@@ -312,12 +307,12 @@ def update_expense(
     updated_fields = list(data.model_dump(exclude_none=True).keys())
     for k, v in data.model_dump(exclude_none=True).items():
         setattr(exp, k, v)
-    db.commit()
-    db.refresh(exp)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EXPENSE_UPDATED, "expense", exp.id,
           description=f"Expense updated: {exp.description or 'no description'}",
           data={"updated_fields": updated_fields, "amount": float(exp.amount)})
+    db.commit()
+    db.refresh(exp)
     return _expense_out(exp)
 
 
@@ -338,8 +333,8 @@ def delete_expense(
     exp_amount = float(exp.amount)
     exp_date = str(exp.date)
     db.delete(exp)
-    db.commit()
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EXPENSE_DELETED, "expense", exp_id,
           description=f"Expense deleted: {exp_desc} — R{exp_amount:,.2f}",
           data={"amount": exp_amount, "date": exp_date})
+    db.commit()

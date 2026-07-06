@@ -1,6 +1,6 @@
 """Meeting model - scheduled calls between users, with Agora-backed voice/video."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -14,6 +14,18 @@ class Meeting(BaseModel):
         Index("ix_meetings_biz_start", "business_id", "start_time"),
         Index("ix_meetings_biz_status", "business_id", "status"),
     )
+
+    version = Column(
+        Integer,
+        nullable=False,
+        default=1,
+        server_default="1",
+        doc="Optimistic-concurrency guard - SQLAlchemy increments this on every "
+            "UPDATE and includes it in the WHERE clause; a stale write raises "
+            "StaleDataError instead of silently overwriting a concurrent change.",
+    )
+
+    __mapper_args__ = {"version_id_col": version}
 
     business_id  = Column(Uuid, ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True)
     organizer_id = Column(Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

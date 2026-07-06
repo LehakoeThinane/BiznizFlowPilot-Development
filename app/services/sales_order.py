@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from uuid import UUID
@@ -18,8 +17,6 @@ from app.repositories.sales_order import SalesOrderRepository
 from app.schemas.sales_order import OrderCreate, OrderUpdate
 from app.schemas.auth import CurrentUser
 
-logger = logging.getLogger(__name__)
-
 
 class SalesOrderService:
     """Sales order service with RBAC and state machine."""
@@ -30,15 +27,16 @@ class SalesOrderService:
         self._event_service = event_service
 
     def _emit_event(self, event_type: EventType, business_id: UUID, entity_id: UUID, actor_id: UUID | None = None, description: str | None = None, data: dict | None = None) -> None:
+        """Queue an event row in the same (not-yet-committed) transaction as
+        the caller's pending business-row change - the caller commits once,
+        after this call, so both persist atomically or neither does."""
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id, event_type=event_type, entity_type="sales_order",
-                entity_id=entity_id, actor_id=actor_id, description=description, data=data
-            )
-        except Exception:
-            logger.warning("Failed to emit %s event", event_type.value, exc_info=True)
+        self._event_service.create_event(
+            business_id=business_id, event_type=event_type, entity_type="sales_order",
+            entity_id=entity_id, actor_id=actor_id, description=description, data=data,
+            commit=False,
+        )
 
     def _get_available_stock(self, business_id: UUID, product_id: UUID) -> int:
         """Return total available units across all active locations for this business."""
@@ -146,11 +144,12 @@ class SalesOrderService:
             shipping_cost=Decimal("0.00"),
             discount_amount=Decimal("0.00"),
             total_amount=Decimal("0.00"),
+            commit=False,
         )
 
         # Create line items and reserve stock
         for item in data.line_items:
-            self.repo.create_line_item(order_id=order.id, **item.model_dump())
+            self.repo.create_line_item(order_id=order.id, commit=False, **item.model_dump())
             if item.product_id:
                 self._reserve_stock(business_id, item.product_id, item.quantity)
 
@@ -163,6 +162,8 @@ class SalesOrderService:
             data={"order_number": order.order_number, "total_amount": float(order.total_amount)}
         )
 
+        self.db.commit()
+        self.db.refresh(order)
         return order
 
     def get(self, business_id: UUID, current_user: CurrentUser, order_id: UUID) -> SalesOrder | None:
@@ -180,7 +181,7 @@ class SalesOrderService:
             return None
 
         old_status = order.status
-        updated_order = self.repo.update(business_id=business_id, entity_id=order_id, **data.model_dump(exclude_unset=True))
+        updated_order = self.repo.update(business_id=business_id, entity_id=order_id, commit=False, **data.model_dump(exclude_unset=True))
 
         if updated_order and data.status and data.status != old_status:
             # Determine appropriate event based on status change
@@ -193,7 +194,7 @@ class SalesOrderService:
                 event_type = EventType.ORDER_DELIVERED
             elif data.status == "cancelled":
                 event_type = EventType.ORDER_CANCELLED
-                
+
             self._emit_event(
                 event_type=event_type,
                 business_id=business_id,
@@ -207,5 +208,9 @@ class SalesOrderService:
                 for item in order.line_items:
                     if item.product_id:
                         self._release_stock(business_id, item.product_id, item.quantity)
+
+        if updated_order:
+            self.db.commit()
+            self.db.refresh(updated_order)
 
         return updated_order

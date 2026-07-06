@@ -86,17 +86,18 @@ def create_invitation(
     except Exception:
         pass  # email delivery failure is logged inside send_invite_email
 
-    try:
-        EventService(db).create_event(
-            business_id=target_business_id,
-            event_type=EventType.USER_INVITED,
-            entity_type="user_invitation",
-            entity_id=invitation.id,
-            actor_id=current_user.user_id,
-            description=f"Invited {body.email} as {body.role}",
-        )
-    except Exception:
-        db.rollback()
+    # The invitation itself is already committed above (create_invitation),
+    # and send_invite_email is an external network call - true one-transaction
+    # atomicity with the audit event isn't practical here. What matters is not
+    # silently losing the event on failure, so this is intentionally not swallowed.
+    EventService(db).create_event(
+        business_id=target_business_id,
+        event_type=EventType.USER_INVITED,
+        entity_type="user_invitation",
+        entity_id=invitation.id,
+        actor_id=current_user.user_id,
+        description=f"Invited {body.email} as {body.role}",
+    )
 
     return InvitationResponse.model_validate(invitation)
 
@@ -147,14 +148,13 @@ def revoke_invitation(
     if not revoked:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
 
-    try:
-        EventService(db).create_event(
-            business_id=current_user.business_id,
-            event_type=EventType.USER_INVITE_REVOKED,
-            entity_type="user_invitation",
-            entity_id=invite_id,
-            actor_id=current_user.user_id,
-            description="Invitation revoked",
-        )
-    except Exception:
-        db.rollback()
+    # The revocation itself is already committed above (revoke_invitation) -
+    # not swallowing this so a failed audit event surfaces instead of vanishing.
+    EventService(db).create_event(
+        business_id=current_user.business_id,
+        event_type=EventType.USER_INVITE_REVOKED,
+        entity_type="user_invitation",
+        entity_id=invite_id,
+        actor_id=current_user.user_id,
+        description="Invitation revoked",
+    )

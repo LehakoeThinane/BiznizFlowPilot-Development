@@ -226,24 +226,20 @@ def update_profile(
     if avatar_url is not None:
         user.avatar_url = avatar_url if avatar_url else None
         updated_fields.append("avatar_url")
+
+    EventService(db).create_event(
+        business_id=_UUID(str(current_user.business_id)),
+        event_type=EventType.USER_PROFILE_UPDATED,
+        entity_type="user",
+        entity_id=_UUID(str(current_user.user_id)),
+        actor_id=_UUID(str(current_user.user_id)),
+        description=f"Profile updated for {user.full_name}",
+        data={"updated_fields": updated_fields},
+        commit=False,
+    )
+
     db.commit()
     db.refresh(user)
-    try:
-        EventService(db).create_event(
-            business_id=_UUID(str(current_user.business_id)),
-            event_type=EventType.USER_PROFILE_UPDATED,
-            entity_type="user",
-            entity_id=_UUID(str(current_user.user_id)),
-            actor_id=_UUID(str(current_user.user_id)),
-            description=f"Profile updated for {user.full_name}",
-            data={"updated_fields": updated_fields},
-        )
-    except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning("Failed to emit USER_PROFILE_UPDATED for user %s", current_user.user_id)
     return {
         "user_id": str(user.id),
         "business_id": str(user.business_id),
@@ -271,22 +267,18 @@ def change_password(
     if not verify_password(current_password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     user.hashed_password = hash_password(new_password)
+
+    EventService(db).create_event(
+        business_id=_UUID(str(current_user.business_id)),
+        event_type=EventType.USER_PASSWORD_CHANGED,
+        entity_type="user",
+        entity_id=_UUID(str(current_user.user_id)),
+        actor_id=_UUID(str(current_user.user_id)),
+        description=f"Password changed for {user.full_name}",
+        commit=False,
+    )
+
     db.commit()
-    try:
-        EventService(db).create_event(
-            business_id=_UUID(str(current_user.business_id)),
-            event_type=EventType.USER_PASSWORD_CHANGED,
-            entity_type="user",
-            entity_id=_UUID(str(current_user.user_id)),
-            actor_id=_UUID(str(current_user.user_id)),
-            description=f"Password changed for {user.full_name}",
-        )
-    except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning("Failed to emit USER_PASSWORD_CHANGED for user %s", current_user.user_id)
     return {"message": "Password changed successfully"}
 
 

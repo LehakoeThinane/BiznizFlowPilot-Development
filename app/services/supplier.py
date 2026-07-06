@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -12,8 +11,6 @@ from app.models.supplier import Supplier
 from app.repositories.supplier import SupplierRepository
 from app.schemas.supplier import SupplierCreate, SupplierUpdate
 from app.schemas.auth import CurrentUser
-
-logger = logging.getLogger(__name__)
 
 
 class SupplierService:
@@ -38,29 +35,22 @@ class SupplierService:
     ) -> None:
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id,
-                event_type=event_type,
-                entity_type="supplier",
-                entity_id=entity_id,
-                actor_id=actor_id,
-                description=description,
-                data=data,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to emit %s event for supplier %s",
-                event_type.value,
-                entity_id,
-                exc_info=True,
-            )
+        self._event_service.create_event(
+            business_id=business_id,
+            event_type=event_type,
+            entity_type="supplier",
+            entity_id=entity_id,
+            actor_id=actor_id,
+            description=description,
+            data=data,
+            commit=False,
+        )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: SupplierCreate) -> Supplier:
         if current_user.role not in ["owner", "manager"]:
             raise ValueError("Permission denied")
 
-        supplier = self.repo.create(business_id=business_id, **data.model_dump())
+        supplier = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
         self._emit_event(
             event_type=EventType.SUPPLIER_CREATED,
@@ -71,6 +61,8 @@ class SupplierService:
             data={"code": supplier.code},
         )
 
+        self.db.commit()
+        self.db.refresh(supplier)
         return supplier
 
     def get(self, business_id: UUID, current_user: CurrentUser, supplier_id: UUID) -> Supplier | None:
@@ -84,7 +76,7 @@ class SupplierService:
             raise ValueError("Permission denied")
 
         update_data = data.model_dump(exclude_unset=True)
-        supplier = self.repo.update(business_id=business_id, entity_id=supplier_id, **update_data)
+        supplier = self.repo.update(business_id=business_id, entity_id=supplier_id, commit=False, **update_data)
 
         if supplier:
             self._emit_event(
@@ -95,6 +87,8 @@ class SupplierService:
                 description="Supplier updated",
                 data={"updated_fields": list(update_data.keys())},
             )
+            self.db.commit()
+            self.db.refresh(supplier)
 
         return supplier
 
@@ -115,5 +109,6 @@ class SupplierService:
             data={"code": supplier.code},
         )
 
-        self.repo.delete(business_id=business_id, entity_id=supplier_id)
+        self.repo.delete(business_id=business_id, entity_id=supplier_id, commit=False)
+        self.db.commit()
         return True

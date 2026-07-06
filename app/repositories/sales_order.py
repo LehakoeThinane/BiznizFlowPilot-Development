@@ -37,10 +37,19 @@ class SalesOrderRepository(BaseRepository[SalesOrder]):
             SalesOrder.customer_id == customer_id,
         ).offset(skip).limit(limit).all()
 
-    def create_line_item(self, **kwargs) -> OrderLineItem:
-        """Create a line item for an order."""
+    def create_line_item(self, commit: bool = True, **kwargs) -> OrderLineItem:
+        """Create a line item for an order.
+
+        Args:
+            commit: When False, flush instead of commit - lets the caller
+                batch this into a larger atomic transaction. Defaults to
+                True, matching prior behavior exactly.
+        """
         line_item = OrderLineItem(**kwargs)
         self.db.add(line_item)
-        self.db.commit()
-        self.db.refresh(line_item)
+        if commit:
+            self.db.commit()
+            self.db.refresh(line_item)
+        else:
+            self.db.flush()
         return line_item

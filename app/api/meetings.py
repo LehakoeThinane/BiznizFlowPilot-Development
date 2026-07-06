@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.exceptions import ConcurrencyConflictError
 from app.dependencies import get_current_user
 from app.models.meeting import Meeting
 from app.schemas.auth import CurrentUser
@@ -119,6 +120,9 @@ def update_meeting(
         return _meeting_out(meeting)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ConcurrencyConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -162,6 +166,9 @@ def start_meeting_call(
         return _meeting_out(meeting)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ConcurrencyConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:
@@ -183,6 +190,9 @@ def end_meeting_call(
         return _meeting_out(meeting)
     except ValueError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ConcurrencyConflictError as e:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(e))
     except HTTPException:
         raise
     except Exception as e:

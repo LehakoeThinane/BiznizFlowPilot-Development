@@ -27,27 +27,33 @@ class StockLevelRepository(BaseRepository[StockLevel]):
         """Initialize repository."""
         super().__init__(db, StockLevel)
 
-    def create(self, business_id: UUID, **kwargs) -> StockLevel:
+    def create(self, business_id: UUID, commit: bool = True, **kwargs) -> StockLevel:
         """Create a stock level record, omitting business_id (not a column on StockLevel)."""
         entity = StockLevel(**kwargs)
         self.db.add(entity)
-        self.db.commit()
-        self.db.refresh(entity)
+        if commit:
+            self.db.commit()
+            self.db.refresh(entity)
+        else:
+            self.db.flush()
         return entity
 
     def get(self, business_id: UUID, entity_id: UUID) -> StockLevel | None:
         """Get stock level by ID (no business_id filter — enforced via product/location FKs)."""
         return self.db.query(StockLevel).filter(StockLevel.id == entity_id).first()
 
-    def update(self, business_id: UUID, entity_id: UUID, **kwargs) -> StockLevel | None:
+    def update(self, business_id: UUID, entity_id: UUID, commit: bool = True, **kwargs) -> StockLevel | None:
         """Update stock level by ID."""
         entity = self.get(business_id, entity_id)
         if not entity:
             return None
         for key, value in kwargs.items():
             setattr(entity, key, value)
-        self.db.commit()
-        self.db.refresh(entity)
+        if commit:
+            self.db.commit()
+            self.db.refresh(entity)
+        else:
+            self.db.flush()
         return entity
 
     def get_by_product_and_location(self, product_id: UUID, location_id: UUID) -> StockLevel | None:

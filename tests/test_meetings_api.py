@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+import pytest
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.core.exceptions import ConcurrencyConflictError
 from app.core.security import create_access_token
+from app.models.meeting import Meeting
 from app.schemas.auth import CurrentUser
+from app.schemas.meeting import MeetingCreate, MeetingUpdate
+from app.services.meeting import MeetingService
 
 
 def _auth_headers(user: CurrentUser) -> dict[str, str]:
@@ -185,3 +192,58 @@ class TestMeetingLifecycle:
 
         r = client.get(f"/api/v1/meetings/{uuid4()}", headers=_auth_headers(owner_user))
         assert r.status_code == 404
+
+
+class TestMeetingConcurrency:
+    """Test optimistic-concurrency protection on meeting updates.
+
+    Uses MeetingService directly (not the API client): the test harness's
+    get_db override closes/resets test_db after every HTTP request, which
+    would wipe out the "stale in-memory copy" this race depends on before a
+    second request could ever observe it.
+    """
+
+    def _create(self, test_db: Session, owner_user: CurrentUser, manager_user: CurrentUser) -> Meeting:
+        service = MeetingService(test_db)
+        start = datetime.now(timezone.utc) + timedelta(days=1)
+        data = MeetingCreate(
+            title="Sprint Planning",
+            description="Weekly sync",
+            start_time=start,
+            end_time=start + timedelta(minutes=30),
+            call_type="video",
+            participant_user_ids=[manager_user.user_id],
+        )
+        return service.create(owner_user.business_id, owner_user, data)
+
+    def _bump_version_externally(self, test_db: Session, meeting_id) -> None:
+        """Simulate a concurrent writer committing a change to this meeting
+        through a separate session, while test_db's identity map still holds
+        the version it originally loaded."""
+        OtherSession = sessionmaker(bind=test_db.get_bind())
+        other_session = OtherSession()
+        try:
+            other_meeting = other_session.query(Meeting).filter(Meeting.id == meeting_id).first()
+            other_meeting.title = "Changed by someone else"
+            other_session.commit()
+        finally:
+            other_session.close()
+
+    def test_stale_update_raises_conflict(self, test_db: Session, owner_user: CurrentUser, manager_user: CurrentUser):
+        meeting = self._create(test_db, owner_user, manager_user)
+        service = MeetingService(test_db)
+
+        self._bump_version_externally(test_db, meeting.id)
+
+        data = MeetingUpdate(description="Updated agenda")
+        with pytest.raises(ConcurrencyConflictError):
+            service.update(owner_user.business_id, owner_user, meeting.id, data)
+
+    def test_stale_start_call_raises_conflict(self, test_db: Session, owner_user: CurrentUser, manager_user: CurrentUser):
+        meeting = self._create(test_db, owner_user, manager_user)
+        service = MeetingService(test_db)
+
+        self._bump_version_externally(test_db, meeting.id)
+
+        with pytest.raises(ConcurrencyConflictError):
+            service.start_call(owner_user.business_id, owner_user, meeting.id)

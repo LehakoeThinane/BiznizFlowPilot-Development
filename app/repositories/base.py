@@ -27,23 +27,30 @@ class BaseRepository(Generic[T]):
         self.db = db
         self.model = model
 
-    def create(self, business_id: UUID, **kwargs) -> T:
+    def create(self, business_id: UUID, commit: bool = True, **kwargs) -> T:
         """Create entity in specified business.
-        
+
         Args:
             business_id: Tenant ID (MUST be set)
+            commit: When False, flush instead of commit - lets the caller
+                batch this insert into a larger atomic transaction (e.g.
+                together with an Event row, for outbox-style atomicity).
+                Defaults to True, matching prior behavior exactly.
             **kwargs: Entity attributes
-            
+
         Returns:
             Created entity
         """
         # Ensure business_id is set on the entity
         kwargs["business_id"] = business_id
-        
+
         entity = self.model(**kwargs)
         self.db.add(entity)
-        self.db.commit()
-        self.db.refresh(entity)
+        if commit:
+            self.db.commit()
+            self.db.refresh(entity)
+        else:
+            self.db.flush()
         return entity
 
     def get(self, business_id: UUID, entity_id: UUID) -> Optional[T]:
@@ -95,48 +102,62 @@ class BaseRepository(Generic[T]):
             self.model.business_id == business_id  # 🧨 MULTI-TENANCY ENFORCEMENT
         ).count()
 
-    def update(self, business_id: UUID, entity_id: UUID, **kwargs) -> Optional[T]:
+    def update(self, business_id: UUID, entity_id: UUID, commit: bool = True, **kwargs) -> Optional[T]:
         """Update entity within tenant.
-        
+
         🧨 CRITICAL: Filters by business_id before updating
-        
+
         Args:
             business_id: Tenant ID
             entity_id: Entity ID
+            commit: When False, flush instead of commit - lets the caller
+                batch this update into a larger atomic transaction (e.g.
+                together with an Event row, for outbox-style atomicity).
+                Defaults to True, matching prior behavior exactly.
             **kwargs: Updated attributes
-            
+
         Returns:
             Updated entity or None
         """
         entity = self.get(business_id, entity_id)
         if not entity:
             return None
-            
+
         for key, value in kwargs.items():
             setattr(entity, key, value)
-            
-        self.db.commit()
-        self.db.refresh(entity)
+
+        if commit:
+            self.db.commit()
+            self.db.refresh(entity)
+        else:
+            self.db.flush()
         return entity
 
-    def delete(self, business_id: UUID, entity_id: UUID) -> bool:
+    def delete(self, business_id: UUID, entity_id: UUID, commit: bool = True) -> bool:
         """Delete entity within tenant.
-        
+
         🧨 CRITICAL: Filters by business_id before deleting
-        
+
         Args:
             business_id: Tenant ID
             entity_id: Entity ID
-            
+            commit: When False, flush instead of commit - lets the caller
+                batch this delete into a larger atomic transaction (e.g.
+                together with an Event row, for outbox-style atomicity).
+                Defaults to True, matching prior behavior exactly.
+
         Returns:
             True if deleted, False if not found
         """
         entity = self.get(business_id, entity_id)
         if not entity:
             return False
-            
+
         self.db.delete(entity)
-        self.db.commit()
+        if commit:
+            self.db.commit()
+        else:
+            self.db.flush()
         return True
 
     def commit(self) -> None:

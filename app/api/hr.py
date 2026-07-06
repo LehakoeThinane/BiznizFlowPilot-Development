@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import calendar
-import logging
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Annotated
@@ -40,8 +39,6 @@ from app.schemas.hr import (
 from app.services.event import EventService
 from app.utils.notify import notify_business
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
 
 
@@ -60,22 +57,19 @@ def _emit(
     description: str | None = None,
     data: dict | None = None,
 ) -> None:
-    try:
-        EventService(db).create_event(
-            business_id=UUID(str(business_id)),
-            event_type=event_type,
-            entity_type=entity_type,
-            entity_id=UUID(str(entity_id)),
-            actor_id=UUID(str(actor_id)) if actor_id else None,
-            description=description,
-            data=data,
-        )
-    except Exception:
-        try:
-            db.rollback()
-        except Exception:
-            pass
-        logger.warning("Failed to emit %s for %s %s", event_type, entity_type, entity_id, exc_info=True)
+    """Queue an event row in the same (not-yet-committed) transaction as the
+    caller's pending business-row change - the caller commits once, after
+    this call, so both persist atomically or neither does."""
+    EventService(db).create_event(
+        business_id=UUID(str(business_id)),
+        event_type=event_type,
+        entity_type=entity_type,
+        entity_id=UUID(str(entity_id)),
+        actor_id=UUID(str(actor_id)) if actor_id else None,
+        description=description,
+        data=data,
+        commit=False,
+    )
 
 
 def _employee_out(emp: Employee) -> EmployeeOut:
@@ -256,12 +250,12 @@ def create_employee(
         action_url="/employees",
         related_type="employee", related_id=emp.id,
     )
-    db.commit()
-    db.refresh(emp)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EMPLOYEE_CREATED, "employee", emp.id,
           description=f"Employee created: {emp.first_name} {emp.last_name}",
           data={"position": emp.position, "department_id": str(emp.department_id) if emp.department_id else None})
+    db.commit()
+    db.refresh(emp)
     return _employee_out(emp)
 
 
@@ -283,12 +277,12 @@ def update_employee(
     updated_fields = list(data.model_dump(exclude_none=True).keys())
     for k, v in data.model_dump(exclude_none=True).items():
         setattr(emp, k, v)
-    db.commit()
-    db.refresh(emp)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EMPLOYEE_UPDATED, "employee", emp.id,
           description=f"Employee updated: {emp.first_name} {emp.last_name}",
           data={"updated_fields": updated_fields})
+    db.commit()
+    db.refresh(emp)
     return _employee_out(emp)
 
 
@@ -307,10 +301,10 @@ def delete_employee(
     emp_name = f"{emp.first_name} {emp.last_name}"
     emp_id = emp.id
     emp.is_active = False
-    db.commit()
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EMPLOYEE_DEACTIVATED, "employee", emp_id,
           description=f"Employee deactivated: {emp_name}")
+    db.commit()
 
 
 # ── Leave Types ─────────────────────────────────────────────────────────────
@@ -398,13 +392,13 @@ def create_leave_request(
         f" from {data.start_date} to {data.end_date}.",
         action_url="/leave", related_type="leave_request", related_id=req.id,
     )
-    db.commit()
-    db.refresh(req)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.LEAVE_REQUESTED, "leave_request", req.id,
           description=f"Leave requested by {emp.first_name} {emp.last_name}: {data.start_date} – {data.end_date}",
           data={"employee_id": str(data.employee_id), "days": int(data.days_requested),
                 "start_date": str(data.start_date), "end_date": str(data.end_date)})
+    db.commit()
+    db.refresh(req)
     return _leave_out(req)
 
 
@@ -437,12 +431,12 @@ def update_leave_status(
         f"{emp_name}'s leave request ({req.start_date} – {req.end_date}) was {data.status}.",
         action_url="/leave", related_type="leave_request", related_id=req.id,
     )
-    db.commit()
-    db.refresh(req)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.LEAVE_STATUS_CHANGED, "leave_request", req.id,
           description=f"Leave {data.status} for {emp_name}: {req.start_date} – {req.end_date}",
           data={"status": data.status, "notes": data.notes})
+    db.commit()
+    db.refresh(req)
     return _leave_out(req)
 
 
@@ -549,27 +543,25 @@ def generate_payroll(
     period.total_gross = total_gross
     period.total_deductions = total_deductions
     period.total_net = total_net
+
+    # Notification + audit event are queued in the same transaction as the
+    # period/payslip rows above - committed together below, atomically.
+    month_name = calendar.month_name[data.period_month]
+    notify_business(
+        db, current_user.business_id, "payroll",
+        "Payroll generated",
+        f"Payroll for {month_name} {data.period_year} has been generated"
+        f" for {len(employees)} employee(s). Total net: R{total_net:,.2f}.",
+        action_url="/payroll", related_type="payroll_period", related_id=period.id,
+    )
+    _emit(db, current_user.business_id, current_user.user_id,
+          EventType.PAYROLL_GENERATED, "payroll_period", period.id,
+          description=f"Payroll generated for {month_name} {data.period_year}: {len(employees)} employees, net R{total_net:,.2f}",
+          data={"period_year": data.period_year, "period_month": data.period_month,
+                "employee_count": len(employees), "total_net": float(total_net)})
+
     db.commit()
     db.refresh(period)
-
-    # Notification + audit event are side-effects; don't block payroll generation if they fail
-    try:
-        month_name = calendar.month_name[data.period_month]
-        notify_business(
-            db, current_user.business_id, "payroll",
-            "Payroll generated",
-            f"Payroll for {month_name} {data.period_year} has been generated"
-            f" for {len(employees)} employee(s). Total net: R{total_net:,.2f}.",
-            action_url="/payroll", related_type="payroll_period", related_id=period.id,
-        )
-        _emit(db, current_user.business_id, current_user.user_id,
-              EventType.PAYROLL_GENERATED, "payroll_period", period.id,
-              description=f"Payroll generated for {month_name} {data.period_year}: {len(employees)} employees, net R{total_net:,.2f}",
-              data={"period_year": data.period_year, "period_month": data.period_month,
-                    "employee_count": len(employees), "total_net": float(total_net)})
-        db.commit()
-    except Exception:
-        db.rollback()
 
     slips = db.query(Payslip).filter(Payslip.payroll_period_id == period.id).all()
     out = PayrollPeriodOut.model_validate(period)
@@ -651,11 +643,11 @@ def approve_payroll(
     period.status = "completed"
     period.processed_at = datetime.now(timezone.utc)
     db.query(Payslip).filter(Payslip.payroll_period_id == period_id).update({"status": "finalized"})
-    db.commit()
-    db.refresh(period)
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.PAYROLL_APPROVED, "payroll_period", period.id,
           description=f"Payroll approved: {period.period_month}/{period.period_year}",
           data={"period_year": period.period_year, "period_month": period.period_month,
                 "total_net": float(period.total_net)})
+    db.commit()
+    db.refresh(period)
     return get_payroll_period(period_id, current_user, db)

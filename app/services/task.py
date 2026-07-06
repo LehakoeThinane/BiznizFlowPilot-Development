@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.exc import StaleDataError
 
 from app.core.enums import EventType
+from app.core.exceptions import ConcurrencyConflictError
 from app.models.task import Task
 from app.repositories.task import TaskRepository
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.auth import CurrentUser
-
-logger = logging.getLogger(__name__)
 
 
 class TaskService:
@@ -56,26 +55,23 @@ class TaskService:
         description: str | None = None,
         data: dict | None = None,
     ) -> None:
-        """Emit an event if event_service is available. Never raises."""
+        """Queue an event row in the same transaction as the caller's pending
+        business-row change (outbox pattern: caller commits once, after this
+        call, so the business row and its event either both persist or
+        neither does). No-ops if event_service is unavailable.
+        """
         if self._event_service is None:
             return
-        try:
-            self._event_service.create_event(
-                business_id=business_id,
-                event_type=event_type,
-                entity_type="task",
-                entity_id=entity_id,
-                actor_id=actor_id,
-                description=description,
-                data=data,
-            )
-        except Exception:
-            logger.warning(
-                "Failed to emit %s event for task %s",
-                event_type.value,
-                entity_id,
-                exc_info=True,
-            )
+        self._event_service.create_event(
+            business_id=business_id,
+            event_type=event_type,
+            entity_type="task",
+            entity_id=entity_id,
+            actor_id=actor_id,
+            description=description,
+            data=data,
+            commit=False,
+        )
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: TaskCreate) -> Task:
         """Create task.
@@ -85,7 +81,7 @@ class TaskService:
         if current_user.role not in ["owner", "manager"]:
             raise ValueError("Permission denied: Only owner/manager can create tasks")
 
-        task = self.repo.create(business_id=business_id, **data.model_dump())
+        task = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
 
         self._emit_event(
             event_type=EventType.TASK_CREATED,
@@ -101,6 +97,8 @@ class TaskService:
             },
         )
 
+        self.db.commit()
+        self.db.refresh(task)
         return task
 
     def get(self, business_id: UUID, current_user: CurrentUser, task_id: UUID) -> Task | None:
@@ -192,7 +190,13 @@ class TaskService:
         if data.status == "completed":
             update_data["completed_at"] = datetime.now(timezone.utc)
 
-        updated_task = self.repo.update(business_id=business_id, entity_id=task_id, **update_data)
+        try:
+            updated_task = self.repo.update(business_id=business_id, entity_id=task_id, commit=False, **update_data)
+        except StaleDataError as e:
+            self.db.rollback()
+            raise ConcurrencyConflictError(
+                "This task was changed by someone else - refresh and try again"
+            ) from e
 
         if updated_task:
             # Emit the most specific event type
@@ -223,6 +227,8 @@ class TaskService:
                     description="Task updated",
                     data={"updated_fields": list(update_data.keys())},
                 )
+            self.db.commit()
+            self.db.refresh(updated_task)
 
         return updated_task
 
@@ -239,7 +245,13 @@ class TaskService:
             return None
 
         old_assigned = task.assigned_to
-        updated_task = self.repo.update(business_id=business_id, entity_id=task_id, assigned_to=assigned_to)
+        try:
+            updated_task = self.repo.update(business_id=business_id, entity_id=task_id, commit=False, assigned_to=assigned_to)
+        except StaleDataError as e:
+            self.db.rollback()
+            raise ConcurrencyConflictError(
+                "This task was changed by someone else - refresh and try again"
+            ) from e
 
         if updated_task:
             self._emit_event(
@@ -254,6 +266,8 @@ class TaskService:
                     "new_assigned_to": str(assigned_to),
                 },
             )
+            self.db.commit()
+            self.db.refresh(updated_task)
 
         return updated_task
 
@@ -269,7 +283,8 @@ class TaskService:
         if not task:
             return False
 
-        # Emit event before deletion (entity still exists for context)
+        # Emit event before deletion (entity still exists for context) - same
+        # transaction as the delete itself, committed together below.
         self._emit_event(
             event_type=EventType.TASK_DELETED,
             business_id=business_id,
@@ -279,7 +294,8 @@ class TaskService:
             data={"title": task.title, "status": task.status},
         )
 
-        self.repo.delete(business_id=business_id, entity_id=task_id)
+        self.repo.delete(business_id=business_id, entity_id=task_id, commit=False)
+        self.db.commit()
         return True
 
     @staticmethod
