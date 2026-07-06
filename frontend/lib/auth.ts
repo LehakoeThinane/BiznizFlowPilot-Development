@@ -2,7 +2,6 @@ import { apiRequest, clearAccessToken, setAccessToken } from "@/lib/api";
 import type {
   CurrentUser,
   LoginRequest,
-  RegisterRequest,
   TokenResponse,
 } from "@/types/api";
 
@@ -28,16 +27,6 @@ export function logout(): void {
 
 export async function login(payload: LoginRequest): Promise<TokenResponse> {
   const tokens = await apiRequest<TokenResponse>("/api/v1/auth/login", {
-    method: "POST",
-    body: payload,
-    _skipRefresh: true,
-  });
-  setAccessToken(tokens.access_token);
-  return tokens;
-}
-
-export async function register(payload: RegisterRequest): Promise<TokenResponse> {
-  const tokens = await apiRequest<TokenResponse>("/api/v1/auth/register", {
     method: "POST",
     body: payload,
     _skipRefresh: true,

@@ -84,11 +84,47 @@ def sample_user_data():
 
 
 @pytest.fixture
-def registered_user(client, sample_user_data):
-    """Register a user and return tokens."""
-    response = client.post("/api/v1/auth/register", json=sample_user_data)
-    assert response.status_code == 200
-    return response.json()
+def registered_user(test_db: Session, sample_user_data):
+    """Create an organization/business/owner directly and return tokens for it.
+
+    There is no public self-service registration endpoint (new client
+    organizations are provisioned by a platform admin, then the owner
+    accepts an invite) - this fixture recreates just the end state
+    (a real owner user with valid tokens) that tests need for setup.
+    """
+    from app.services.auth import AuthService
+
+    organization = Organization(
+        id=uuid4(), name=sample_user_data["business_name"], billing_email=sample_user_data["email"],
+    )
+    test_db.add(organization)
+    test_db.commit()
+
+    business = Business(
+        id=uuid4(), organization_id=organization.id, name=sample_user_data["business_name"],
+        email=sample_user_data["email"], is_primary_subsidiary=True,
+    )
+    test_db.add(business)
+    test_db.commit()
+
+    user = User(
+        id=uuid4(), business_id=business.id, email=sample_user_data["email"],
+        hashed_password=hash_password(sample_user_data["password"]),
+        first_name=sample_user_data["first_name"], last_name=sample_user_data["last_name"],
+        role="owner", is_active=True,
+    )
+    test_db.add(user)
+    test_db.commit()
+
+    tokens = AuthService(test_db)._create_tokens(
+        user_id=user.id,
+        business_id=business.id,
+        email=user.email,
+        role="owner",
+        full_name=f"{user.first_name} {user.last_name}",
+        phash=user.hashed_password[-8:],
+    )
+    return tokens.model_dump()
 
 
 # ============================================================================

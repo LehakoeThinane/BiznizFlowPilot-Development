@@ -1,6 +1,6 @@
 """Pydantic schemas package."""
 
-from app.schemas.auth import CurrentUser, LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import CurrentUser, LoginRequest, TokenResponse
 from app.schemas.customer import CustomerCreate, CustomerListResponse, CustomerResponse, CustomerUpdate
 from app.schemas.event import EventAuditTrailResponse, EventCreate, EventListResponse, EventResponse
 from app.schemas.lead import LeadCreate, LeadListResponse, LeadResponse, LeadUpdate
@@ -56,7 +56,6 @@ from app.schemas.purchase_order import (
 
 __all__ = [
     # Auth
-    "RegisterRequest",
     "LoginRequest",
     "TokenResponse",
     "CurrentUser",

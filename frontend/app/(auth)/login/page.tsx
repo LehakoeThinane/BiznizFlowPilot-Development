@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
 import { apiRequest } from "@/lib/api";
@@ -64,7 +63,7 @@ export default function LoginPage() {
       const message = err instanceof Error ? err.message : "Login failed";
       setError(
         message === "Invalid email or password"
-          ? "We could not sign you in. Check your email and password, or create an account first."
+          ? "We could not sign you in. Check your email and password, or contact your administrator if you haven't received an invite yet."
           : message,
       );
     } finally {
@@ -133,7 +132,7 @@ export default function LoginPage() {
         {/* ── Login ── */}
         {mode === "login" && (
           <>
-            <p className="mb-6 text-xs text-[#555]">If this is your first time, create an account first.</p>
+            <p className="mb-6 text-xs text-[#555]">New here? Use the invite link sent to your work email.</p>
             <form className="space-y-4" onSubmit={handleLogin}>
               <div>
                 <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="email">Email</label>
@@ -160,11 +159,6 @@ export default function LoginPage() {
                 className="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60">
                 {isSubmitting ? "Signing in..." : "Sign in"}
               </button>
-
-              <p className="text-center text-sm text-muted">
-                New business?{" "}
-                <Link href="/register" className="font-medium text-brand hover:underline">Create an account</Link>
-              </p>
             </form>
           </>
         )}

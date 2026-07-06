@@ -17,7 +17,6 @@ from app.core.security import (
 from app.models.user import User
 from app.repositories.user import UserRepository
 from app.schemas.auth import TokenResponse
-from app.services.organization import OrganizationService
 
 
 class AuthService:
@@ -27,61 +26,6 @@ class AuthService:
         """Initialize with database session."""
         self.db = db
         self.user_repo = UserRepository(db)
-
-    def register(
-        self,
-        business_name: str,
-        email: str,
-        password: str,
-        first_name: str,
-        last_name: str,
-    ) -> TokenResponse:
-        """Register new organization (client account), its first subsidiary business, and owner.
-
-        Creates:
-        1. Organization (client account) + first subsidiary Business
-        2. User (owner with full access)
-        3. Returns tokens
-
-        Args:
-            business_name: Business/organization name
-            email: Owner email (also used as business/organization billing email)
-            password: Owner password
-            first_name: Owner first name
-            last_name: Owner last name
-
-        Returns:
-            TokenResponse with access and refresh tokens
-
-        Raises:
-            ValueError: If email already exists
-        """
-        org_service = OrganizationService(self.db)
-        try:
-            provisioned = org_service.create_organization_with_first_subsidiary(
-                org_name=business_name,
-                billing_email=email,
-                owner_email=email,
-                owner_password=password,
-                owner_first_name=first_name,
-                owner_last_name=last_name,
-                plan_tier="trial",
-            )
-            self.db.commit()
-
-            # Generate tokens
-            return self._create_tokens(
-                user_id=provisioned.owner.id,
-                business_id=provisioned.business.id,
-                email=email,
-                role="owner",
-                full_name=f"{first_name} {last_name}",
-                phash=provisioned.owner.hashed_password[-8:],
-            )
-
-        except Exception as e:
-            self.db.rollback()
-            raise e
 
     # Number of consecutive failures before the account is locked
     MAX_FAILED_ATTEMPTS = 5

@@ -110,6 +110,17 @@ class Settings(BaseSettings):
     # Frontend base URL (used in emails)
     frontend_url: str = "http://localhost:3000"
 
+    # Billing (Stripe) — self-serve signup: checkout success automatically
+    # provisions the Organization via a webhook. No safe fallback exists
+    # (like secret_key's dev default) because Stripe calls cannot be signed
+    # or verified without real API credentials from a Stripe account.
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    # Maps a plan tier name to its Stripe Price ID (created in the Stripe
+    # Dashboard/API) - e.g. {"starter": "price_...", "professional": "price_..."}
+    stripe_price_ids: dict[str, str] = {}
+
     # Email delivery — set RESEND_API_KEY to use Resend; otherwise falls back to SMTP
     resend_api_key: str = ""
 

@@ -126,6 +126,9 @@
     "user = db.query(User).filter(User.id == current_user.user_id).first()",
     "user = db.query(User).filter(User.id == current_user.user_id).first()"
   ],
+  "app/services/billing.py": [
+    "db.query(Organization)"
+  ],
   "app/services/chat.py": [
     "business = self.db.query(Business).filter(Business.id == business_id).first()",
     "user = self.db.query(User).filter(User.id == user_id).first()"
@@ -173,9 +176,6 @@
     "self.db.query(WorkflowAction)",
     "self.db.query(WorkflowDefinition)",
     "self.db.query(WorkflowDefinition)"
-  ],
-  "app/services/organization.py": [
-    "existing_user = self.db.query(User).filter(User.email == owner_email).first()"
   ],
   "app/services/recovery.py": [
     "self.db.query(Event)",

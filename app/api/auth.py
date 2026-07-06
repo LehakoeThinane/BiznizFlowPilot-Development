@@ -12,7 +12,6 @@ from app.schemas.auth import (
     MessageResponse,
     PasswordResetConfirmRequest,
     PasswordResetRequest,
-    RegisterRequest,
     TokenResponse,
 )
 from app.schemas.invitation import InvitationAcceptRequest, InvitationValidateResponse
@@ -78,32 +77,6 @@ def _clear_access_cookie(response: Response) -> None:
 
 def _clear_session_cookie(response: Response) -> None:
     response.delete_cookie(key=_SESSION_COOKIE, path="/")
-
-
-@router.post("/register", response_model=TokenResponse)
-@limiter.limit("10/minute")
-def register(
-    request: Request,
-    body: RegisterRequest,
-    response: Response,
-    db: Session = Depends(get_db),
-) -> TokenResponse:
-    """Register new business and owner."""
-    service = AuthService(db)
-    try:
-        tokens = service.register(
-            business_name=body.business_name,
-            email=body.email,
-            password=body.password,
-            first_name=body.first_name,
-            last_name=body.last_name,
-        )
-        _set_refresh_cookie(response, tokens.refresh_token)
-        _set_access_cookie(response, tokens.access_token)
-        _set_session_cookie(response)
-        return tokens
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
 @router.post("/login", response_model=TokenResponse)

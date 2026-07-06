@@ -65,6 +65,18 @@ class Organization(BaseModel):
         doc="Plan seat allowance for org-level rollup metering (schema placeholder, no enforcement logic yet)",
     )
 
+    stripe_customer_id = Column(
+        String(255),
+        nullable=True,
+        unique=True,
+        index=True,
+        doc="Stripe Customer ID from the checkout session that provisioned "
+            "this organization (self-serve signups only - null for "
+            "platform-admin-provisioned orgs). The uniqueness constraint is "
+            "what makes the checkout-completed webhook idempotent: a "
+            "redelivered event can't provision the same customer twice.",
+    )
+
     domains = relationship(
         "OrganizationDomain",
         back_populates="organization",
