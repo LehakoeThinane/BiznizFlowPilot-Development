@@ -1,0 +1,3 @@
+api.mmnexus.co.za {
+	reverse_proxy backend:8000
+}

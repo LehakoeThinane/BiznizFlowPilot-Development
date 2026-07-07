@@ -27,6 +27,9 @@ export default function LandingPage() {
           Sign in
         </Link>
       </div>
+      <Link href="/download" className="mt-6 text-xs text-[#666] hover:text-[#999] hover:underline">
+        Already a customer? Download the desktop app →
+      </Link>
     </main>
   );
 }

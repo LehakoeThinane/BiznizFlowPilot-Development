@@ -1,0 +1,34 @@
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    expose:
+      - "8000"
+
+  # Beat runs embedded in the worker process (-B) rather than as its own
+  # container, to fit a 1GB-RAM VM. Safe here because there's only ever one
+  # worker replica - embedded beat double-schedules if run under multiple
+  # concurrent worker processes, which this deployment never does.
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-B", "--loglevel=INFO"]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:
