@@ -56,6 +56,7 @@ venv.bak/
 .env.example
 .env.local
 .env.*.local
+.env.production
 
 # Database
 *.db

@@ -16,6 +16,17 @@ services:
     env_file: .env.production
     command: ["celery", "-A", "app.workers.celery_app", "worker", "-B", "--loglevel=INFO"]
 
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      # Internal Docker network hop straight to the backend container -
+      # faster and avoids an unnecessary public-internet round trip, since
+      # both containers are already on the same host.
+      BACKEND_URL: http://backend:8000
+    expose:
+      - "3000"
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -28,6 +39,7 @@ services:
       - caddy_config:/config
     depends_on:
       - backend
+      - frontend
 
 volumes:
   caddy_data:
