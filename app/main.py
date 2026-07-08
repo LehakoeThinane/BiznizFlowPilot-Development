@@ -43,6 +43,7 @@ from app.api import (
 )
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.entitlements import require_active_trial
 from app.core.enums import EventType
 from app.core.exception_handlers import unhandled_exception_handler
 from app.core.security import hash_password, verify_password
@@ -129,46 +130,54 @@ app.include_router(auth.router, prefix=settings.api_v1_prefix)
 app.include_router(billing.router)
 
 # CRM routes (auth required)
-app.include_router(customers.router)
-app.include_router(events.router)
-app.include_router(leads.router)
-app.include_router(tasks.router)
-app.include_router(users.router)
-app.include_router(invites.router)
+# require_active_trial: a no-op for every tier except an expired trial,
+# which loses access to everything (no paid tier to fall back to) rather
+# than just the specific features require_feature gates for paying tiers.
+# Not applied to auth/billing/organizations (see below) - those must stay
+# reachable so an expired-trial account can still log in, read its own
+# plan/trial status, and upgrade.
+app.include_router(customers.router, dependencies=[Depends(require_active_trial)])
+app.include_router(events.router, dependencies=[Depends(require_active_trial)])
+app.include_router(leads.router, dependencies=[Depends(require_active_trial)])
+app.include_router(tasks.router, dependencies=[Depends(require_active_trial)])
+app.include_router(users.router, dependencies=[Depends(require_active_trial)])
+app.include_router(invites.router, dependencies=[Depends(require_active_trial)])
 
 # Meetings / calendar calls (auth required)
-app.include_router(meetings.router)
+app.include_router(meetings.router, dependencies=[Depends(require_active_trial)])
 
 # Direct messaging (auth required)
-app.include_router(messaging.router)
+app.include_router(messaging.router, dependencies=[Depends(require_active_trial)])
 
 # Organization / subsidiary management (auth required, IT Admin for mutations)
+# Deliberately NOT gated by require_active_trial - the frontend needs this
+# reachable to read plan_tier/trial_ends_at and render the upgrade prompt.
 app.include_router(organizations.router)
 
 # Automation routes (auth required)
-app.include_router(workflows.router)
-app.include_router(workflow_definitions.router)
-app.include_router(metrics.router)
-app.include_router(dashboard.router)
+app.include_router(workflows.router, dependencies=[Depends(require_active_trial)])
+app.include_router(workflow_definitions.router, dependencies=[Depends(require_active_trial)])
+app.include_router(metrics.router, dependencies=[Depends(require_active_trial)])
+app.include_router(dashboard.router, dependencies=[Depends(require_active_trial)])
 
 # ERP routes (auth required)
-app.include_router(products.router)
-app.include_router(suppliers.router)
-app.include_router(inventory.router)
-app.include_router(sales_orders.router)
-app.include_router(purchase_orders.router)
+app.include_router(products.router, dependencies=[Depends(require_active_trial)])
+app.include_router(suppliers.router, dependencies=[Depends(require_active_trial)])
+app.include_router(inventory.router, dependencies=[Depends(require_active_trial)])
+app.include_router(sales_orders.router, dependencies=[Depends(require_active_trial)])
+app.include_router(purchase_orders.router, dependencies=[Depends(require_active_trial)])
 
 # Finance, HR, Invoicing, Notifications (auth required)
-app.include_router(finance.router)
-app.include_router(hr.router)
-app.include_router(invoice.router)
-app.include_router(notification.router)
+app.include_router(finance.router, dependencies=[Depends(require_active_trial)])
+app.include_router(hr.router, dependencies=[Depends(require_active_trial)])
+app.include_router(invoice.router, dependencies=[Depends(require_active_trial)])
+app.include_router(notification.router, dependencies=[Depends(require_active_trial)])
 
 # AI chat routes (auth required)
-app.include_router(chat.router)
+app.include_router(chat.router, dependencies=[Depends(require_active_trial)])
 
 # Global search (auth required)
-app.include_router(search.router)
+app.include_router(search.router, dependencies=[Depends(require_active_trial)])
 
 # Platform (vendor staff) routes — fully separate auth boundary, cross-tenant
 app.include_router(platform_auth.router)

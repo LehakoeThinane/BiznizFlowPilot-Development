@@ -1,6 +1,7 @@
 """Organization service - creation and cross-subsidiary management."""
 
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.models.business import Business
 from app.models.organization import Organization
 from app.repositories.organization import OrganizationRepository
+
+TRIAL_PERIOD_DAYS = 14
 
 
 @dataclass
@@ -46,6 +49,9 @@ class OrganizationService:
             name=org_name,
             billing_email=billing_email,
             plan_tier=plan_tier,
+            trial_ends_at=(
+                datetime.now(timezone.utc) + timedelta(days=TRIAL_PERIOD_DAYS) if plan_tier == "trial" else None
+            ),
         )
         self.db.add(organization)
         self.db.flush()  # get organization.id without committing
