@@ -3,7 +3,7 @@ api.mmnexus.co.za {
 }
 
 app.mmnexus.co.za {
-	handle /downloads/* {
+	handle_path /downloads/* {
 		root * /srv/downloads
 		file_server
 	}
