@@ -16,8 +16,8 @@ autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
 // Overridable for local development against a dev server; defaults to the
-// hosted production app. Swap the default before shipping a real build.
-const APP_URL = process.env.BFP_APP_URL || "https://app.biznizflowpilot.com";
+// hosted production app.
+const APP_URL = process.env.BFP_APP_URL || "https://app.mmnexus.co.za";
 
 let mainWindow = null;
 

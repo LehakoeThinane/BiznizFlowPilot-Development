@@ -3,5 +3,11 @@ api.mmnexus.co.za {
 }
 
 app.mmnexus.co.za {
-	reverse_proxy frontend:3000
+	handle /downloads/* {
+		root * /srv/downloads
+		file_server
+	}
+	handle {
+		reverse_proxy frontend:3000
+	}
 }
