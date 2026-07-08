@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies import get_current_user
-from app.models.organization import Organization
+from app.repositories.organization import OrganizationRepository
 from app.schemas.auth import CurrentUser
 
 FULL_ACCESS_TIERS = frozenset({"legacy", "trial", "enterprise"})
@@ -51,7 +51,7 @@ def require_feature(feature: str):
         db: Annotated[Session, Depends(get_db)],
     ) -> CurrentUser:
         org = (
-            db.query(Organization).filter(Organization.id == current_user.organization_id).first()
+            OrganizationRepository(db).get_by_id(current_user.organization_id)
             if current_user.organization_id
             else None
         )

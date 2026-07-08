@@ -50,3 +50,15 @@ class InvitationRepository(BaseRepository[UserInvitation]):
             .limit(limit)
             .all()
         )
+
+    def count_pending_for_organization(self, organization_id: UUID) -> int:
+        """Count pending invitations across every subsidiary in an organization.
+
+        Used for seat-limit enforcement - same sanctioned org-wide exception
+        as list_for_organization above.
+        """
+        return (
+            self.db.query(UserInvitation)
+            .filter(UserInvitation.organization_id == organization_id, UserInvitation.status == "pending")
+            .count()
+        )

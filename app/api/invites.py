@@ -13,9 +13,9 @@ from app.core.entitlements import FULL_ACCESS_TIERS, SEAT_LIMITS
 from app.core.enums import EventType
 from app.core.permissions import INVITE_MANAGERS
 from app.dependencies import get_current_user
-from app.models.organization import Organization
-from app.models.user import User
-from app.models.user_invitation import UserInvitation
+from app.repositories.invitation import InvitationRepository
+from app.repositories.organization import OrganizationRepository
+from app.repositories.user import UserRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.invitation import InvitationCreate, InvitationListResponse, InvitationResponse
 from app.services.event import EventService
@@ -63,18 +63,12 @@ def create_invitation(
     if current_user.role == "it_admin" and str(target_business.organization_id) != str(current_user.organization_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Business is not in your organization")
 
-    org = db.query(Organization).filter(Organization.id == target_business.organization_id).first()
+    org = OrganizationRepository(db).get_by_id(target_business.organization_id)
     seat_limit = None if org is None or org.plan_tier in FULL_ACCESS_TIERS else SEAT_LIMITS.get(org.plan_tier)
     if seat_limit is not None:
-        seat_count = (
-            db.query(User)
-            .join(Business, Business.id == User.business_id)
-            .filter(Business.organization_id == org.id, User.is_active.is_(True))
-            .count()
-            + db.query(UserInvitation)
-            .filter(UserInvitation.organization_id == org.id, UserInvitation.status == "pending")
-            .count()
-        )
+        seat_count = UserRepository(db).count_active_in_organization(
+            org.id
+        ) + InvitationRepository(db).count_pending_for_organization(org.id)
         if seat_count >= seat_limit:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,

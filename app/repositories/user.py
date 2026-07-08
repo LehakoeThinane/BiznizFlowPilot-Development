@@ -1,9 +1,11 @@
 """User repository - data access for User model."""
 
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.models.business import Business
 from app.models.user import User
 from app.repositories.base import BaseRepository
 
@@ -78,3 +80,18 @@ class UserRepository(BaseRepository[User]):
             User.business_id == business_id,  # 🧨 MULTI-TENANCY
             User.role == role,
         ).count()
+
+    def count_active_in_organization(self, organization_id: UUID) -> int:
+        """Count active users across every subsidiary in an organization.
+
+        🧨 Deliberately bypasses the single-business_id filter for an
+        org-wide aggregate - same sanctioned exception as
+        InvitationRepository.list_for_organization. Used for seat-limit
+        enforcement, which is a per-organization (not per-business) cap.
+        """
+        return (
+            self.db.query(User)
+            .join(Business, Business.id == User.business_id)
+            .filter(Business.organization_id == organization_id, User.is_active.is_(True))
+            .count()
+        )
