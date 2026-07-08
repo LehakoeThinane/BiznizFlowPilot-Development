@@ -1,7 +1,5 @@
 "use client";
 
-import Link from "next/link";
-
 export default function CheckoutCancelledPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
@@ -11,9 +9,9 @@ export default function CheckoutCancelledPage() {
           No payment was made and no account was created. You can pick a plan again whenever you&apos;re ready.
         </p>
         <p className="mt-6 text-sm text-muted">
-          <Link href="/pricing" className="font-medium text-brand hover:underline">
+          <a href="https://mmnexus.co.za/biznizflowpilot#pricing" className="font-medium text-brand hover:underline">
             Back to pricing
-          </Link>
+          </a>
         </p>
       </section>
     </main>

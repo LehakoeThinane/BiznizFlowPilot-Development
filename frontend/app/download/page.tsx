@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type OsId = "windows" | "mac" | "linux";
@@ -114,9 +113,9 @@ export default function DownloadPage() {
 
         <p className="text-body-sm mt-14 text-muted">
           Don&apos;t have an invite yet?{" "}
-          <Link href="/pricing" className="font-medium text-brand hover:underline">
+          <a href="https://mmnexus.co.za/biznizflowpilot#pricing" className="font-medium text-brand hover:underline">
             View pricing
-          </Link>
+          </a>
         </p>
       </div>
     </main>
