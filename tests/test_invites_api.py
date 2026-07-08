@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
+
+from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token
 from app.models.business import Business
+from app.models.organization import Organization
+from app.models.user_invitation import UserInvitation
 from app.schemas.auth import CurrentUser
 
 
@@ -288,3 +293,40 @@ class TestValidateAndAcceptInvite:
             },
         )
         assert r.status_code == 400
+
+
+class TestSeatLimit:
+    def test_starter_seat_limit_enforced(
+        self, client, test_db: Session, owner_organization: Organization, owner_business: Business, owner_user: CurrentUser
+    ):
+        owner_organization.plan_tier = "starter"
+        test_db.commit()
+
+        # owner_user already counts as 1 active seat; fill the remaining 49
+        # of Starter's 50-seat cap with pending invitations (cheap bulk
+        # insert - no need to actually send 49 real invite requests).
+        now = datetime.now(timezone.utc)
+        test_db.bulk_save_objects(
+            [
+                UserInvitation(
+                    id=uuid4(),
+                    business_id=owner_business.id,
+                    organization_id=owner_organization.id,
+                    email=f"seat-{i}@example.com",
+                    role="staff",
+                    token_hash=uuid4().hex,
+                    status="pending",
+                    expires_at=now + timedelta(days=7),
+                )
+                for i in range(49)
+            ]
+        )
+        test_db.commit()
+
+        r = client.post(
+            "/api/v1/users/invite",
+            json={"email": "one-too-many@example.com", "role": "staff"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 403
+        assert "seat limit" in r.json()["detail"].lower()

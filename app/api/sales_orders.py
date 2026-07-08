@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.sales_order import OrderCreate, OrderListResponse, OrderResponse, OrderUpdate
@@ -16,6 +17,7 @@ from app.services.event import EventService
 router = APIRouter(
     prefix="/api/v1/sales-orders",
     tags=["sales-orders"],
+    dependencies=[Depends(require_feature("sales_orders"))],
 )
 
 

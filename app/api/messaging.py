@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.models.messaging import Message
 from app.schemas.auth import CurrentUser
@@ -24,7 +25,9 @@ from app.schemas.messaging import (
 )
 from app.services.messaging import MessagingService
 
-router = APIRouter(prefix="/api/v1/messaging", tags=["messaging"])
+router = APIRouter(
+    prefix="/api/v1/messaging", tags=["messaging"], dependencies=[Depends(require_feature("messaging"))]
+)
 
 
 def _message_out(message: Message) -> DirectMessageOut:

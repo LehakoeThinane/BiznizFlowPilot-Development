@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import EventType
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user, get_org_admin
 from app.models.business import Business
 from app.models.organization import Organization
@@ -183,7 +184,12 @@ def list_subsidiaries(
     return SubsidiaryListResponse(total=len(items), items=items)
 
 
-@router.post("/subsidiaries", response_model=SubsidiaryResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/subsidiaries",
+    response_model=SubsidiaryResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_feature("multi_subsidiary"))],
+)
 def create_subsidiary(
     body: SubsidiaryCreate,
     current_user: Annotated[CurrentUser, Depends(get_org_admin)],

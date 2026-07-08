@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.core.enums import EventType
 from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
@@ -34,7 +35,7 @@ from app.schemas.finance import (
 )
 from app.services.event import EventService
 
-router = APIRouter(prefix="/api/v1/finance", tags=["finance"])
+router = APIRouter(prefix="/api/v1/finance", tags=["finance"], dependencies=[Depends(require_feature("finance"))])
 
 _REVENUE_STATUSES = ("confirmed", "processing", "shipped", "delivered")
 

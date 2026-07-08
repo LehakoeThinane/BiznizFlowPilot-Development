@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.workflow import (
@@ -22,7 +23,9 @@ from app.schemas.workflow import (
 )
 from app.services.workflow import WorkflowService
 
-router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
+router = APIRouter(
+    prefix="/api/v1/workflows", tags=["workflows"], dependencies=[Depends(require_feature("workflow_automation"))]
+)
 
 
 @router.post("", response_model=WorkflowResponse, status_code=status.HTTP_201_CREATED)

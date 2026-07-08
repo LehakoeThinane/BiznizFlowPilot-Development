@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.core.enums import EventType
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
@@ -22,6 +23,7 @@ from app.services.workflow_definition import WorkflowDefinitionService
 router = APIRouter(
     prefix="/api/v1/workflow-definitions",
     tags=["workflow-definitions"],
+    dependencies=[Depends(require_feature("workflow_automation"))],
 )
 
 

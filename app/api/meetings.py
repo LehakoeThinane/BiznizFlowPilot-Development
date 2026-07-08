@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.core.exceptions import ConcurrencyConflictError
 from app.dependencies import get_current_user
 from app.models.meeting import Meeting
@@ -25,7 +26,7 @@ from app.schemas.meeting import (
 from app.services.event import EventService
 from app.services.meeting import MeetingService
 
-router = APIRouter(prefix="/api/v1/meetings", tags=["meetings"])
+router = APIRouter(prefix="/api/v1/meetings", tags=["meetings"], dependencies=[Depends(require_feature("meetings"))])
 
 
 def _meeting_service(db: Session) -> MeetingService:

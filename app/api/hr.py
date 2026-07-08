@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.core.enums import EventType
 from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
@@ -40,7 +41,7 @@ from app.schemas.hr import (
 from app.services.event import EventService
 from app.utils.notify import notify_business
 
-router = APIRouter(prefix="/api/v1/hr", tags=["hr"])
+router = APIRouter(prefix="/api/v1/hr", tags=["hr"], dependencies=[Depends(require_feature("hr"))])
 
 
 def _require_manager(user: CurrentUser) -> None:

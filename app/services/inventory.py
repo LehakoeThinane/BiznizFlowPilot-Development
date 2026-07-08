@@ -6,9 +6,12 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.entitlements import FULL_ACCESS_TIERS, LOCATION_LIMITS
 from app.core.enums import EventType
 from app.core.permissions import ALL_BUSINESS_ROLES, OWNER_ONLY, PRIVILEGED_ROLES, require_role
+from app.models.business import Business
 from app.models.inventory import InventoryLocation, StockLevel
+from app.models.organization import Organization
 from app.repositories.inventory import InventoryLocationRepository, StockLevelRepository
 from app.schemas.inventory import LocationCreate, LocationUpdate, StockAdjustment
 from app.schemas.auth import CurrentUser
@@ -38,6 +41,17 @@ class InventoryService:
     # Locations
     def create_location(self, business_id: UUID, current_user: CurrentUser, data: LocationCreate) -> InventoryLocation:
         require_role(current_user, PRIVILEGED_ROLES, "create locations")
+
+        business = self.db.query(Business).filter(Business.id == business_id).first()
+        org = (
+            self.db.query(Organization).filter(Organization.id == business.organization_id).first()
+            if business
+            else None
+        )
+        location_limit = None if org is None or org.plan_tier in FULL_ACCESS_TIERS else LOCATION_LIMITS.get(org.plan_tier)
+        if location_limit is not None and self.location_repo.count(business_id=business_id) >= location_limit:
+            raise PermissionError("Upgrade your plan to add another inventory location.")
+
         location = self.location_repo.create(business_id=business_id, **data.model_dump())
         return location
 

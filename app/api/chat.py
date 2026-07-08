@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.mention_resolver import search_mentions
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.repositories.chat import ChatRepository
 from app.schemas.auth import CurrentUser
@@ -20,7 +21,7 @@ from app.schemas.chat import (
 )
 from app.services.chat import ChatService
 
-router = APIRouter(prefix="/api/v1/chat", tags=["chat"])
+router = APIRouter(prefix="/api/v1/chat", tags=["chat"], dependencies=[Depends(require_feature("ai_chat"))])
 
 
 @router.post("/message", response_model=SendMessageResponse)

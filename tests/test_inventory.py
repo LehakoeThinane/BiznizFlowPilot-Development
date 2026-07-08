@@ -5,6 +5,7 @@ from uuid import uuid4
 from sqlalchemy.orm import Session
 
 from app.models.inventory import InventoryLocation
+from app.models.organization import Organization
 from app.models.product import Product
 from app.services.inventory import InventoryService
 from app.schemas.inventory import LocationCreate, LocationUpdate, StockAdjustment
@@ -47,6 +48,18 @@ class TestLocationCreate:
 
         with pytest.raises(PermissionError, match="cannot"):
             service.create_location(staff_user.business_id, staff_user, data)
+
+    def test_starter_tier_capped_at_one_location(
+        self, test_db: Session, owner_organization: Organization, owner_user: CurrentUser
+    ):
+        owner_organization.plan_tier = "starter"
+        test_db.commit()
+
+        service = InventoryService(test_db)
+        service.create_location(owner_user.business_id, owner_user, _make_location_data(name="Only Warehouse"))
+
+        with pytest.raises(PermissionError, match="Upgrade your plan"):
+            service.create_location(owner_user.business_id, owner_user, _make_location_data(name="Second Warehouse"))
 
 
 class TestLocationRead:
