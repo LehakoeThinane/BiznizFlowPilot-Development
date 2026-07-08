@@ -7,6 +7,7 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const BACKEND_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   turbopack: {
     root: currentDir,

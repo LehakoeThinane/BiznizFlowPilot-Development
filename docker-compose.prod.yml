@@ -1,0 +1,47 @@
+services:
+  backend:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    expose:
+      - "8000"
+
+  # Beat runs embedded in the worker process (-B) rather than as its own
+  # container, to fit a 1GB-RAM VM. Safe here because there's only ever one
+  # worker replica - embedded beat double-schedules if run under multiple
+  # concurrent worker processes, which this deployment never does.
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    command: ["celery", "-A", "app.workers.celery_app", "worker", "-B", "--loglevel=INFO"]
+
+  frontend:
+    build: ./frontend
+    restart: unless-stopped
+    environment:
+      # Internal Docker network hop straight to the backend container -
+      # faster and avoids an unnecessary public-internet round trip, since
+      # both containers are already on the same host.
+      BACKEND_URL: http://backend:8000
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./downloads:/srv/downloads:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  caddy_data:
+  caddy_config:

@@ -14,12 +14,12 @@ export default function LandingPage() {
         business than run the spreadsheets.
       </p>
       <div className="mt-8 flex gap-4">
-        <Link
-          href="/pricing"
+        <a
+          href="https://mmnexus.co.za/biznizflowpilot#pricing"
           className="rounded-md bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
         >
           View pricing
-        </Link>
+        </a>
         <Link
           href="/login"
           className="rounded-md border border-[#333] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:border-[#555]"
@@ -27,6 +27,9 @@ export default function LandingPage() {
           Sign in
         </Link>
       </div>
+      <Link href="/download" className="mt-6 text-xs text-[#666] hover:text-[#999] hover:underline">
+        Already a customer? Download the desktop app →
+      </Link>
     </main>
   );
 }

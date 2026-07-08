@@ -1,0 +1,47 @@
+{
+  "name": "biznizflowpilot-desktop",
+  "version": "0.1.0",
+  "description": "BiznizFlowPilot desktop client - a thin native shell around the hosted web app, same pattern as Slack/Teams/Discord.",
+  "main": "main.js",
+  "author": "BiznizFlowPilot",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "com.biznizflowpilot.desktop",
+    "productName": "BiznizFlowPilot",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Office"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "LehakoeThinane",
+      "repo": "BiznizFlowPilot-Development"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}
