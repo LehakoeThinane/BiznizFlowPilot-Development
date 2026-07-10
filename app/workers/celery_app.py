@@ -38,6 +38,10 @@ celery_app.conf.update(
             "schedule": timedelta(seconds=settings.followup_check_interval_seconds),
             "args": (24,),
         },
+        "send-trial-reminders": {
+            "task": "ops.send_trial_reminders",
+            "schedule": timedelta(seconds=settings.trial_reminder_check_interval_seconds),
+        },
     },
 )
 

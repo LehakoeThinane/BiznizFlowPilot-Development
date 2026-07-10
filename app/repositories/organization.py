@@ -5,6 +5,7 @@ NOT extend BaseRepository (whose entire contract is business_id
 filtering). Cross-tenant tables get their own hand-written repositories.
 """
 
+from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
@@ -95,3 +96,18 @@ class OrganizationRepository:
     def count(self) -> int:
         """Count all organizations."""
         return self.db.query(Organization).count()
+
+    def list_due_for_trial_reminder(self, now: datetime, window_end: datetime) -> list[Organization]:
+        """Trial-tier orgs expiring within [now, window_end) that haven't
+        already been reminded. Used by the trial-expiry reminder task."""
+        return (
+            self.db.query(Organization)
+            .filter(
+                Organization.plan_tier == "trial",
+                Organization.trial_ends_at.isnot(None),
+                Organization.trial_reminder_sent_at.is_(None),
+                Organization.trial_ends_at > now,
+                Organization.trial_ends_at <= window_end,
+            )
+            .all()
+        )

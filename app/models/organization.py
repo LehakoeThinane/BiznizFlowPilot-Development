@@ -59,6 +59,12 @@ class Organization(BaseModel):
         doc="Trial expiry, if subscription_status is 'trial'",
     )
 
+    trial_reminder_sent_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        doc="Idempotency marker for the trial-expiry reminder email - NULL means not yet sent",
+    )
+
     seats_included = Column(
         Integer,
         nullable=True,

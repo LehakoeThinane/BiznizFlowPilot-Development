@@ -4,6 +4,7 @@ and the legacy/trial full-access carve-out."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -213,3 +214,72 @@ class TestTrialProvisioning:
         test_db.commit()
 
         assert shell.organization.trial_ends_at is None
+
+
+def _make_trial_org(test_db: Session, *, days_until_expiry: float, reminder_sent: bool = False) -> Organization:
+    org = Organization(
+        id=uuid4(),
+        name="Reminder Test Org",
+        billing_email=f"reminder-{uuid4().hex[:8]}@example.com",
+        plan_tier="trial",
+        trial_ends_at=datetime.now(timezone.utc) + timedelta(days=days_until_expiry),
+        trial_reminder_sent_at=datetime.now(timezone.utc) if reminder_sent else None,
+    )
+    test_db.add(org)
+    test_db.commit()
+    return org
+
+
+class TestTrialReminders:
+    """send_due_trial_reminders emails trial orgs nearing expiry, exactly once."""
+
+    def test_sends_reminder_within_window(self, test_db: Session):
+        org = _make_trial_org(test_db, days_until_expiry=2)
+
+        with patch("app.services.organization.send_trial_reminder_email") as mock_send:
+            sent = OrganizationService(test_db).send_due_trial_reminders()
+            test_db.commit()
+
+        assert sent == 1
+        mock_send.assert_called_once()
+        assert mock_send.call_args.kwargs["to_email"] == org.billing_email
+        test_db.refresh(org)
+        assert org.trial_reminder_sent_at is not None
+
+    def test_does_not_send_outside_window(self, test_db: Session):
+        _make_trial_org(test_db, days_until_expiry=10)
+
+        with patch("app.services.organization.send_trial_reminder_email") as mock_send:
+            sent = OrganizationService(test_db).send_due_trial_reminders()
+
+        assert sent == 0
+        mock_send.assert_not_called()
+
+    def test_does_not_send_twice(self, test_db: Session):
+        _make_trial_org(test_db, days_until_expiry=2, reminder_sent=True)
+
+        with patch("app.services.organization.send_trial_reminder_email") as mock_send:
+            sent = OrganizationService(test_db).send_due_trial_reminders()
+
+        assert sent == 0
+        mock_send.assert_not_called()
+
+    def test_does_not_send_for_non_trial_tier(self, test_db: Session):
+        org = _make_trial_org(test_db, days_until_expiry=2)
+        org.plan_tier = "starter"
+        test_db.commit()
+
+        with patch("app.services.organization.send_trial_reminder_email") as mock_send:
+            sent = OrganizationService(test_db).send_due_trial_reminders()
+
+        assert sent == 0
+        mock_send.assert_not_called()
+
+    def test_does_not_send_for_already_expired_trial(self, test_db: Session):
+        _make_trial_org(test_db, days_until_expiry=-1)
+
+        with patch("app.services.organization.send_trial_reminder_email") as mock_send:
+            sent = OrganizationService(test_db).send_due_trial_reminders()
+
+        assert sent == 0
+        mock_send.assert_not_called()

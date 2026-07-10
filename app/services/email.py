@@ -225,3 +225,41 @@ def send_password_reset_email(to_email: str, reset_token: str) -> None:
 </html>
 """
     _send(to_email, subject, html, plain)
+
+
+def send_trial_reminder_email(to_email: str, org_name: str, days_remaining: int) -> None:
+    pricing_link = "https://mmnexus.co.za/biznizflowpilot#pricing"
+    subject = f"Your BiznizFlowPilot trial ends in {days_remaining} days"
+
+    plain = (
+        f"Hi,\n\n"
+        f"{org_name}'s BiznizFlowPilot trial ends in {days_remaining} days. After that, your team "
+        f"loses access until you upgrade to a paid plan - CRM, tasks, inventory, everything.\n\n"
+        f"Pick a plan: {pricing_link}\n\n"
+        f"— BiznizFlowPilot"
+    )
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;background:#070d1a;color:#e8f0ff;padding:32px">
+  <div style="max-width:480px;margin:0 auto;background:#101a2c;border:1px solid #25344f;border-radius:12px;padding:32px">
+    <div style="margin-bottom:24px">
+      <span style="display:inline-block;background:#2a7fff;color:#fff;font-weight:700;font-size:18px;
+                   width:40px;height:40px;line-height:40px;text-align:center;border-radius:10px">B</span>
+    </div>
+    <h2 style="color:#e8f0ff;margin:0 0 8px">Your trial ends in {days_remaining} days</h2>
+    <p style="color:#8ea1c1;font-size:14px;margin:0 0 24px">
+      {org_name}'s BiznizFlowPilot trial ends soon. After that, your team loses access until you
+      upgrade - CRM, tasks, inventory, everything.
+    </p>
+    <a href="{pricing_link}"
+       style="display:inline-block;background:#2a7fff;color:#fff;font-weight:600;font-size:14px;
+              padding:10px 24px;border-radius:8px;text-decoration:none;margin-bottom:8px">
+      Pick a plan
+    </a>
+  </div>
+</body>
+</html>
+"""
+    _send(to_email, subject, html, plain)

@@ -106,6 +106,7 @@ class Settings(BaseSettings):
     action_retry_check_interval_seconds: int = 60
     stale_run_check_interval_seconds: int = 300
     followup_check_interval_seconds: int = 3600  # 1 hour
+    trial_reminder_check_interval_seconds: int = 21600  # 6 hours
 
     # Frontend base URL (used in emails)
     frontend_url: str = "http://localhost:3000"
