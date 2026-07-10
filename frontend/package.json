@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^3.0.0",
+    "@sentry/nextjs": "^10.65.0",
     "@xyflow/react": "^12.11.1",
     "agora-rtc-sdk-ng": "^4.24.5",
     "next": "16.2.4",

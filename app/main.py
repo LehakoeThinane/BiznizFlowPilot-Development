@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
@@ -56,6 +57,17 @@ from app.utils.logger import get_logger
 limiter = Limiter(key_func=get_remote_address)
 
 logger = get_logger(__name__)
+
+# Error tracking - no-op unless SENTRY_DSN is set, so local/dev runs need no
+# Sentry account at all.
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=settings.version,
+        traces_sample_rate=0.1,
+        send_default_pii=False,
+    )
 
 # ============================================================================
 # Initialize FastAPI App

@@ -7,6 +7,10 @@ FROM node:22-slim AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# NEXT_PUBLIC_* vars are inlined into the client bundle at build time, so
+# this needs to be a build ARG, not just a runtime environment variable.
+ARG NEXT_PUBLIC_SENTRY_DSN=""
+ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
 RUN npm run build
 
 FROM node:22-slim AS runner

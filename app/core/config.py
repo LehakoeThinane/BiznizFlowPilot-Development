@@ -144,6 +144,9 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
 
+    # Error tracking - empty means disabled (dev/local default)
+    sentry_dsn: str = ""
+
     # AI / LLM
     ai_provider: str = "echo"  # echo | ollama | anthropic | groq
     ollama_base_url: str = "http://localhost:11434"

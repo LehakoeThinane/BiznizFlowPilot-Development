@@ -1,6 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -26,4 +27,12 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// withSentryConfig is a safe no-op wrapper when there's no Sentry org/project
+// configured (SENTRY_ORG/SENTRY_PROJECT unset) - it just skips the source-map
+// upload step, so this needs no Sentry account to build locally.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  silent: true,
+  disableLogger: true,
+});
