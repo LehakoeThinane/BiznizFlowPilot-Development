@@ -140,6 +140,9 @@ export interface PlatformStats {
   total_events: number;
   total_workflow_runs: number;
   workflow_runs_failed: number;
+  organizations_by_plan_tier: Record<string, number>;
+  mrr_zar: number;
+  trial_conversion_rate: number | null;
 }
 
 export interface OrganizationAdmin {

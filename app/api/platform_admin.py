@@ -104,6 +104,16 @@ class PlatformStats(BaseModel):
     total_events: int
     total_workflow_runs: int
     workflow_runs_failed: int
+    organizations_by_plan_tier: dict[str, int]
+    mrr_zar: int
+    trial_conversion_rate: float | None
+
+
+# Illustrative MRR only - derived from the advertised prices on the pricing
+# page (mmnexus.co.za/biznizflowpilot), not from real per-org billing
+# records, since no billing system stores actual contract amounts yet.
+# Enterprise is "Custom" pricing and excluded from the estimate.
+PLAN_TIER_MONTHLY_PRICE_ZAR = {"starter": 8750, "professional": 35000}
 
 
 # ── Stats / cross-tenant read endpoints ──────────────────────────────────────
@@ -127,6 +137,18 @@ def get_platform_stats(
         or 0
     )
 
+    org_repo = OrganizationRepository(db)
+    tier_counts = org_repo.count_by_plan_tier()
+    mrr_zar = sum(tier_counts.get(tier, 0) * price for tier, price in PLAN_TIER_MONTHLY_PRICE_ZAR.items())
+
+    # A trial "cohort" is any org that was ever provisioned as a trial -
+    # trial_ends_at is only ever set at trial creation (see
+    # OrganizationService.create_organization_shell), so it survives as a
+    # marker even after plan_tier is later changed to a paid tier.
+    trial_cohort_size = org_repo.count_trial_cohort()
+    converted_count = org_repo.count_converted_from_trial()
+    trial_conversion_rate = (converted_count / trial_cohort_size) if trial_cohort_size else None
+
     return PlatformStats(
         total_organizations=total_organizations,
         total_tenants=total_tenants,
@@ -135,6 +157,9 @@ def get_platform_stats(
         total_events=total_events,
         total_workflow_runs=total_runs,
         workflow_runs_failed=failed_runs,
+        organizations_by_plan_tier=tier_counts,
+        mrr_zar=mrr_zar,
+        trial_conversion_rate=trial_conversion_rate,
     )
 
 
