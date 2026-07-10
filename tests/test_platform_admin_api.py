@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from app.core.security import create_access_token, create_platform_access_token
 from app.models.business import Business
+from app.models.organization import Organization
 from app.models.platform_admin import PlatformAdmin
 from app.schemas.auth import CurrentUser
 
@@ -53,8 +55,50 @@ class TestPlatformStats:
         r = client.get("/platform/v1/stats", headers=_platform_headers(platform_admin))
         assert r.status_code == 200
         body = r.json()
-        assert body["total_organizations"] >= 1
-        assert body["total_tenants"] >= 1
+        assert "organizations_by_plan_tier" in body
+        assert "mrr_zar" in body
+        assert "trial_conversion_rate" in body
+
+    def test_mrr_and_conversion_rate(self, client, test_db, platform_admin: PlatformAdmin):
+        now = datetime.now(timezone.utc)
+        # One converted trial (still has trial_ends_at, now on a paid tier).
+        test_db.add(
+            Organization(
+                id=uuid4(),
+                name="Converted Co",
+                billing_email="converted@example.com",
+                plan_tier="professional",
+                trial_ends_at=now - timedelta(days=5),
+            )
+        )
+        # One still-active trial (not yet converted, not yet expired).
+        test_db.add(
+            Organization(
+                id=uuid4(),
+                name="Still Trialing Co",
+                billing_email="trialing@example.com",
+                plan_tier="trial",
+                trial_ends_at=now + timedelta(days=5),
+            )
+        )
+        # One starter-tier org that never went through a trial (no trial_ends_at) - excluded from the cohort.
+        test_db.add(
+            Organization(
+                id=uuid4(), name="Direct Starter Co", billing_email="direct@example.com", plan_tier="starter"
+            )
+        )
+        test_db.commit()
+
+        r = client.get("/platform/v1/stats", headers=_platform_headers(platform_admin))
+        assert r.status_code == 200
+        body = r.json()
+
+        # Trial cohort = 2 (converted + still trialing); 1 of 2 converted = 50%.
+        assert body["trial_conversion_rate"] == 0.5
+        # MRR only counts starter/professional orgs: R35,000 (professional) + R8,750 (starter) = R43,750.
+        assert body["mrr_zar"] == 43750
+        assert body["organizations_by_plan_tier"]["professional"] >= 1
+        assert body["organizations_by_plan_tier"]["trial"] >= 1
 
 
 class TestPlatformTenants:

@@ -17,13 +17,18 @@ services:
     command: ["celery", "-A", "app.workers.celery_app", "worker", "-B", "--loglevel=INFO"]
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        # Build-time only (inlined into the client bundle) - see frontend/Dockerfile.
+        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
     restart: unless-stopped
     environment:
       # Internal Docker network hop straight to the backend container -
       # faster and avoids an unnecessary public-internet round trip, since
       # both containers are already on the same host.
       BACKEND_URL: http://backend:8000
+      SENTRY_DSN: ${SENTRY_DSN:-}
     expose:
       - "3000"
 

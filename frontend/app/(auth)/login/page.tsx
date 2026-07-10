@@ -116,32 +116,32 @@ export default function LoginPage() {
 
   const Logo = (
     <div className="mb-6 flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-lg font-bold text-white">B</div>
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-lg font-bold text-on-primary">B</div>
       <div>
-        <h1 className="text-xl font-semibold text-white">BiznizFlowPilot</h1>
-        <p className="text-xs text-[#666]">Sign in to the operational dashboard.</p>
+        <h1 className="text-xl font-semibold text-foreground">BiznizFlowPilot</h1>
+        <p className="text-xs text-muted">Sign in to the operational dashboard.</p>
       </div>
     </div>
   );
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[#0a0a0a] px-4">
-      <section className="w-full max-w-md rounded-xl border border-[#222] bg-[#141414] p-6 shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-background px-4">
+      <section className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-sm">
         {Logo}
 
         {/* ── Login ── */}
         {mode === "login" && (
           <>
-            <p className="mb-6 text-xs text-[#555]">New here? Use the invite link sent to your work email.</p>
+            <p className="mb-6 text-xs text-muted">New here? Use the invite link sent to your work email.</p>
             <form className="space-y-4" onSubmit={handleLogin}>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="email">Email</label>
+                <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="email">Email</label>
                 <input id="email" type="email" required value={email}
                   onChange={(e) => setEmail(e.target.value)} className={INPUT} />
               </div>
               <div>
                 <div className="mb-1 flex items-center justify-between">
-                  <label className="text-sm font-medium text-[#aaa]" htmlFor="password">Password</label>
+                  <label className="text-sm font-medium text-on-surface-variant" htmlFor="password">Password</label>
                   <button type="button" onClick={() => { setMode("reset-request"); setResetEmail(email); setResetError(null); }}
                     className="text-xs text-brand hover:underline">
                     Forgot password?
@@ -167,10 +167,10 @@ export default function LoginPage() {
         {mode === "reset-request" && (
           <>
             <p className="mb-1 text-sm font-semibold text-white">Reset your password</p>
-            <p className="mb-5 text-xs text-[#666]">Enter your email and we'll send a reset link to your inbox.</p>
+            <p className="mb-5 text-xs text-muted">Enter your email and we'll send a reset link to your inbox.</p>
             <form className="space-y-4" onSubmit={handleResetRequest}>
               <div>
-                <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="reset-email">Email</label>
+                <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="reset-email">Email</label>
                 <input id="reset-email" type="email" required value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)} className={INPUT} />
               </div>
@@ -185,7 +185,7 @@ export default function LoginPage() {
               </button>
 
               <button type="button" onClick={() => setMode("login")}
-                className="w-full text-center text-sm text-[#555] hover:text-[#aaa]">
+                className="w-full text-center text-sm text-muted hover:text-on-surface-variant">
                 ← Back to sign in
               </button>
             </form>
@@ -208,21 +208,21 @@ export default function LoginPage() {
               </div>
             ) : (
               <>
-                <p className="mb-5 text-xs text-[#666]">Check your inbox for the reset link. Paste the token below.</p>
+                <p className="mb-5 text-xs text-muted">Check your inbox for the reset link. Paste the token below.</p>
                 <form className="space-y-4" onSubmit={handleResetConfirm}>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="confirm-token">Reset token</label>
+                    <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="confirm-token">Reset token</label>
                     <input id="confirm-token" type="text" required value={confirmToken}
                       onChange={(e) => setConfirmToken(e.target.value)}
                       className={`${INPUT} font-mono text-xs`} placeholder="Paste token from your email" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="new-password">New password</label>
+                    <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="new-password">New password</label>
                     <input id="new-password" type="password" required minLength={8} value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)} className={INPUT} placeholder="At least 8 characters" />
                   </div>
                   <div>
-                    <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="confirm-password">Confirm password</label>
+                    <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="confirm-password">Confirm password</label>
                     <input id="confirm-password" type="password" required value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)} className={INPUT} />
                   </div>
@@ -237,7 +237,7 @@ export default function LoginPage() {
                   </button>
 
                   <button type="button" onClick={() => setMode("login")}
-                    className="w-full text-center text-sm text-[#555] hover:text-[#aaa]">
+                    className="w-full text-center text-sm text-muted hover:text-on-surface-variant">
                     ← Back to sign in
                   </button>
                 </form>
