@@ -532,6 +532,51 @@ export interface PurchaseOrderListResponse {
   limit: number;
 }
 
+// ─── ERP: Purchase Requisitions ────────────────────────────────────────────────
+
+export type PurchaseRequisitionStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancelled"
+  | "converted";
+
+export interface PRLineItem {
+  id: string;
+  requisition_id: string;
+  product_id: string | null;
+  description: string;
+  quantity: number;
+  estimated_unit_cost: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PurchaseRequisition {
+  id: string;
+  business_id: string;
+  requested_by: string | null;
+  supplier_id: string | null;
+  title: string;
+  justification: string | null;
+  estimated_total: string;
+  status: PurchaseRequisitionStatus;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejection_reason: string | null;
+  converted_purchase_order_id: string | null;
+  created_at: string;
+  updated_at: string;
+  line_items: PRLineItem[];
+}
+
+export interface PurchaseRequisitionListResponse {
+  items: PurchaseRequisition[];
+  total: number;
+  skip: number;
+  limit: number;
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
 export interface ChatMessage {

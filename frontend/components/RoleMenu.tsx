@@ -48,7 +48,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "Sales & CRM",
     icon: "groups",
     href: "/leads",
-    matches: ["/leads", "/tasks", "/invoices", "/sales-orders", "/purchase-orders"],
+    matches: ["/leads", "/tasks", "/invoices", "/sales-orders", "/purchase-orders", "/purchase-requisitions"],
     roles: ["owner", "manager", "staff"],
   },
   {
