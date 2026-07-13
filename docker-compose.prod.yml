@@ -1,6 +1,9 @@
 services:
+  # Images are built on GitHub's runners (.github/workflows/docker-publish.yml)
+  # and pulled here, not built on the VM - this 1-vCPU/1GB free-tier instance
+  # chokes if asked to build while also serving live traffic.
   backend:
-    build: .
+    image: ghcr.io/lehakoethinane/biznizflowpilot-backend:latest
     restart: unless-stopped
     env_file: .env.production
     expose:
@@ -11,17 +14,13 @@ services:
   # worker replica - embedded beat double-schedules if run under multiple
   # concurrent worker processes, which this deployment never does.
   worker:
-    build: .
+    image: ghcr.io/lehakoethinane/biznizflowpilot-backend:latest
     restart: unless-stopped
     env_file: .env.production
     command: ["celery", "-A", "app.workers.celery_app", "worker", "-B", "--loglevel=INFO"]
 
   frontend:
-    build:
-      context: ./frontend
-      args:
-        # Build-time only (inlined into the client bundle) - see frontend/Dockerfile.
-        NEXT_PUBLIC_SENTRY_DSN: ${NEXT_PUBLIC_SENTRY_DSN:-}
+    image: ghcr.io/lehakoethinane/biznizflowpilot-frontend:latest
     restart: unless-stopped
     environment:
       # Internal Docker network hop straight to the backend container -
