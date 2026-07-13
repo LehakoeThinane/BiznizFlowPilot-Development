@@ -116,7 +116,7 @@ def root() -> RedirectResponse:
     return RedirectResponse(url="/docs")
 
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check(db: Session = Depends(get_db)) -> dict:
     """Health check endpoint — verifies DB connectivity for load balancer use."""
     db_ok = False
