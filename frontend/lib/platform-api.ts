@@ -10,7 +10,9 @@ interface PlatformApiRequestOptions extends Omit<RequestInit, "body"> {
 
 // Same relative-URL/proxy convention as lib/api.ts.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-const REQUEST_TIMEOUT_MS = 15_000;
+// See lib/api.ts for why this isn't 15s - the production VM's shared vCPU
+// makes bcrypt-backed requests occasionally slow.
+const REQUEST_TIMEOUT_MS = 35_000;
 const PLATFORM_SESSION_TOKEN_KEY = "bfp_platform_at";
 
 // Deliberately a separate sessionStorage key and separate refresh endpoint

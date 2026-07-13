@@ -12,7 +12,11 @@ interface ApiRequestOptions extends Omit<RequestInit, "body"> {
 // NEXT_PUBLIC_API_BASE_URL can override this for deployments where the API lives elsewhere.
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
 
-const REQUEST_TIMEOUT_MS = 15_000;
+// 35s - the production VM's shared vCPU means even routine requests (e.g.
+// bcrypt password verification on login) can occasionally take 15-20s under
+// CPU contention; a tighter timeout was surfacing false "Request failed"
+// errors on otherwise-successful requests.
+const REQUEST_TIMEOUT_MS = 35_000;
 const SESSION_TOKEN_KEY = "bfp_at";
 
 export class ApiError extends Error {
