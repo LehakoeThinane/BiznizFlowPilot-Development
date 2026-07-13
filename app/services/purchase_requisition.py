@@ -54,7 +54,7 @@ class PurchaseRequisitionService:
             self.db, business_id, "order_status",
             "Purchase requisition submitted",
             f"{current_user.full_name} requested to purchase: {pr.title}",
-            action_url="/purchasing/requisitions", related_type="purchase_requisition", related_id=pr.id,
+            action_url="/purchase-requisitions", related_type="purchase_requisition", related_id=pr.id,
         )
 
         self._emit_event(
@@ -98,7 +98,7 @@ class PurchaseRequisitionService:
             self.db, business_id, "order_status",
             f"Purchase requisition {data.status}",
             f"'{pr.title}' was {data.status}.",
-            action_url="/purchasing/requisitions", related_type="purchase_requisition", related_id=pr_id,
+            action_url="/purchase-requisitions", related_type="purchase_requisition", related_id=pr_id,
         )
 
         self._emit_event(
