@@ -92,6 +92,14 @@ const SECTIONS: Section[] = [
         accent: "bg-yellow-500/20",
         roles: ["owner", "manager", "staff"],
       },
+      {
+        title: "Purchase Requisitions",
+        description: "Request a purchase and route it for manager approval.",
+        href: "/purchase-requisitions",
+        icon: "🧾",
+        accent: "bg-teal-500/20",
+        roles: ["owner", "manager", "staff"],
+      },
     ],
   },
   {

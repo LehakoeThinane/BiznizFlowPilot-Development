@@ -34,6 +34,7 @@ from app.api import (
     platform_auth,
     products,
     purchase_orders,
+    purchase_requisitions,
     sales_orders,
     search,
     suppliers,
@@ -178,6 +179,7 @@ app.include_router(suppliers.router, dependencies=[Depends(require_active_trial)
 app.include_router(inventory.router, dependencies=[Depends(require_active_trial)])
 app.include_router(sales_orders.router, dependencies=[Depends(require_active_trial)])
 app.include_router(purchase_orders.router, dependencies=[Depends(require_active_trial)])
+app.include_router(purchase_requisitions.router, dependencies=[Depends(require_active_trial)])
 
 # Finance, HR, Invoicing, Notifications (auth required)
 app.include_router(finance.router, dependencies=[Depends(require_active_trial)])

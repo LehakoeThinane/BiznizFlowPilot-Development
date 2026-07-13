@@ -90,6 +90,8 @@ class EventType(str, Enum):
     PURCHASE_ORDER_CREATED = "purchase_order_created"
     PURCHASE_ORDER_SENT = "purchase_order_sent"
     PURCHASE_ORDER_RECEIVED = "purchase_order_received"
+    PURCHASE_REQUISITION_CREATED = "purchase_requisition_created"
+    PURCHASE_REQUISITION_STATUS_CHANGED = "purchase_requisition_status_changed"
 
     # --- HR: Employees ---
     EMPLOYEE_CREATED = "employee_created"
