@@ -308,6 +308,12 @@ export interface LeadListResponse {
   limit: number;
 }
 
+export interface LeadGenSearchResponse {
+  created_count: number;
+  skipped_duplicates: number;
+  leads: Lead[];
+}
+
 export interface Customer {
   id: string;
   business_id: string;

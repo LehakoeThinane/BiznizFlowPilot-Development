@@ -147,6 +147,10 @@ class Settings(BaseSettings):
     # Error tracking - empty means disabled (dev/local default)
     sentry_dsn: str = ""
 
+    # Lead-gen automation - empty means the feature 404s / no-ops rather
+    # than erroring, same convention as sentry_dsn above.
+    google_places_api_key: str = ""
+
     # AI / LLM
     ai_provider: str = "echo"  # echo | ollama | anthropic | groq
     ollama_base_url: str = "http://localhost:11434"

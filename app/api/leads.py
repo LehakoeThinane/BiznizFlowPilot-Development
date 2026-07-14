@@ -10,8 +10,10 @@ from app.core.database import get_db
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.lead import LeadCreate, LeadListResponse, LeadResponse, LeadUpdate
+from app.schemas.lead_gen import LeadGenSearchRequest, LeadGenSearchResponse
 from app.services.event import EventService
 from app.services.lead import LeadService
+from app.services.lead_gen import LeadGenService
 
 router = APIRouter(
     prefix="/api/v1/leads",
@@ -75,6 +77,37 @@ def list_leads(
         skip=skip,
         limit=limit,
     )
+
+
+@router.post("/find", response_model=LeadGenSearchResponse)
+def find_leads(
+    data: LeadGenSearchRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Search Google Places for prospects and create a Lead for each new result.
+
+    🧨 RBAC: Only owner/manager can create - enforced inside LeadService.create,
+    reused per result here.
+    """
+    try:
+        service = LeadGenService(db)
+        result = service.find_via_google_places(
+            current_user.business_id,
+            current_user,
+            query=data.query,
+            max_results=data.max_results,
+            assign_to=data.assign_to,
+        )
+        return LeadGenSearchResponse(
+            created_count=len(result.leads),
+            skipped_duplicates=result.skipped_duplicates,
+            leads=[LeadResponse.model_validate(lead) for lead in result.leads],
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)
