@@ -3,10 +3,10 @@ import Link from "next/link";
 export default function LandingPage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-background px-4 text-center">
-      <div className="mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-2xl font-bold text-on-primary">
+      <div className="glow-badge mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand text-2xl font-bold text-on-primary">
         B
       </div>
-      <p className="text-label-caps text-brand">BiznizFlowPilot</p>
+      <p className="text-label-caps text-tertiary-fixed-dim">BiznizFlowPilot</p>
       <h1 className="text-display mt-3 max-w-xl text-balance text-foreground">
         Run your business operations from one place
       </h1>

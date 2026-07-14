@@ -13,7 +13,7 @@ import type {
 } from "@/types/api";
 
 const STATUS_COLORS: Record<SalesOrderStatus, string> = {
-  draft: "bg-white/10 text-[#aaa]",
+  draft: "bg-white/10 text-on-surface-variant",
   confirmed: "bg-blue-500/20 text-blue-300",
   processing: "bg-yellow-500/20 text-yellow-300",
   shipped: "bg-purple-500/20 text-purple-300",
@@ -43,7 +43,7 @@ function StatusBadge({ status }: { status: SalesOrderStatus }) {
 function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium text-[#888] uppercase tracking-wide">{label}</dt>
+      <dt className="text-xs font-medium text-muted uppercase tracking-wide">{label}</dt>
       <dd className="mt-1 text-sm text-white">{value ?? "—"}</dd>
     </div>
   );
@@ -150,9 +150,9 @@ export default function SalesOrdersPage() {
   }
 
   function SortIndicator({ field }: { field: typeof sortField }) {
-    if (sortField !== field) return <span className="ml-1 text-[#555]">↕</span>;
+    if (sortField !== field) return <span className="ml-1 text-on-surface-variant">↕</span>;
     return (
-      <span className="ml-1 text-[#888]">{sortDirection === "asc" ? "↑" : "↓"}</span>
+      <span className="ml-1 text-muted">{sortDirection === "asc" ? "↑" : "↓"}</span>
     );
   }
 
@@ -225,7 +225,7 @@ export default function SalesOrdersPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">Sales Orders</h1>
-          <p className="mt-1 text-sm text-[#888]">{total} order{total !== 1 ? "s" : ""} total</p>
+          <p className="mt-1 text-sm text-muted">{total} order{total !== 1 ? "s" : ""} total</p>
         </div>
         <button
           onClick={() => setIsCreateOpen(true)}
@@ -250,7 +250,7 @@ export default function SalesOrdersPage() {
           placeholder="Search by order # or customer…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="h-9 rounded-md border border-[#333] px-3 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50 w-64"
+          className="h-9 rounded-md border border-outline-variant px-3 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50 w-64"
         />
         <div className="flex gap-1">
           {(["all", ...STATUS_OPTIONS] as const).map((s) => (
@@ -260,7 +260,7 @@ export default function SalesOrdersPage() {
               className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
                 activeFilter === s
                   ? "bg-brand text-white"
-                  : "bg-white/10 text-[#aaa] hover:bg-white/[0.08]"
+                  : "bg-white/10 text-on-surface-variant hover:bg-white/[0.08]"
               }`}
             >
               {s.replace("_", " ")}
@@ -270,49 +270,49 @@ export default function SalesOrdersPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-[#222] bg-[#141414] shadow-sm">
-        <table className="min-w-full divide-y divide-[#222]">
-          <thead className="bg-[#1a1a1a]">
+      <div className="overflow-hidden rounded-lg border border-outline-variant bg-surface shadow-sm">
+        <table className="min-w-full divide-y divide-outline-variant">
+          <thead className="bg-surface-dim">
             <tr>
               <th
-                className="cursor-pointer px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider select-none"
+                className="cursor-pointer px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider select-none"
                 onClick={() => toggleSort("order_number")}
               >
                 Order # <SortIndicator field="order_number" />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                 Customer
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                 Status
               </th>
               <th
-                className="cursor-pointer px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider select-none"
+                className="cursor-pointer px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider select-none"
                 onClick={() => toggleSort("total_amount")}
               >
                 Total <SortIndicator field="total_amount" />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">
                 Items
               </th>
               <th
-                className="cursor-pointer px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider select-none"
+                className="cursor-pointer px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider select-none"
                 onClick={() => toggleSort("created_at")}
               >
                 Created <SortIndicator field="created_at" />
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#222]">
+          <tbody className="divide-y divide-outline-variant">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#888]">
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">
                   Loading…
                 </td>
               </tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#888]">
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">
                   No orders found.
                 </td>
               </tr>
@@ -326,19 +326,19 @@ export default function SalesOrdersPage() {
                   <td className="px-4 py-3 text-sm font-mono font-medium text-white">
                     {order.order_number}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#aaa]">
+                  <td className="px-4 py-3 text-sm text-on-surface-variant">
                     {customerName(order.customer_id)}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={order.status} />
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#aaa] font-medium">
+                  <td className="px-4 py-3 text-sm text-on-surface-variant font-medium">
                     {fmt(order.total_amount)}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888]">
+                  <td className="px-4 py-3 text-sm text-muted">
                     {order.line_items?.length ?? 0}
                   </td>
-                  <td className="px-4 py-3 text-sm text-[#888]">
+                  <td className="px-4 py-3 text-sm text-muted">
                     {new Date(order.created_at).toLocaleDateString()}
                   </td>
                 </tr>
@@ -350,7 +350,7 @@ export default function SalesOrdersPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-[#888]">
+        <div className="flex items-center justify-between text-sm text-muted">
           <span>
             Page {page} of {totalPages}
           </span>
@@ -358,14 +358,14 @@ export default function SalesOrdersPage() {
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => p - 1)}
-              className="rounded border border-[#333] px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
+              className="rounded border border-outline-variant px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
             >
               Prev
             </button>
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded border border-[#333] px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
+              className="rounded border border-outline-variant px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
             >
               Next
             </button>
@@ -377,23 +377,23 @@ export default function SalesOrdersPage() {
       {isCreateOpen && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/20" onClick={() => setIsCreateOpen(false)} />
-          <div className="w-full max-w-md bg-[#141414] shadow-xl flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#222] px-6 py-4">
+          <div className="w-full max-w-md bg-surface shadow-xl flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
               <h2 className="text-lg font-semibold text-white">New Sales Order</h2>
               <button
                 onClick={() => setIsCreateOpen(false)}
-                className="text-[#666] hover:text-[#aaa] text-xl leading-none"
+                className="text-on-surface-variant hover:text-on-surface-variant text-xl leading-none"
               >
                 ×
               </button>
             </div>
             <form onSubmit={handleCreate} className="flex-1 space-y-5 px-6 py-5">
               <div>
-                <label className="block text-xs font-medium text-[#aaa] mb-1">Customer</label>
+                <label className="block text-xs font-medium text-on-surface-variant mb-1">Customer</label>
                 <select
                   value={createForm.customer_id}
                   onChange={(e) => setCreateForm((f) => ({ ...f, customer_id: e.target.value }))}
-                  className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                 >
                   <option value="">— No customer —</option>
                   {customers.map((c) => (
@@ -404,15 +404,15 @@ export default function SalesOrdersPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#aaa] mb-1">Notes</label>
+                <label className="block text-xs font-medium text-on-surface-variant mb-1">Notes</label>
                 <textarea
                   value={createForm.notes}
                   onChange={(e) => setCreateForm((f) => ({ ...f, notes: e.target.value }))}
                   rows={3}
-                  className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                 />
               </div>
-              <p className="text-xs text-[#888]">
+              <p className="text-xs text-muted">
                 Line items can be added after order creation via the API.
               </p>
               <div className="flex gap-3 pt-2">
@@ -426,7 +426,7 @@ export default function SalesOrdersPage() {
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="rounded-md border border-[#333] px-4 py-2 text-sm text-[#aaa] hover:bg-white/[0.02]"
+                  className="rounded-md border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-white/[0.02]"
                 >
                   Cancel
                 </button>
@@ -440,8 +440,8 @@ export default function SalesOrdersPage() {
       {selectedOrder && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/20" onClick={closePanel} />
-          <div className="w-full max-w-xl bg-[#141414] shadow-xl flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#222] px-6 py-4">
+          <div className="w-full max-w-xl bg-surface shadow-xl flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-white font-mono">
                   {selectedOrder.order_number}
@@ -450,7 +450,7 @@ export default function SalesOrdersPage() {
               </div>
               <button
                 onClick={closePanel}
-                className="text-[#666] hover:text-[#aaa] text-xl leading-none"
+                className="text-on-surface-variant hover:text-on-surface-variant text-xl leading-none"
               >
                 ×
               </button>
@@ -482,10 +482,10 @@ export default function SalesOrdersPage() {
 
               {selectedOrder.notes && (
                 <div>
-                  <dt className="text-xs font-medium text-[#888] uppercase tracking-wide">
+                  <dt className="text-xs font-medium text-muted uppercase tracking-wide">
                     Notes
                   </dt>
-                  <dd className="mt-1 text-sm text-[#aaa] whitespace-pre-wrap">
+                  <dd className="mt-1 text-sm text-on-surface-variant whitespace-pre-wrap">
                     {selectedOrder.notes}
                   </dd>
                 </div>
@@ -497,34 +497,34 @@ export default function SalesOrdersPage() {
                   Line Items ({selectedOrder.line_items?.length ?? 0})
                 </h3>
                 {!selectedOrder.line_items || selectedOrder.line_items.length === 0 ? (
-                  <p className="text-sm text-[#666] italic">No line items.</p>
+                  <p className="text-sm text-on-surface-variant italic">No line items.</p>
                 ) : (
-                  <div className="overflow-hidden rounded-lg border border-[#222]">
-                    <table className="min-w-full divide-y divide-[#222] text-sm">
-                      <thead className="bg-[#1a1a1a]">
+                  <div className="overflow-hidden rounded-lg border border-outline-variant">
+                    <table className="min-w-full divide-y divide-outline-variant text-sm">
+                      <thead className="bg-surface-dim">
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-[#888] uppercase">
+                          <th className="px-3 py-2 text-left text-xs font-medium text-muted uppercase">
                             Product
                           </th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-[#888] uppercase">
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted uppercase">
                             Qty
                           </th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-[#888] uppercase">
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted uppercase">
                             Unit Price
                           </th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-[#888] uppercase">
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted uppercase">
                             Subtotal
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#222]">
+                      <tbody className="divide-y divide-outline-variant">
                         {selectedOrder.line_items.map((item: OrderLineItem) => (
                           <tr key={item.id}>
-                            <td className="px-3 py-2 text-[#aaa] font-mono text-xs">
+                            <td className="px-3 py-2 text-on-surface-variant font-mono text-xs">
                               {item.product_id ? item.product_id.slice(0, 8) + "…" : "—"}
                             </td>
-                            <td className="px-3 py-2 text-right text-[#aaa]">{item.quantity}</td>
-                            <td className="px-3 py-2 text-right text-[#aaa]">
+                            <td className="px-3 py-2 text-right text-on-surface-variant">{item.quantity}</td>
+                            <td className="px-3 py-2 text-right text-on-surface-variant">
                               {fmt(item.unit_price)}
                             </td>
                             <td className="px-3 py-2 text-right font-medium text-white">
@@ -533,11 +533,11 @@ export default function SalesOrdersPage() {
                           </tr>
                         ))}
                       </tbody>
-                      <tfoot className="bg-[#1a1a1a]">
+                      <tfoot className="bg-surface-dim">
                         <tr>
                           <td
                             colSpan={3}
-                            className="px-3 py-2 text-right text-xs font-medium text-[#888] uppercase"
+                            className="px-3 py-2 text-right text-xs font-medium text-muted uppercase"
                           >
                             Total
                           </td>
@@ -552,13 +552,13 @@ export default function SalesOrdersPage() {
               </div>
 
               {/* Status Update */}
-              <div className="border-t border-[#222] pt-5">
+              <div className="border-t border-outline-variant pt-5">
                 <h3 className="text-sm font-medium text-white mb-3">Update Status</h3>
                 <div className="flex gap-3 items-center">
                   <select
                     value={pendingStatus}
                     onChange={(e) => setPendingStatus(e.target.value as SalesOrderStatus)}
-                    className="flex-1 rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    className="flex-1 rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                   >
                     {STATUS_OPTIONS.map((s) => (
                       <option key={s} value={s}>

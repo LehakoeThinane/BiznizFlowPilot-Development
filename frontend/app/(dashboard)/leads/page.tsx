@@ -717,7 +717,7 @@ export default function LeadsPage() {
 
       {selectedVisibleLeadIds.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-white/5 px-4 py-3 text-sm">
-          <p className="text-[#aaa]">
+          <p className="text-on-surface-variant">
             Selected {selectedVisibleLeadIds.length} lead
             {selectedVisibleLeadIds.length === 1 ? "" : "s"}.
           </p>
@@ -727,7 +727,7 @@ export default function LeadsPage() {
               onChange={(event) =>
                 setBulkStatus(event.target.value as Exclude<LeadStatusUi, "all">)
               }
-              className="rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-1.5 text-sm capitalize"
+              className="rounded-md border border-border bg-background text-white px-3 py-1.5 text-sm capitalize"
             >
               <option value="new">New</option>
               <option value="contacted">Contacted</option>
@@ -777,9 +777,9 @@ export default function LeadsPage() {
       ) : (
         <div className="overflow-x-auto erp-panel">
           <table className="min-w-full text-sm">
-            <thead className="bg-[#111e35] text-left">
+            <thead className="bg-surface-dim text-left">
               <tr>
-                <th className="px-4 py-3 font-medium text-[#aaa]">
+                <th className="px-4 py-3 font-medium text-on-surface-variant">
                   <input
                     type="checkbox"
                     checked={allVisibleSelected}
@@ -787,7 +787,7 @@ export default function LeadsPage() {
                     aria-label="Select all visible leads"
                   />
                 </th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">
+                <th className="px-4 py-3 font-medium text-on-surface-variant">
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 hover:text-white/80"
@@ -797,7 +797,7 @@ export default function LeadsPage() {
                     <SortIndicator active={sortField === "name"} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">
+                <th className="px-4 py-3 font-medium text-on-surface-variant">
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 hover:text-white/80"
@@ -807,8 +807,8 @@ export default function LeadsPage() {
                     <SortIndicator active={sortField === "email"} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">Phone</th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">
+                <th className="px-4 py-3 font-medium text-on-surface-variant">Phone</th>
+                <th className="px-4 py-3 font-medium text-on-surface-variant">
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 hover:text-white/80"
@@ -818,7 +818,7 @@ export default function LeadsPage() {
                     <SortIndicator active={sortField === "status"} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">
+                <th className="px-4 py-3 font-medium text-on-surface-variant">
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 hover:text-white/80"
@@ -828,7 +828,7 @@ export default function LeadsPage() {
                     <SortIndicator active={sortField === "source"} direction={sortDirection} />
                   </button>
                 </th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">
+                <th className="px-4 py-3 font-medium text-on-surface-variant">
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 hover:text-white/80"
@@ -863,8 +863,8 @@ export default function LeadsPage() {
                     <td className="px-4 py-3 text-white">
                       {fullName(nameParts.firstName, nameParts.lastName) || "Unknown"}
                     </td>
-                    <td className="px-4 py-3 text-[#aaa]">{customer?.email ?? "-"}</td>
-                    <td className="px-4 py-3 text-[#aaa]">{customer?.phone ?? "-"}</td>
+                    <td className="px-4 py-3 text-on-surface-variant">{customer?.email ?? "-"}</td>
+                    <td className="px-4 py-3 text-on-surface-variant">{customer?.phone ?? "-"}</td>
                     <td className="px-4 py-3">
                       <span
                         className={[
@@ -875,8 +875,8 @@ export default function LeadsPage() {
                         {displayStatus}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-[#aaa]">{lead.source ?? "-"}</td>
-                    <td className="px-4 py-3 text-[#aaa]">{formatDate(lead.created_at)}</td>
+                    <td className="px-4 py-3 text-on-surface-variant">{lead.source ?? "-"}</td>
+                    <td className="px-4 py-3 text-on-surface-variant">{formatDate(lead.created_at)}</td>
                   </tr>
                 );
               })}
@@ -885,14 +885,14 @@ export default function LeadsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-[#aaa]">
+      <div className="flex items-center justify-between text-sm text-on-surface-variant">
         <p>
           Page {page} of {totalPages}
         </p>
         <div className="flex gap-2">
           <button
             type="button"
-            className="rounded-md border border-outline-variant bg-[#0c172b] px-3 py-1 disabled:opacity-50"
+            className="rounded-md border border-outline-variant bg-background px-3 py-1 disabled:opacity-50"
             disabled={page <= 1}
             onClick={() => setPage((p) => p - 1)}
           >
@@ -900,7 +900,7 @@ export default function LeadsPage() {
           </button>
           <button
             type="button"
-            className="rounded-md border border-outline-variant bg-[#0c172b] px-3 py-1 disabled:opacity-50"
+            className="rounded-md border border-outline-variant bg-background px-3 py-1 disabled:opacity-50"
             disabled={page >= totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
@@ -917,7 +917,7 @@ export default function LeadsPage() {
             onClick={() => setIsCreateOpen(false)}
             aria-label="Close create lead panel"
           />
-          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-outline-variant bg-[#0f1c33] p-5 shadow-xl">
+          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-outline-variant bg-surface p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Add Lead</h2>
               <button
@@ -954,7 +954,7 @@ export default function LeadsPage() {
             }}
             aria-label="Close lead details panel"
           />
-          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-outline-variant bg-[#0f1c33] p-5 shadow-xl">
+          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-outline-variant bg-surface p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Lead Details</h2>
               <button
@@ -995,7 +995,7 @@ export default function LeadsPage() {
                     </div>
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted">Notes</p>
-                      <p className="mt-1 rounded-md border border-border bg-white/5 p-3 text-sm text-[#ccc] whitespace-pre-wrap">
+                      <p className="mt-1 rounded-md border border-border bg-white/5 p-3 text-sm text-on-surface-variant whitespace-pre-wrap">
                         {selectedLead.notes?.trim() || "No notes"}
                       </p>
                     </div>
@@ -1099,7 +1099,7 @@ export default function LeadsPage() {
                     />
                     <button
                       type="button"
-                      className="rounded-md border border-border px-4 py-2 text-sm text-[#aaa] hover:bg-white/5"
+                      className="rounded-md border border-border px-4 py-2 text-sm text-on-surface-variant hover:bg-white/5"
                       onClick={() => {
                         if (selectedLead) hydrateEditorFromLead(selectedLead);
                         setIsEditing(false);
@@ -1126,7 +1126,7 @@ function SortIndicator({
   direction: SortDirection;
 }) {
   if (!active) {
-    return <span className="text-[#555]">↕</span>;
+    return <span className="text-on-surface-variant">↕</span>;
   }
   return <span>{direction === "asc" ? "↑" : "↓"}</span>;
 }
@@ -1143,7 +1143,7 @@ function DetailItem({
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className={`mt-1 text-sm text-[#ccc] ${capitalize ? "capitalize" : ""}`}>{value}</p>
+      <p className={`mt-1 text-sm text-on-surface-variant ${capitalize ? "capitalize" : ""}`}>{value}</p>
     </div>
   );
 }
@@ -1169,7 +1169,7 @@ function LeadForm({
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="first-name">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="first-name">
             First Name
           </label>
           <input
@@ -1180,7 +1180,7 @@ function LeadForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="last-name">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="last-name">
             Last Name
           </label>
           <input
@@ -1194,7 +1194,7 @@ function LeadForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="email">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="email">
             Email
           </label>
           <input
@@ -1206,7 +1206,7 @@ function LeadForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="phone">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="phone">
             Phone
           </label>
           <input
@@ -1219,7 +1219,7 @@ function LeadForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="company">
+        <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="company">
           Company
         </label>
         <input
@@ -1232,7 +1232,7 @@ function LeadForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="status">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="status">
             Status
           </label>
           <select
@@ -1251,7 +1251,7 @@ function LeadForm({
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="source">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="source">
             Source
           </label>
           <input
@@ -1264,7 +1264,7 @@ function LeadForm({
       </div>
 
       <div>
-        <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="notes">
+        <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="notes">
           Notes
         </label>
         <textarea

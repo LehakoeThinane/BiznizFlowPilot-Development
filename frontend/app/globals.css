@@ -76,8 +76,9 @@
 
 body {
   background:
-    radial-gradient(1200px 700px at 0% -10%, #18366a 0%, transparent 55%),
-    radial-gradient(900px 500px at 100% 0%, #0f2c5b 0%, transparent 50%),
+    radial-gradient(1100px 650px at 8% -8%, rgba(45, 212, 191, 0.16) 0%, transparent 55%),
+    radial-gradient(1000px 650px at 100% 0%, rgba(42, 127, 255, 0.22) 0%, transparent 52%),
+    radial-gradient(800px 500px at 50% 110%, rgba(45, 212, 191, 0.08) 0%, transparent 50%),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-dm-sans), "DM Sans", "Segoe UI", system-ui, sans-serif;
@@ -89,22 +90,40 @@ body {
 a { color: inherit; text-decoration: none; }
 
 /* ── Sidebar ───────────────────────────────────────────────────────────── */
-.sidebar { background: var(--sidebar-bg); }
+.sidebar {
+  background: linear-gradient(180deg, rgba(10, 19, 35, 0.9), rgba(7, 13, 26, 0.96));
+  backdrop-filter: blur(16px);
+}
 .sidebar-divider { border-color: var(--sidebar-border); }
 
 @layer components {
   .erp-panel {
     border: 1px solid var(--outline-variant);
-    background: linear-gradient(180deg, rgba(20, 30, 50, 0.95), rgba(15, 23, 40, 0.95));
+    background: linear-gradient(180deg, rgba(20, 30, 50, 0.75), rgba(15, 23, 40, 0.8));
+    backdrop-filter: blur(14px);
     border-radius: 14px;
-    box-shadow: 0 14px 40px rgba(2, 8, 20, 0.35);
+    box-shadow:
+      0 14px 40px rgba(2, 8, 20, 0.4),
+      0 0 0 1px rgba(45, 212, 191, 0.06),
+      inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .erp-panel:hover {
+    border-color: rgba(45, 212, 191, 0.25);
+    box-shadow:
+      0 14px 40px rgba(2, 8, 20, 0.4),
+      0 0 24px rgba(45, 212, 191, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 
   .erp-input {
     border: 1px solid var(--outline-variant);
-    background: rgba(10, 18, 32, 0.75);
+    background: rgba(10, 18, 32, 0.6);
+    backdrop-filter: blur(8px);
     color: var(--on-surface);
     border-radius: 10px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .erp-input::placeholder {
@@ -112,19 +131,35 @@ a { color: inherit; text-decoration: none; }
   }
 
   .erp-input:focus {
-    outline: 2px solid rgba(42, 127, 255, 0.35);
-    outline-offset: 0;
-    border-color: var(--brand);
+    outline: none;
+    border-color: var(--tertiary-fixed-dim);
+    box-shadow: 0 0 0 3px rgba(45, 212, 191, 0.18), 0 0 16px rgba(45, 212, 191, 0.2);
   }
 
   .erp-button-primary {
     border-radius: 10px;
-    background: linear-gradient(135deg, var(--brand), #1b6df0);
+    background: linear-gradient(135deg, var(--tertiary-fixed-dim), var(--brand));
     color: var(--on-primary);
+    box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.3), 0 4px 20px rgba(45, 212, 191, 0.25);
+    transition: box-shadow 0.2s ease, transform 0.15s ease;
   }
 
   .erp-button-primary:hover {
-    background: linear-gradient(135deg, var(--brand-hover), #155fd4);
+    box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.5), 0 6px 28px rgba(45, 212, 191, 0.4);
+    transform: translateY(-1px);
+  }
+
+  /* Glow badge: wraps an icon/avatar for the "glowing node" look from the
+     brand reference (soft ring + blur behind a flat icon), used for the
+     sidebar logo mark and active nav icons. */
+  .glow-badge {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    background: linear-gradient(135deg, rgba(45, 212, 191, 0.18), rgba(42, 127, 255, 0.18));
+    box-shadow: 0 0 0 1px rgba(45, 212, 191, 0.35), 0 0 20px rgba(45, 212, 191, 0.35);
   }
 }
 
@@ -132,7 +167,7 @@ a { color: inherit; text-decoration: none; }
 button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible {
-  outline: 2px solid rgba(42, 127, 255, 0.7);
+  outline: 2px solid rgba(45, 212, 191, 0.7);
   outline-offset: 2px;
   border-radius: 6px;
 }

@@ -17,7 +17,7 @@ const STATUS_COLORS: Record<PurchaseRequisitionStatus, string> = {
   pending: "bg-yellow-500/20 text-yellow-300",
   approved: "bg-emerald-500/20 text-emerald-300",
   rejected: "bg-rose-500/20 text-rose-300",
-  cancelled: "bg-white/10 text-[#aaa]",
+  cancelled: "bg-white/10 text-on-surface-variant",
   converted: "bg-blue-500/20 text-blue-300",
 };
 
@@ -42,7 +42,7 @@ function StatusBadge({ status }: { status: PurchaseRequisitionStatus }) {
 function DetailItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-medium text-[#888] uppercase tracking-wide">{label}</dt>
+      <dt className="text-xs font-medium text-muted uppercase tracking-wide">{label}</dt>
       <dd className="mt-1 text-sm text-white">{value ?? "—"}</dd>
     </div>
   );
@@ -233,7 +233,7 @@ export default function PurchaseRequisitionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-white">Purchase Requisitions</h1>
-          <p className="mt-1 text-sm text-[#888]">
+          <p className="mt-1 text-sm text-muted">
             {total} requisition{total !== 1 ? "s" : ""} total — request a purchase, get it approved, then convert it to a PO.
           </p>
         </div>
@@ -262,7 +262,7 @@ export default function PurchaseRequisitionsPage() {
             className={`rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors ${
               activeFilter === s
                 ? "bg-brand text-white"
-                : "bg-white/10 text-[#aaa] hover:bg-white/[0.08]"
+                : "bg-white/10 text-on-surface-variant hover:bg-white/[0.08]"
             }`}
           >
             {s}
@@ -271,26 +271,26 @@ export default function PurchaseRequisitionsPage() {
       </div>
 
       {/* Table */}
-      <div className="overflow-hidden rounded-lg border border-[#222] bg-[#141414] shadow-sm">
-        <table className="min-w-full divide-y divide-[#222]">
-          <thead className="bg-[#1a1a1a]">
+      <div className="overflow-hidden rounded-lg border border-outline-variant bg-surface shadow-sm">
+        <table className="min-w-full divide-y divide-outline-variant">
+          <thead className="bg-surface-dim">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">Title</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">Supplier</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">Estimated Total</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">Items</th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-[#888] uppercase tracking-wider">Submitted</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Title</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Supplier</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Status</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Estimated Total</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Items</th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-muted uppercase tracking-wider">Submitted</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#222]">
+          <tbody className="divide-y divide-outline-variant">
             {isLoading ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#888]">Loading…</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">Loading…</td>
               </tr>
             ) : visible.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm text-[#888]">No purchase requisitions found.</td>
+                <td colSpan={6} className="px-4 py-8 text-center text-sm text-muted">No purchase requisitions found.</td>
               </tr>
             ) : (
               visible.map((req) => (
@@ -300,11 +300,11 @@ export default function PurchaseRequisitionsPage() {
                   onClick={() => openRequisition(req)}
                 >
                   <td className="px-4 py-3 text-sm font-medium text-white">{req.title}</td>
-                  <td className="px-4 py-3 text-sm text-[#aaa]">{supplierName(req.supplier_id)}</td>
+                  <td className="px-4 py-3 text-sm text-on-surface-variant">{supplierName(req.supplier_id)}</td>
                   <td className="px-4 py-3"><StatusBadge status={req.status} /></td>
-                  <td className="px-4 py-3 text-sm text-[#aaa] font-medium">{fmt(req.estimated_total)}</td>
-                  <td className="px-4 py-3 text-sm text-[#888]">{req.line_items?.length ?? 0}</td>
-                  <td className="px-4 py-3 text-sm text-[#888]">{new Date(req.created_at).toLocaleDateString()}</td>
+                  <td className="px-4 py-3 text-sm text-on-surface-variant font-medium">{fmt(req.estimated_total)}</td>
+                  <td className="px-4 py-3 text-sm text-muted">{req.line_items?.length ?? 0}</td>
+                  <td className="px-4 py-3 text-sm text-muted">{new Date(req.created_at).toLocaleDateString()}</td>
                 </tr>
               ))
             )}
@@ -314,20 +314,20 @@ export default function PurchaseRequisitionsPage() {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-[#888]">
+        <div className="flex items-center justify-between text-sm text-muted">
           <span>Page {page} of {totalPages}</span>
           <div className="flex gap-2">
             <button
               disabled={page === 1}
               onClick={() => setPage((p) => p - 1)}
-              className="rounded border border-[#333] px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
+              className="rounded border border-outline-variant px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
             >
               Prev
             </button>
             <button
               disabled={page === totalPages}
               onClick={() => setPage((p) => p + 1)}
-              className="rounded border border-[#333] px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
+              className="rounded border border-outline-variant px-3 py-1 disabled:opacity-40 hover:bg-white/[0.02]"
             >
               Next
             </button>
@@ -339,38 +339,38 @@ export default function PurchaseRequisitionsPage() {
       {isCreateOpen && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/20" onClick={() => setIsCreateOpen(false)} />
-          <div className="w-full max-w-md bg-[#141414] shadow-xl flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#222] px-6 py-4">
+          <div className="w-full max-w-md bg-surface shadow-xl flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
               <h2 className="text-lg font-semibold text-white">Request a Purchase</h2>
-              <button onClick={() => setIsCreateOpen(false)} className="text-[#666] hover:text-[#aaa] text-xl leading-none">×</button>
+              <button onClick={() => setIsCreateOpen(false)} className="text-on-surface-variant hover:text-on-surface-variant text-xl leading-none">×</button>
             </div>
             <form onSubmit={handleCreate} className="flex-1 space-y-5 px-6 py-5">
               <div>
-                <label className="block text-xs font-medium text-[#aaa] mb-1">What do you need? *</label>
+                <label className="block text-xs font-medium text-on-surface-variant mb-1">What do you need? *</label>
                 <input
                   required
                   type="text"
                   value={createForm.title}
                   onChange={(e) => setCreateForm((f) => ({ ...f, title: e.target.value }))}
                   placeholder="e.g. Replacement laptop for design team"
-                  className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#aaa] mb-1">Why do you need it?</label>
+                <label className="block text-xs font-medium text-on-surface-variant mb-1">Why do you need it?</label>
                 <textarea
                   value={createForm.justification}
                   onChange={(e) => setCreateForm((f) => ({ ...f, justification: e.target.value }))}
                   rows={3}
-                  className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#aaa] mb-1">Preferred Supplier</label>
+                <label className="block text-xs font-medium text-on-surface-variant mb-1">Preferred Supplier</label>
                 <select
                   value={createForm.supplier_id}
                   onChange={(e) => setCreateForm((f) => ({ ...f, supplier_id: e.target.value }))}
-                  className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                 >
                   <option value="">— Not sure yet —</option>
                   {suppliers.filter((s) => s.is_active).map((s) => (
@@ -379,7 +379,7 @@ export default function PurchaseRequisitionsPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-[#aaa] mb-1">Estimated Total *</label>
+                <label className="block text-xs font-medium text-on-surface-variant mb-1">Estimated Total *</label>
                 <input
                   required
                   type="number"
@@ -388,13 +388,13 @@ export default function PurchaseRequisitionsPage() {
                   value={createForm.estimated_total}
                   onChange={(e) => setCreateForm((f) => ({ ...f, estimated_total: e.target.value }))}
                   placeholder="0.00"
-                  className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                  className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                 />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-xs font-medium text-[#aaa]">Items (optional)</label>
+                  <label className="block text-xs font-medium text-on-surface-variant">Items (optional)</label>
                   <button type="button" onClick={addDraftItem} className="text-xs text-brand hover:underline">+ Add item</button>
                 </div>
                 <div className="space-y-2">
@@ -405,7 +405,7 @@ export default function PurchaseRequisitionsPage() {
                         value={item.description}
                         onChange={(e) => updateDraftItem(i, "description", e.target.value)}
                         placeholder="Description"
-                        className="flex-1 rounded-md border border-[#333] px-2 py-1.5 text-xs bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                        className="flex-1 rounded-md border border-outline-variant px-2 py-1.5 text-xs bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                       />
                       <input
                         type="number"
@@ -413,7 +413,7 @@ export default function PurchaseRequisitionsPage() {
                         value={item.quantity}
                         onChange={(e) => updateDraftItem(i, "quantity", e.target.value)}
                         placeholder="Qty"
-                        className="w-16 rounded-md border border-[#333] px-2 py-1.5 text-xs bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                        className="w-16 rounded-md border border-outline-variant px-2 py-1.5 text-xs bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                       />
                       <input
                         type="number"
@@ -422,12 +422,12 @@ export default function PurchaseRequisitionsPage() {
                         value={item.estimated_unit_cost}
                         onChange={(e) => updateDraftItem(i, "estimated_unit_cost", e.target.value)}
                         placeholder="Unit cost"
-                        className="w-20 rounded-md border border-[#333] px-2 py-1.5 text-xs bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                        className="w-20 rounded-md border border-outline-variant px-2 py-1.5 text-xs bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                       />
                       <button
                         type="button"
                         onClick={() => removeDraftItem(i)}
-                        className="text-[#666] hover:text-rose-400 text-sm leading-none px-1"
+                        className="text-on-surface-variant hover:text-rose-400 text-sm leading-none px-1"
                       >
                         ×
                       </button>
@@ -447,7 +447,7 @@ export default function PurchaseRequisitionsPage() {
                 <button
                   type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="rounded-md border border-[#333] px-4 py-2 text-sm text-[#aaa] hover:bg-white/[0.02]"
+                  className="rounded-md border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-white/[0.02]"
                 >
                   Cancel
                 </button>
@@ -461,13 +461,13 @@ export default function PurchaseRequisitionsPage() {
       {selected && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/20" onClick={closePanel} />
-          <div className="w-full max-w-xl bg-[#141414] shadow-xl flex flex-col overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#222] px-6 py-4">
+          <div className="w-full max-w-xl bg-surface shadow-xl flex flex-col overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-white">{selected.title}</h2>
                 <StatusBadge status={selected.status} />
               </div>
-              <button onClick={closePanel} className="text-[#666] hover:text-[#aaa] text-xl leading-none">×</button>
+              <button onClick={closePanel} className="text-on-surface-variant hover:text-on-surface-variant text-xl leading-none">×</button>
             </div>
 
             <div className="flex-1 space-y-6 px-6 py-5">
@@ -483,14 +483,14 @@ export default function PurchaseRequisitionsPage() {
 
               {selected.justification && (
                 <div>
-                  <dt className="text-xs font-medium text-[#888] uppercase tracking-wide">Justification</dt>
-                  <dd className="mt-1 text-sm text-[#aaa] whitespace-pre-wrap">{selected.justification}</dd>
+                  <dt className="text-xs font-medium text-muted uppercase tracking-wide">Justification</dt>
+                  <dd className="mt-1 text-sm text-on-surface-variant whitespace-pre-wrap">{selected.justification}</dd>
                 </div>
               )}
 
               {selected.rejection_reason && (
                 <div>
-                  <dt className="text-xs font-medium text-[#888] uppercase tracking-wide">Rejection Reason</dt>
+                  <dt className="text-xs font-medium text-muted uppercase tracking-wide">Rejection Reason</dt>
                   <dd className="mt-1 text-sm text-rose-300 whitespace-pre-wrap">{selected.rejection_reason}</dd>
                 </div>
               )}
@@ -500,23 +500,23 @@ export default function PurchaseRequisitionsPage() {
                   Items ({selected.line_items?.length ?? 0})
                 </h3>
                 {!selected.line_items || selected.line_items.length === 0 ? (
-                  <p className="text-sm text-[#666] italic">No items listed.</p>
+                  <p className="text-sm text-on-surface-variant italic">No items listed.</p>
                 ) : (
-                  <div className="overflow-hidden rounded-lg border border-[#222]">
-                    <table className="min-w-full divide-y divide-[#222] text-sm">
-                      <thead className="bg-[#1a1a1a]">
+                  <div className="overflow-hidden rounded-lg border border-outline-variant">
+                    <table className="min-w-full divide-y divide-outline-variant text-sm">
+                      <thead className="bg-surface-dim">
                         <tr>
-                          <th className="px-3 py-2 text-left text-xs font-medium text-[#888] uppercase">Description</th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-[#888] uppercase">Qty</th>
-                          <th className="px-3 py-2 text-right text-xs font-medium text-[#888] uppercase">Est. Unit Cost</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium text-muted uppercase">Description</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted uppercase">Qty</th>
+                          <th className="px-3 py-2 text-right text-xs font-medium text-muted uppercase">Est. Unit Cost</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#222]">
+                      <tbody className="divide-y divide-outline-variant">
                         {selected.line_items.map((item: PRLineItem) => (
                           <tr key={item.id}>
-                            <td className="px-3 py-2 text-[#aaa]">{item.description}</td>
-                            <td className="px-3 py-2 text-right text-[#aaa]">{item.quantity}</td>
-                            <td className="px-3 py-2 text-right text-[#aaa]">{fmt(item.estimated_unit_cost)}</td>
+                            <td className="px-3 py-2 text-on-surface-variant">{item.description}</td>
+                            <td className="px-3 py-2 text-right text-on-surface-variant">{item.quantity}</td>
+                            <td className="px-3 py-2 text-right text-on-surface-variant">{fmt(item.estimated_unit_cost)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -526,14 +526,14 @@ export default function PurchaseRequisitionsPage() {
               </div>
 
               {selected.status === "pending" && (
-                <div className="border-t border-[#222] pt-5 space-y-3">
+                <div className="border-t border-outline-variant pt-5 space-y-3">
                   <h3 className="text-sm font-medium text-white">Decide</h3>
                   <textarea
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
                     placeholder="Rejection reason (only needed if rejecting)"
                     rows={2}
-                    className="w-full rounded-md border border-[#333] px-3 py-2 text-sm bg-[#0f0f0f] text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
+                    className="w-full rounded-md border border-outline-variant px-3 py-2 text-sm bg-background text-white focus:outline-none focus:ring-2 focus:ring-brand/50"
                   />
                   <div className="flex gap-3">
                     <button
@@ -553,7 +553,7 @@ export default function PurchaseRequisitionsPage() {
                     <button
                       onClick={() => handleDecision("cancelled")}
                       disabled={isActing}
-                      className="rounded-md border border-[#333] px-4 py-2 text-sm text-[#aaa] hover:bg-white/[0.02] disabled:opacity-60"
+                      className="rounded-md border border-outline-variant px-4 py-2 text-sm text-on-surface-variant hover:bg-white/[0.02] disabled:opacity-60"
                     >
                       Cancel
                     </button>
@@ -562,7 +562,7 @@ export default function PurchaseRequisitionsPage() {
               )}
 
               {selected.status === "approved" && (
-                <div className="border-t border-[#222] pt-5">
+                <div className="border-t border-outline-variant pt-5">
                   <h3 className="text-sm font-medium text-white mb-3">Ready to buy</h3>
                   <button
                     onClick={handleConvert}
@@ -575,7 +575,7 @@ export default function PurchaseRequisitionsPage() {
               )}
 
               {selected.status === "converted" && selected.converted_purchase_order_id && (
-                <div className="border-t border-[#222] pt-5 text-sm text-[#888]">
+                <div className="border-t border-outline-variant pt-5 text-sm text-muted">
                   Converted to purchase order. View it under{" "}
                   <a href="/purchase-orders" className="text-brand hover:underline">Purchase Orders</a>.
                 </div>

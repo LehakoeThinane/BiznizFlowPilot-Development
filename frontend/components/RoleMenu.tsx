@@ -126,9 +126,9 @@ export function RoleMenu({ role }: { role: UserRole }) {
             <Link
               key={item.href}
               href={item.href}
-              className="group flex items-center gap-3 rounded-xl border border-primary-fixed-dim/40 bg-primary-container/70 px-4 py-3 text-sm text-on-primary-container shadow-sm transition-colors"
+              className="group flex items-center gap-3 rounded-xl border border-tertiary-fixed-dim/50 bg-primary-container/70 px-4 py-3 text-sm text-on-primary-container shadow-[0_0_0_1px_rgba(45,212,191,0.15),0_0_20px_rgba(45,212,191,0.25)] transition-shadow"
             >
-              <span className="material-symbols-outlined text-primary-fixed-dim">{item.icon}</span>
+              <span className="material-symbols-outlined text-tertiary-fixed-dim drop-shadow-[0_0_6px_rgba(45,212,191,0.7)]">{item.icon}</span>
               <span className="font-medium">{item.label}</span>
               {badge}
             </Link>
@@ -139,9 +139,9 @@ export function RoleMenu({ role }: { role: UserRole }) {
           <Link
             key={item.href}
             href={item.href}
-            className="group flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm text-surface-variant transition-colors hover:border-white/10 hover:bg-white/5 hover:text-surface-bright"
+            className="group flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm text-surface-variant transition-colors hover:border-tertiary-fixed-dim/20 hover:bg-white/5 hover:text-surface-bright"
           >
-            <span className="material-symbols-outlined text-primary-fixed-dim/90 transition-transform group-hover:scale-105">{item.icon}</span>
+            <span className="material-symbols-outlined text-primary-fixed-dim/90 transition-transform group-hover:scale-105 group-hover:text-tertiary-fixed-dim">{item.icon}</span>
             <span className="font-medium">{item.label}</span>
             {badge}
           </Link>
