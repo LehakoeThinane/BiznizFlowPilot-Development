@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
 import type {
   PurchaseOrder,
   PurchaseOrderListResponse,
@@ -221,6 +222,7 @@ export default function PurchaseOrdersPage() {
 
   return (
     <div className="space-y-6">
+      <SalesCrmSubNav />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, apiRequest } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
+import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
 import type { Customer, CustomerListResponse, Lead, LeadListResponse } from "@/types/api";
 
 type LeadStatusUi = "all" | "new" | "contacted" | "qualified" | "converted" | "lost";
@@ -637,6 +638,7 @@ export default function LeadsPage() {
 
   return (
     <section className="space-y-5">
+      <SalesCrmSubNav />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-white">Leads</h1>
