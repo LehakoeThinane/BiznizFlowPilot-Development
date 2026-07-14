@@ -34,6 +34,13 @@ interface TaskEditorState {
 }
 
 const PAGE_SIZE = 20;
+const BOARD_PAGE_SIZE = 200;
+const STATUS_COLUMNS: { key: Exclude<TaskStatusUi, "all">; label: string }[] = [
+  { key: "pending", label: "Pending" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "completed", label: "Completed" },
+  { key: "overdue", label: "Overdue" },
+];
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -140,6 +147,7 @@ function downloadCsv(filename: string, rows: string[][]): void {
 }
 
 export default function TasksPage() {
+  const [viewMode, setViewMode] = useState<"list" | "board">("board");
   const [tasks, setTasks] = useState<Task[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -208,6 +216,18 @@ export default function TasksPage() {
     return filtered;
   }, [priorityFilter, search, sortDirection, sortField, tasks]);
 
+  // Board columns ARE the status split, so this applies search + priority
+  // only, leaving status filtering to the column grouping itself.
+  const boardTasks = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return tasks.filter((task) => {
+      const titleMatch = task.title.toLowerCase().includes(query);
+      const priorityMatch =
+        priorityFilter === "all" || toUiPriority(task.priority) === priorityFilter;
+      return titleMatch && priorityMatch;
+    });
+  }, [priorityFilter, search, tasks]);
+
   const visibleTaskIdSet = useMemo(
     () => new Set(visibleTasks.map((task) => task.id)),
     [visibleTasks],
@@ -262,16 +282,20 @@ export default function TasksPage() {
     setIsLoading(true);
     setError(null);
 
-    const skip = (page - 1) * PAGE_SIZE;
+    // The board shows every status split into columns at once, so it needs
+    // a much wider fetch and must ignore the list's single-status filter
+    // (which would otherwise leave most columns empty).
+    const skip = viewMode === "board" ? 0 : (page - 1) * PAGE_SIZE;
+    const limit = viewMode === "board" ? BOARD_PAGE_SIZE : PAGE_SIZE;
     const statusQuery =
-      statusFilter === "all"
+      viewMode === "board" || statusFilter === "all"
         ? ""
         : `&status=${encodeURIComponent(toBackendStatus(statusFilter))}`;
 
     try {
       const [taskResponse, userResponse, usersResponse] = await Promise.all([
         apiRequest<TaskListResponse>(
-          `/api/v1/tasks?skip=${skip}&limit=${PAGE_SIZE}${statusQuery}`,
+          `/api/v1/tasks?skip=${skip}&limit=${limit}${statusQuery}`,
           {
             method: "GET",
             authToken: token,
@@ -300,7 +324,7 @@ export default function TasksPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, viewMode]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -349,6 +373,51 @@ export default function TasksPage() {
       return [...previous, taskId];
     });
   }, []);
+
+  const handleDropTask = useCallback(
+    async (taskId: string, newStatus: Exclude<TaskStatusUi, "all">) => {
+      const task = tasks.find((candidate) => candidate.id === taskId);
+      if (!task || task.status === newStatus) {
+        return;
+      }
+
+      const token = getStoredToken();
+      if (!token) {
+        logout();
+        window.location.replace("/login");
+        return;
+      }
+
+      // Optimistic update - the board should feel instant even though this
+      // VM's response times can vary; revert on failure below.
+      const previousTasks = tasks;
+      setTasks((current) =>
+        current.map((candidate) =>
+          candidate.id === taskId ? { ...candidate, status: newStatus } : candidate,
+        ),
+      );
+      setError(null);
+
+      try {
+        await apiRequest<Task>(`/api/v1/tasks/${taskId}`, {
+          method: "PATCH",
+          authToken: token,
+          body: { status: toBackendStatus(newStatus) },
+        });
+      } catch (requestError) {
+        setTasks(previousTasks);
+        if (requestError instanceof ApiError && requestError.status === 401) {
+          logout();
+          window.location.replace("/login");
+          return;
+        }
+        setError(
+          toErrorMessage(requestError, "Unable to move that task - it may not be yours to update."),
+        );
+      }
+    },
+    [tasks],
+  );
 
   const handleBulkStatusUpdate = useCallback(async () => {
     if (selectedVisibleTaskIds.length === 0) {
@@ -653,17 +722,43 @@ export default function TasksPage() {
             Manage task lifecycle, assignments, and due dates.
           </p>
         </div>
-        <button
-          type="button"
-          className="erp-button-primary px-4 py-2 text-sm font-semibold"
-          onClick={() => {
-            setEditor(defaultEditor());
-            setIsCreateOpen(true);
-            setError(null);
-          }}
-        >
-          Create Task
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-md border border-outline-variant p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("board")}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === "board"
+                  ? "bg-brand text-on-primary"
+                  : "text-on-surface-variant hover:bg-surface-container-high"
+              }`}
+            >
+              Board
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("list")}
+              className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === "list"
+                  ? "bg-brand text-on-primary"
+                  : "text-on-surface-variant hover:bg-surface-container-high"
+              }`}
+            >
+              List
+            </button>
+          </div>
+          <button
+            type="button"
+            className="erp-button-primary px-4 py-2 text-sm font-semibold"
+            onClick={() => {
+              setEditor(defaultEditor());
+              setIsCreateOpen(true);
+              setError(null);
+            }}
+          >
+            Create Task
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -677,11 +772,13 @@ export default function TasksPage() {
         <select
           aria-label="Filter by status"
           value={statusFilter}
+          disabled={viewMode === "board"}
+          title={viewMode === "board" ? "Board view already splits tasks by status" : undefined}
           onChange={(event) => {
             setStatusFilter(event.target.value as TaskStatusUi);
             setPage(1);
           }}
-          className="erp-input w-full px-3 py-2 text-sm"
+          className="erp-input w-full px-3 py-2 text-sm disabled:opacity-50"
         >
           <option value="all">All statuses</option>
           <option value="pending">Pending</option>
@@ -731,10 +828,11 @@ export default function TasksPage() {
       </div>
 
       <p className="text-sm text-muted">
-        Showing {visibleTasks.length} of {tasks.length} task{tasks.length === 1 ? "" : "s"}.
+        Showing {viewMode === "board" ? boardTasks.length : visibleTasks.length} of {tasks.length} task
+        {tasks.length === 1 ? "" : "s"}.
       </p>
 
-      {selectedVisibleTaskIds.length > 0 ? (
+      {viewMode === "list" && selectedVisibleTaskIds.length > 0 ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-white/5 px-4 py-3 text-sm">
           <p className="text-[#aaa]">
             Selected {selectedVisibleTaskIds.length} task
@@ -788,6 +886,13 @@ export default function TasksPage() {
         <div className="erp-panel p-5 text-sm text-muted">
           Loading tasks...
         </div>
+      ) : viewMode === "board" ? (
+        <TaskBoard
+          tasks={boardTasks}
+          onOpenTask={(task) => void openTaskDetails(task)}
+          onDropTask={(taskId, newStatus) => void handleDropTask(taskId, newStatus)}
+          resolveAssignee={resolveAssignee}
+        />
       ) : visibleTasks.length === 0 ? (
         <div className="erp-panel p-5 text-sm text-muted">
           No tasks found for the current filters.
@@ -935,29 +1040,31 @@ export default function TasksPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-[#aaa]">
-        <p>
-          Page {page} of {totalPages}
-        </p>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            className="rounded-md border border-outline-variant bg-[#0c172b] px-3 py-1 disabled:opacity-50"
-            disabled={page <= 1}
-            onClick={() => setPage((p) => p - 1)}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            className="rounded-md border border-outline-variant bg-[#0c172b] px-3 py-1 disabled:opacity-50"
-            disabled={page >= totalPages}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </button>
+      {viewMode === "list" ? (
+        <div className="flex items-center justify-between text-sm text-[#aaa]">
+          <p>
+            Page {page} of {totalPages}
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="rounded-md border border-outline-variant bg-[#0c172b] px-3 py-1 disabled:opacity-50"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-outline-variant bg-[#0c172b] px-3 py-1 disabled:opacity-50"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              Next
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {isCreateOpen ? (
         <div className="fixed inset-0 z-40 flex">
@@ -1122,6 +1229,95 @@ function SortIndicator({
     return <span className="text-[#555]">↕</span>;
   }
   return <span>{direction === "asc" ? "↑" : "↓"}</span>;
+}
+
+function TaskBoard({
+  tasks,
+  onOpenTask,
+  onDropTask,
+  resolveAssignee,
+}: {
+  tasks: Task[];
+  onOpenTask: (task: Task) => void;
+  onDropTask: (taskId: string, newStatus: Exclude<TaskStatusUi, "all">) => void;
+  resolveAssignee: (assignedTo: string | null) => string;
+}) {
+  const [dragOverColumn, setDragOverColumn] = useState<Exclude<TaskStatusUi, "all"> | null>(null);
+
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {STATUS_COLUMNS.map((column) => {
+        const columnTasks = tasks.filter((task) => task.status === column.key);
+        return (
+          <div
+            key={column.key}
+            onDragOver={(event) => {
+              event.preventDefault();
+              setDragOverColumn(column.key);
+            }}
+            onDragLeave={() =>
+              setDragOverColumn((current) => (current === column.key ? null : current))
+            }
+            onDrop={(event) => {
+              event.preventDefault();
+              setDragOverColumn(null);
+              const taskId = event.dataTransfer.getData("text/plain");
+              if (taskId) onDropTask(taskId, column.key);
+            }}
+            className={`erp-panel flex min-h-50 flex-col gap-2 p-3 transition-colors ${
+              dragOverColumn === column.key ? "ring-2 ring-brand" : ""
+            }`}
+          >
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-white">{column.label}</h3>
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs text-[#aaa]">
+                {columnTasks.length}
+              </span>
+            </div>
+            <div className="flex flex-1 flex-col gap-2">
+              {columnTasks.length === 0 ? (
+                <p className="px-1 text-xs italic text-muted">No tasks</p>
+              ) : (
+                columnTasks.map((task) => {
+                  const priority = toUiPriority(task.priority);
+                  return (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={(event) => {
+                        event.dataTransfer.setData("text/plain", task.id);
+                        event.dataTransfer.effectAllowed = "move";
+                      }}
+                      onClick={() => onOpenTask(task)}
+                      className="cursor-grab rounded-md border border-border bg-white/5 p-3 text-sm hover:bg-white/[0.08] active:cursor-grabbing"
+                    >
+                      <p className="font-medium text-white">{task.title}</p>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <span
+                          className={[
+                            "inline-flex rounded-full px-2 py-0.5 text-xs font-semibold capitalize",
+                            priorityBadgeClass(priority),
+                          ].join(" ")}
+                        >
+                          {priority}
+                        </span>
+                        <span className="truncate text-xs text-muted">
+                          {resolveAssignee(task.assigned_to)}
+                        </span>
+                      </div>
+                      {task.due_date ? (
+                        <p className="mt-1.5 text-xs text-muted">{formatDate(task.due_date)}</p>
+                      ) : null}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function DetailItem({

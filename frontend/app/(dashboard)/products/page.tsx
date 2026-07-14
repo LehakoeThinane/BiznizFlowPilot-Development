@@ -44,6 +44,10 @@ function formatDate(value: string) {
   return Number.isNaN(d.getTime()) ? value : d.toLocaleDateString();
 }
 
+function fmt(amount: string): string {
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(parseFloat(amount));
+}
+
 function toErrorMessage(err: unknown, fallback: string) {
   if (err instanceof Error && err.message.trim()) return err.message;
   return fallback;
@@ -306,7 +310,7 @@ export default function ProductsPage() {
                   <td className="px-4 py-3 font-mono text-xs text-[#aaa]">{p.sku}</td>
                   <td className="px-4 py-3 font-medium text-white">{p.name}</td>
                   <td className="px-4 py-3 text-[#aaa]">{p.category ?? "-"}</td>
-                  <td className="px-4 py-3 text-[#aaa]">${parseFloat(p.unit_price).toFixed(2)}</td>
+                  <td className="px-4 py-3 text-[#aaa]">{fmt(p.unit_price)}</td>
                   <td className="px-4 py-3 text-[#aaa]">{formatDate(p.created_at)}</td>
                   <td className="px-4 py-3 capitalize text-[#aaa]">{p.product_type}</td>
                   <td className="px-4 py-3">
@@ -359,8 +363,8 @@ export default function ProductsPage() {
                   <DetailItem label="Name" value={selectedProduct.name} />
                   <DetailItem label="Type" value={selectedProduct.product_type} capitalize />
                   <DetailItem label="Category" value={selectedProduct.category ?? "-"} />
-                  <DetailItem label="Unit Price" value={`$${parseFloat(selectedProduct.unit_price).toFixed(2)}`} />
-                  <DetailItem label="Cost Price" value={selectedProduct.cost_price ? `$${parseFloat(selectedProduct.cost_price).toFixed(2)}` : "-"} />
+                  <DetailItem label="Unit Price" value={fmt(selectedProduct.unit_price)} />
+                  <DetailItem label="Cost Price" value={selectedProduct.cost_price ? fmt(selectedProduct.cost_price) : "-"} />
                   <DetailItem label="Status" value={selectedProduct.is_active ? "Active" : "Inactive"} />
                   <DetailItem label="Track Inventory" value={selectedProduct.track_inventory ? "Yes" : "No"} />
                   <DetailItem label="Created" value={formatDate(selectedProduct.created_at)} />

@@ -50,7 +50,7 @@ function DetailItem({ label, value }: { label: string; value: React.ReactNode })
 
 function fmt(amount: string | null | undefined): string {
   if (!amount) return "—";
-  return `$${parseFloat(amount).toFixed(2)}`;
+  return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format(parseFloat(amount));
 }
 
 export default function PurchaseOrdersPage() {

@@ -11,6 +11,12 @@ COPY . .
 # this needs to be a build ARG, not just a runtime environment variable.
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
+# next.config.ts's rewrites() destination is resolved and frozen into the
+# standalone build's routes manifest at build time, not re-read at container
+# startup - a runtime-only `environment:` value in docker-compose is silently
+# ignored for this purpose, so BACKEND_URL needs to be a build ARG too.
+ARG BACKEND_URL="http://127.0.0.1:8000"
+ENV BACKEND_URL=${BACKEND_URL}
 RUN npm run build
 
 FROM node:22-slim AS runner
