@@ -225,7 +225,7 @@ export default function HomePage() {
                 >
                   {/* Icon + LIVE badge */}
                   <div className="flex items-start justify-between">
-                    <div className="glow-badge h-11 w-11">
+                    <div className="glow-badge flex h-11 w-11 items-center justify-center">
                       <span className="material-symbols-outlined ms-28 text-tertiary-fixed-dim">
                         {app.icon}
                       </span>

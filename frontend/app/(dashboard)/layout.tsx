@@ -120,7 +120,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex flex-col">
               <div className="flex items-center justify-between border-b border-white/10 px-6 py-7">
                 <div>
-                  <div className="glow-badge mb-4 h-11 w-11 p-1.5">
+                  <div className="glow-badge mb-4 flex h-11 w-11 items-center justify-center p-1.5">
                     <BizLogo />
                   </div>
                   <h2 className="text-lg font-bold leading-none tracking-tight text-surface-bright">
