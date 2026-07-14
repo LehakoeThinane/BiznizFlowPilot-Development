@@ -35,8 +35,8 @@ function fmt(n: number) {
 
 function KpiCard({ label, value, sub, color }: { label: string; value: string; sub?: string; color: string }) {
   return (
-    <div className="relative overflow-hidden erp-panel p-5">
-      <div className={`absolute left-0 top-0 h-full w-1 ${color}`} />
+    <div className="erp-panel p-5">
+      <span className={`status-dot ${color} ${color.replace("bg-", "text-")}`} />
       <p className="text-xs font-medium text-slate-400">{label}</p>
       <p className="mt-1.5 text-2xl font-bold text-white">{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
