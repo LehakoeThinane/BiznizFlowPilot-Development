@@ -36,7 +36,7 @@ const EMPTY_EDITOR: Editor = {
 const PAGE_SIZE = 20;
 
 function statusBadge(active: boolean) {
-  return active ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-[#aaa]";
+  return active ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-on-surface-variant";
 }
 
 function formatDate(value: string) {
@@ -256,16 +256,16 @@ export default function ProductsPage() {
       <div className="flex flex-wrap items-center gap-3">
         <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Search name, SKU, or category"
-          className="min-w-[240px] rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+          className="min-w-[240px] rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
         <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value as typeof activeFilter)}
-          className="rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm">
+          className="rounded-md border border-border bg-background text-white px-3 py-2 text-sm">
           <option value="all">All products</option>
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
         </select>
-        <button type="button" className="rounded-md border border-border px-3 py-2 text-sm text-[#aaa] hover:bg-white/5"
+        <button type="button" className="rounded-md border border-border px-3 py-2 text-sm text-on-surface-variant hover:bg-white/5"
           onClick={() => void load()}>Refresh</button>
-        <button type="button" className="rounded-md border border-border px-3 py-2 text-sm text-[#aaa] hover:bg-white/5"
+        <button type="button" className="rounded-md border border-border px-3 py-2 text-sm text-on-surface-variant hover:bg-white/5"
           onClick={() => { setSearch(""); setActiveFilter("all"); setSortField("created"); setSortDirection("desc"); }}>Clear</button>
       </div>
 
@@ -288,10 +288,10 @@ export default function ProductsPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border border-border bg-surface">
           <table className="min-w-full text-sm">
-            <thead className="bg-[#1a1a1a] text-left">
+            <thead className="bg-surface-dim text-left">
               <tr>
                 {(["sku", "name", "category", "price", "created"] as SortField[]).map((f) => (
-                  <th key={f} className="px-4 py-3 font-medium text-[#aaa]">
+                  <th key={f} className="px-4 py-3 font-medium text-on-surface-variant">
                     <button type="button" className="inline-flex items-center gap-1 hover:text-white capitalize"
                       onClick={() => handleSort(f)}>
                       {f === "price" ? "Unit Price" : f === "created" ? "Created" : f.charAt(0).toUpperCase() + f.slice(1)}
@@ -299,20 +299,20 @@ export default function ProductsPage() {
                     </button>
                   </th>
                 ))}
-                <th className="px-4 py-3 font-medium text-[#aaa]">Type</th>
-                <th className="px-4 py-3 font-medium text-[#aaa]">Status</th>
+                <th className="px-4 py-3 font-medium text-on-surface-variant">Type</th>
+                <th className="px-4 py-3 font-medium text-on-surface-variant">Status</th>
               </tr>
             </thead>
             <tbody>
               {visible.map((p) => (
                 <tr key={p.id} className="cursor-pointer border-t border-border hover:bg-white/[0.02]"
                   onClick={() => { setSelectedProduct(p); setIsEditing(false); hydrateEditor(p); }}>
-                  <td className="px-4 py-3 font-mono text-xs text-[#aaa]">{p.sku}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-on-surface-variant">{p.sku}</td>
                   <td className="px-4 py-3 font-medium text-white">{p.name}</td>
-                  <td className="px-4 py-3 text-[#aaa]">{p.category ?? "-"}</td>
-                  <td className="px-4 py-3 text-[#aaa]">{fmt(p.unit_price)}</td>
-                  <td className="px-4 py-3 text-[#aaa]">{formatDate(p.created_at)}</td>
-                  <td className="px-4 py-3 capitalize text-[#aaa]">{p.product_type}</td>
+                  <td className="px-4 py-3 text-on-surface-variant">{p.category ?? "-"}</td>
+                  <td className="px-4 py-3 text-on-surface-variant">{fmt(p.unit_price)}</td>
+                  <td className="px-4 py-3 text-on-surface-variant">{formatDate(p.created_at)}</td>
+                  <td className="px-4 py-3 capitalize text-on-surface-variant">{p.product_type}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${statusBadge(p.is_active)}`}>
                       {p.is_active ? "Active" : "Inactive"}
@@ -325,7 +325,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="flex items-center justify-between text-sm text-[#aaa]">
+      <div className="flex items-center justify-between text-sm text-on-surface-variant">
         <p>Page {page} of {totalPages}</p>
         <div className="flex gap-2">
           <button type="button" className="rounded-md border border-border px-3 py-1 disabled:opacity-50"
@@ -338,10 +338,10 @@ export default function ProductsPage() {
       {isCreateOpen && (
         <div className="fixed inset-0 z-40 flex">
           <button type="button" className="h-full flex-1 bg-slate-900/30" onClick={() => setIsCreateOpen(false)} aria-label="Close" />
-          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-border bg-[#141414] p-5 shadow-xl">
+          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-border bg-surface p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Add Product</h2>
-              <button type="button" className="rounded-md border border-border px-3 py-1 text-sm text-[#aaa] hover:bg-white/5" onClick={() => setIsCreateOpen(false)}>Close</button>
+              <button type="button" className="rounded-md border border-border px-3 py-1 text-sm text-on-surface-variant hover:bg-white/5" onClick={() => setIsCreateOpen(false)}>Close</button>
             </div>
             <ProductForm editor={editor} onChange={setEditor} onSubmit={() => void handleCreate()} submitLabel={isSavingCreate ? "Creating..." : "Create Product"} disabled={isSavingCreate} />
           </aside>
@@ -351,10 +351,10 @@ export default function ProductsPage() {
       {selectedProduct && (
         <div className="fixed inset-0 z-40 flex">
           <button type="button" className="h-full flex-1 bg-slate-900/30" onClick={() => { setSelectedProduct(null); setIsEditing(false); }} aria-label="Close" />
-          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-border bg-[#141414] p-5 shadow-xl">
+          <aside className="h-full w-full max-w-xl overflow-y-auto border-l border-border bg-surface p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Product Details</h2>
-              <button type="button" className="rounded-md border border-border px-3 py-1 text-sm text-[#aaa] hover:bg-white/5" onClick={() => { setSelectedProduct(null); setIsEditing(false); }}>Close</button>
+              <button type="button" className="rounded-md border border-border px-3 py-1 text-sm text-on-surface-variant hover:bg-white/5" onClick={() => { setSelectedProduct(null); setIsEditing(false); }}>Close</button>
             </div>
             {!isEditing ? (
               <div className="space-y-4">
@@ -372,7 +372,7 @@ export default function ProductsPage() {
                 {selectedProduct.description && (
                   <div>
                     <p className="text-xs uppercase tracking-wide text-muted">Description</p>
-                    <p className="mt-1 rounded-md border border-border bg-white/5 p-3 text-sm text-[#ccc] whitespace-pre-wrap">{selectedProduct.description}</p>
+                    <p className="mt-1 rounded-md border border-border bg-white/5 p-3 text-sm text-on-surface-variant whitespace-pre-wrap">{selectedProduct.description}</p>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2">
@@ -387,7 +387,7 @@ export default function ProductsPage() {
             ) : (
               <div className="space-y-3">
                 <ProductForm editor={editor} onChange={setEditor} onSubmit={() => void handleSaveEdit()} submitLabel={isSavingEdit ? "Saving..." : "Save"} disabled={isSavingEdit} />
-                <button type="button" className="rounded-md border border-border px-4 py-2 text-sm text-[#aaa] hover:bg-white/5"
+                <button type="button" className="rounded-md border border-border px-4 py-2 text-sm text-on-surface-variant hover:bg-white/5"
                   onClick={() => { hydrateEditor(selectedProduct); setIsEditing(false); }}>Cancel</button>
               </div>
             )}
@@ -399,7 +399,7 @@ export default function ProductsPage() {
 }
 
 function SortIndicator({ active, direction }: { active: boolean; direction: SortDirection }) {
-  if (!active) return <span className="text-[#555]">↕</span>;
+  if (!active) return <span className="text-on-surface-variant">↕</span>;
   return <span>{direction === "asc" ? "↑" : "↓"}</span>;
 }
 
@@ -407,7 +407,7 @@ function DetailItem({ label, value, capitalize = false }: { label: string; value
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-muted">{label}</p>
-      <p className={`mt-1 text-sm text-[#ccc] ${capitalize ? "capitalize" : ""}`}>{value}</p>
+      <p className={`mt-1 text-sm text-on-surface-variant ${capitalize ? "capitalize" : ""}`}>{value}</p>
     </div>
   );
 }
@@ -424,47 +424,47 @@ function ProductForm({ editor, onChange, onSubmit, submitLabel, disabled }: {
     <div className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-sku">SKU *</label>
-          <input id="p-sku" value={editor.sku} onChange={(e) => set("sku", e.target.value)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-sku">SKU *</label>
+          <input id="p-sku" value={editor.sku} onChange={(e) => set("sku", e.target.value)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-name">Name *</label>
-          <input id="p-name" value={editor.name} onChange={(e) => set("name", e.target.value)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-name">Name *</label>
+          <input id="p-name" value={editor.name} onChange={(e) => set("name", e.target.value)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-type">Type</label>
-          <select id="p-type" value={editor.product_type} onChange={(e) => set("product_type", e.target.value as ProductType)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm">
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-type">Type</label>
+          <select id="p-type" value={editor.product_type} onChange={(e) => set("product_type", e.target.value as ProductType)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm">
             <option value="physical">Physical</option>
             <option value="digital">Digital</option>
             <option value="service">Service</option>
           </select>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-category">Category</label>
-          <input id="p-category" value={editor.category} onChange={(e) => set("category", e.target.value)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-category">Category</label>
+          <input id="p-category" value={editor.category} onChange={(e) => set("category", e.target.value)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
         </div>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-price">Unit Price *</label>
-          <input id="p-price" type="number" step="0.01" min="0" value={editor.unit_price} onChange={(e) => set("unit_price", e.target.value)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-price">Unit Price *</label>
+          <input id="p-price" type="number" step="0.01" min="0" value={editor.unit_price} onChange={(e) => set("unit_price", e.target.value)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-cost">Cost Price</label>
-          <input id="p-cost" type="number" step="0.01" min="0" value={editor.cost_price} onChange={(e) => set("cost_price", e.target.value)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+          <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-cost">Cost Price</label>
+          <input id="p-cost" type="number" step="0.01" min="0" value={editor.cost_price} onChange={(e) => set("cost_price", e.target.value)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
         </div>
       </div>
       <div>
-        <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="p-desc">Description</label>
-        <textarea id="p-desc" rows={3} value={editor.description} onChange={(e) => set("description", e.target.value)} className="w-full rounded-md border border-border bg-[#0f0f0f] text-white px-3 py-2 text-sm" />
+        <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="p-desc">Description</label>
+        <textarea id="p-desc" rows={3} value={editor.description} onChange={(e) => set("description", e.target.value)} className="w-full rounded-md border border-border bg-background text-white px-3 py-2 text-sm" />
       </div>
       <div className="flex gap-6">
-        <label className="flex items-center gap-2 text-sm text-[#aaa] cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer">
           <input type="checkbox" checked={editor.is_active} onChange={(e) => set("is_active", e.target.checked)} /> Active
         </label>
-        <label className="flex items-center gap-2 text-sm text-[#aaa] cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer">
           <input type="checkbox" checked={editor.track_inventory} onChange={(e) => set("track_inventory", e.target.checked)} /> Track Inventory
         </label>
       </div>

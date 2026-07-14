@@ -116,7 +116,7 @@ export default function LoginPage() {
 
   const Logo = (
     <div className="mb-6 flex items-center gap-3">
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-lg font-bold text-on-primary">B</div>
+      <div className="glow-badge flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-lg font-bold text-on-primary">B</div>
       <div>
         <h1 className="text-xl font-semibold text-foreground">BiznizFlowPilot</h1>
         <p className="text-xs text-muted">Sign in to the operational dashboard.</p>
@@ -156,7 +156,7 @@ export default function LoginPage() {
               )}
 
               <button type="submit" disabled={isSubmitting}
-                className="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60">
+                className="erp-button-primary w-full px-3 py-2.5 text-sm font-semibold disabled:opacity-60">
                 {isSubmitting ? "Signing in..." : "Sign in"}
               </button>
             </form>
@@ -180,7 +180,7 @@ export default function LoginPage() {
               )}
 
               <button type="submit" disabled={resetLoading}
-                className="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60">
+                className="erp-button-primary w-full px-3 py-2.5 text-sm font-semibold disabled:opacity-60">
                 {resetLoading ? "Sending..." : "Send reset link"}
               </button>
 
@@ -202,7 +202,7 @@ export default function LoginPage() {
                   Password reset successfully. You can now sign in.
                 </p>
                 <button type="button" onClick={() => { setMode("login"); setPassword(""); setError(null); }}
-                  className="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white">
+                  className="erp-button-primary w-full px-3 py-2.5 text-sm font-semibold">
                   Back to sign in
                 </button>
               </div>
@@ -232,7 +232,7 @@ export default function LoginPage() {
                   )}
 
                   <button type="submit" disabled={confirmLoading}
-                    className="w-full rounded-md bg-brand px-3 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60">
+                    className="erp-button-primary w-full px-3 py-2.5 text-sm font-semibold disabled:opacity-60">
                     {confirmLoading ? "Resetting..." : "Reset password"}
                   </button>
 

@@ -5,6 +5,7 @@ import { apiRequest, downloadFile } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Pagination } from "@/components/Pagination";
+import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
 
 const PAGE_SIZE = 20;
 
@@ -246,6 +247,7 @@ export default function InvoicesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <SalesCrmSubNav />
       <div className="flex items-center justify-between">
         <PageHeader title="Invoices" subtitle={`${total} invoices`} />
         <div className="flex items-center gap-2">
