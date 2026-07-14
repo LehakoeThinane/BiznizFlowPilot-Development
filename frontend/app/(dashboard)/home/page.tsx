@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth";
+import { AppTileIcon } from "@/components/AppTileIcon";
 import type { UserRole } from "@/types/api";
 
 interface AppCard {
@@ -226,9 +227,7 @@ export default function HomePage() {
                   {/* Icon + LIVE badge */}
                   <div className="flex items-start justify-between">
                     <div className="glow-badge flex h-11 w-11 items-center justify-center">
-                      <span className="material-symbols-outlined ms-28 text-tertiary-fixed-dim">
-                        {app.icon}
-                      </span>
+                      <AppTileIcon name={app.icon} className="h-6 w-6 text-tertiary-fixed-dim" />
                     </div>
                     <span className="rounded-full border border-tertiary-fixed-dim/20 bg-tertiary-fixed-dim/10 px-2 py-0.5 text-[10px] font-bold text-tertiary-fixed-dim">
                       LIVE
