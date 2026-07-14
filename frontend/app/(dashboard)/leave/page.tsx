@@ -230,8 +230,8 @@ export default function LeavePage() {
               { label: "Approved", value: String(approved), color: "bg-emerald-500" },
               { label: "Total",    value: String(total),    color: "bg-blue-500" },
             ].map((c) => (
-              <div key={c.label} className="relative overflow-hidden rounded-xl border border-white/6 bg-[#1e293b] p-5">
-                <div className={`absolute left-0 top-0 h-full w-1 ${c.color}`} />
+              <div key={c.label} className="erp-panel p-5">
+                <span className={`status-dot ${c.color} ${c.color.replace("bg-", "text-")}`} />
                 <p className="text-xs font-medium text-slate-400">{c.label}</p>
                 <p className="mt-1.5 text-2xl font-bold text-white">{c.value}</p>
               </div>

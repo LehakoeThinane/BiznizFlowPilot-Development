@@ -112,8 +112,8 @@ export default function PayrollPage() {
                   { label: "Total Deductions",  value: fmt(selected.total_deductions),  color: "bg-rose-500" },
                   { label: "Total Net Pay",     value: fmt(selected.total_net),         color: "bg-emerald-500" },
                 ].map((c) => (
-                  <div key={c.label} className="relative overflow-hidden rounded-xl border border-white/6 bg-[#1e293b] p-4">
-                    <div className={`absolute left-0 top-0 h-full w-1 ${c.color}`} />
+                  <div key={c.label} className="erp-panel p-4">
+                    <span className={`status-dot ${c.color} ${c.color.replace("bg-", "text-")}`} />
                     <p className="text-xs text-slate-400">{c.label}</p>
                     <p className="mt-1 text-xl font-bold text-white">{c.value}</p>
                   </div>

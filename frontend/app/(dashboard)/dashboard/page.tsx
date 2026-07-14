@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/api";
+import { AppTileIcon } from "@/components/AppTileIcon";
 import type { DashboardMetricsResponse, UserRole } from "@/types/api";
 
 const REFRESH_INTERVAL = 30;
@@ -26,13 +27,13 @@ function fmtCurrency(n: string | number) {
 
 type Accent = "green" | "blue" | "amber" | "red" | "violet" | "none";
 
-const ACCENT_STYLES: Record<Accent, { bar: string; badge: string }> = {
-  green:  { bar: "bg-emerald-500", badge: "bg-emerald-950 text-emerald-300" },
-  blue:   { bar: "bg-blue-500",   badge: "bg-blue-950   text-blue-300"   },
-  amber:  { bar: "bg-amber-400",  badge: "bg-amber-950  text-amber-300"  },
-  red:    { bar: "bg-red-500",    badge: "bg-red-950    text-red-300"    },
-  violet: { bar: "bg-violet-500", badge: "bg-violet-950 text-violet-300" },
-  none:   { bar: "bg-[#444]",     badge: "bg-[#1f1f1f]  text-[#888]"    },
+const ACCENT_STYLES: Record<Accent, { dot: string; badge: string }> = {
+  green:  { dot: "bg-emerald-400 text-emerald-400", badge: "bg-emerald-950 text-emerald-300" },
+  blue:   { dot: "bg-blue-400 text-blue-400",       badge: "bg-blue-950   text-blue-300"   },
+  amber:  { dot: "bg-amber-400 text-amber-400",     badge: "bg-amber-950  text-amber-300"  },
+  red:    { dot: "bg-red-400 text-red-400",         badge: "bg-red-950    text-red-300"    },
+  violet: { dot: "bg-violet-400 text-violet-400",   badge: "bg-violet-950 text-violet-300" },
+  none:   { dot: "",                                 badge: "bg-[#1f1f1f]  text-[#888]"    },
 };
 
 function StatCard({
@@ -44,8 +45,8 @@ function StatCard({
 }) {
   const a = ACCENT_STYLES[accent];
   return (
-    <div className="relative overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <div className={`absolute left-0 top-0 h-full w-1 ${a.bar}`} />
+    <div className="erp-panel">
+      {a.dot && <span className={`status-dot ${a.dot}`} />}
       <div className="px-5 py-4">
         <div className="flex items-start justify-between gap-2">
           <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
@@ -72,7 +73,7 @@ function StatCard({
 function SectionHeader({ title, icon }: { title: string; icon: string }) {
   return (
     <div className="flex items-center gap-2">
-      <span className="text-base">{icon}</span>
+      <AppTileIcon name={icon} className="h-4 w-4 text-tertiary-fixed-dim" />
       <h2 className="text-sm font-semibold text-[#aaa]">{title}</h2>
     </div>
   );
@@ -130,9 +131,9 @@ function QuickActions() {
         <Link
           key={a.label}
           href={a.href}
-          className="flex flex-col items-center gap-1.5 rounded-xl border border-border bg-surface px-2 py-3 text-center transition-colors hover:bg-[#1f1f1f]"
+          className="erp-panel flex flex-col items-center gap-1.5 px-2 py-3 text-center transition-colors hover:border-tertiary-fixed-dim/40"
         >
-          <span className="material-symbols-outlined text-[22px] text-on-surface-variant">{a.icon}</span>
+          <AppTileIcon name={a.icon} className="h-5 w-5 text-tertiary-fixed-dim" />
           <span className="text-[10px] font-medium text-muted leading-tight">{a.label}</span>
         </Link>
       ))}
@@ -290,14 +291,14 @@ export default function DashboardPage() {
 
       {/* ── Quick Actions ───────────────────────────────────────────────── */}
       <div className="space-y-3">
-        <SectionHeader title="Quick Actions" icon="⚡" />
+        <SectionHeader title="Quick Actions" icon="bolt" />
         <QuickActions />
       </div>
 
       {/* ── Attention Required ─────────────────────────────────────────── */}
       {!loading && attentionItems.length > 0 && (
         <div className="space-y-2">
-          <SectionHeader title="Attention Required" icon="🔔" />
+          <SectionHeader title="Attention Required" icon="notifications" />
           <div className="space-y-1.5">
             {attentionItems.map((item) => (
               <a
@@ -323,7 +324,7 @@ export default function DashboardPage() {
       {/* ── Staff-only: simplified Tasks view ──────────────────────────── */}
       {isStaff && (
         <div className="space-y-3">
-          <SectionHeader title="My Tasks" icon="✅" />
+          <SectionHeader title="My Tasks" icon="task_alt" />
           <div className="grid grid-cols-3 gap-4">
             <StatCard
               label="Overdue"
@@ -350,7 +351,7 @@ export default function DashboardPage() {
           {/* ── Finance (This Month) with trends ── */}
           {finStats && (
             <div className="space-y-3">
-              <SectionHeader title="Finance — This Month" icon="📊" />
+              <SectionHeader title="Finance — This Month" icon="analytics" />
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <StatCard
                   label="Revenue"
@@ -375,7 +376,7 @@ export default function DashboardPage() {
 
           {/* ── Sales ── */}
           <div className="space-y-3">
-            <SectionHeader title="Sales" icon="💰" />
+            <SectionHeader title="Sales" icon="payments" />
             <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
               <StatCard label="Total Revenue"      value={ph(fmtCurrency(s?.revenue_total ?? 0))}       accent="green" />
               <StatCard label="Revenue This Month" value={ph(fmtCurrency(s?.revenue_this_month ?? 0))}  accent="green" />
@@ -393,7 +394,7 @@ export default function DashboardPage() {
           {/* ── Leads & Tasks ── */}
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-3">
-              <SectionHeader title="Leads" icon="👥" />
+              <SectionHeader title="Leads" icon="groups" />
               <div className="grid grid-cols-2 gap-4">
                 <StatCard label="Open Leads"  value={ph(fmt(l?.open_leads ?? 0))}      accent="blue"  badge={l?.open_leads ? String(l.open_leads) : undefined} />
                 <StatCard label="New"         value={ph(fmt(l?.new_leads ?? 0))}        accent="violet" />
@@ -403,7 +404,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-3">
-              <SectionHeader title="Tasks" icon="✅" />
+              <SectionHeader title="Tasks" icon="task_alt" />
               <div className="grid grid-cols-3 gap-4">
                 <StatCard
                   label="Overdue"
@@ -424,7 +425,7 @@ export default function DashboardPage() {
           {/* ── Inventory & Workflows ── */}
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-3">
-              <SectionHeader title="Inventory" icon="📦" />
+              <SectionHeader title="Inventory" icon="inventory_2" />
               <div className="grid grid-cols-2 gap-4">
                 <StatCard
                   label="Low Stock"
@@ -444,7 +445,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-3">
-              <SectionHeader title="Workflows" icon="⚡" />
+              <SectionHeader title="Workflows" icon="bolt" />
               <div className="grid grid-cols-3 gap-4">
                 <StatCard label="Definitions" value={ph(fmt(wf?.total_definitions ?? 0))} />
                 <StatCard
@@ -467,7 +468,7 @@ export default function DashboardPage() {
             <div className="grid gap-6 lg:grid-cols-2">
               {hrStats && (
                 <div className="space-y-3">
-                  <SectionHeader title="HR" icon="🏢" />
+                  <SectionHeader title="HR" icon="groups" />
                   <div className="grid grid-cols-2 gap-4">
                     <StatCard label="Employees" value={fmt(hrStats.employees)} accent="blue" />
                     <StatCard
@@ -481,7 +482,7 @@ export default function DashboardPage() {
               )}
               {invStats && (
                 <div className="space-y-3">
-                  <SectionHeader title="Invoices" icon="🧾" />
+                  <SectionHeader title="Invoices" icon="receipt_long" />
                   <div className="grid grid-cols-2 gap-4">
                     <StatCard label="Total"       value={fmt(invStats.total)}                    accent="violet" />
                     <StatCard label="Outstanding" value={fmtCurrency(invStats.outstanding)} accent={invStats.outstanding > 0 ? "amber" : "none"} />

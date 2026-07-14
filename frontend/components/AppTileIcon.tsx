@@ -24,6 +24,14 @@ const PATHS: Record<string, string> = {
     "M3 8l9-5 9 5-9 5-9-5Z M3 8v9l9 5 9-5V8 M12 13v9",
   warehouse: "M3 10 12 4l9 6v10H3V10Z M9 20v-6h6v6 M3 10h18",
   handshake: "M9 17H7a5 5 0 0 1 0-10h2 M15 7h2a5 5 0 0 1 0 10h-2 M8 12h8",
+  notifications:
+    "M6 9a6 6 0 1 1 12 0c0 3.5 1 5 2 6H4c1-1 2-2.5 2-6Z M10 20a2 2 0 0 0 4 0",
+  person_add:
+    "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M3 21a6 6 0 0 1 12 0 M19 8v6 M16 11h6",
+  add_task:
+    "M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z M8 15h5 M8 18h3 M15.5 8.5v4 M13.5 10.5h4",
+  badge:
+    "M6 3h12a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z M9 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z M7 17c.5-2 2-3 5-3s4.5 1 5 3",
   task_alt:
     "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z M8.5 12.5l2.2 2.2L16 10",
   analytics: "M4 20V10 M10 20V4 M16 20v-7 M21 20H3",
