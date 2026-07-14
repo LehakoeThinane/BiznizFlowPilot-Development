@@ -48,6 +48,76 @@ class TestLeadCreate:
             service.create(staff_user.business_id, staff_user, data)
 
 
+class TestLeadInstantNotification:
+    """New leads and (re)assignment fire an instant in-app notification."""
+
+    def test_create_assigned_notifies_the_assignee(
+        self, test_db: Session, owner_user: CurrentUser, staff_user: CurrentUser
+    ):
+        from app.models.notification import Notification
+
+        service = LeadService(test_db)
+        data = LeadCreate(status="new", source="web_form", assigned_to=staff_user.user_id)
+
+        lead = service.create(owner_user.business_id, owner_user, data)
+
+        notif = (
+            test_db.query(Notification)
+            .filter(Notification.related_id == lead.id, Notification.user_id == staff_user.user_id)
+            .first()
+        )
+        assert notif is not None
+        assert notif.related_type == "lead"
+
+    def test_create_unassigned_notifies_owners_and_managers(
+        self, test_db: Session, owner_user: CurrentUser, manager_user: CurrentUser
+    ):
+        from app.models.notification import Notification
+
+        service = LeadService(test_db)
+        data = LeadCreate(status="new", source="referral")
+
+        lead = service.create(owner_user.business_id, owner_user, data)
+
+        notified_user_ids = {
+            n.user_id
+            for n in test_db.query(Notification).filter(Notification.related_id == lead.id).all()
+        }
+        assert owner_user.user_id in notified_user_ids
+        assert manager_user.user_id in notified_user_ids
+
+    def test_assign_notifies_the_new_assignee(
+        self, test_db: Session, owner_user: CurrentUser, staff_user: CurrentUser, sample_lead: Lead
+    ):
+        from app.models.notification import Notification
+
+        service = LeadService(test_db)
+        service.assign(owner_user.business_id, owner_user, sample_lead.id, staff_user.user_id)
+
+        notif = (
+            test_db.query(Notification)
+            .filter(Notification.related_id == sample_lead.id, Notification.user_id == staff_user.user_id)
+            .first()
+        )
+        assert notif is not None
+
+    def test_reassigning_to_same_user_does_not_duplicate_notification(
+        self, test_db: Session, owner_user: CurrentUser, staff_user: CurrentUser, sample_lead: Lead
+    ):
+        from app.models.notification import Notification
+
+        service = LeadService(test_db)
+        service.assign(owner_user.business_id, owner_user, sample_lead.id, staff_user.user_id)
+        service.assign(owner_user.business_id, owner_user, sample_lead.id, staff_user.user_id)
+
+        count = (
+            test_db.query(Notification)
+            .filter(Notification.related_id == sample_lead.id, Notification.user_id == staff_user.user_id)
+            .count()
+        )
+        assert count == 1
+
+
 class TestLeadStateTransitions:
     """Test lead pipeline state transitions."""
 
