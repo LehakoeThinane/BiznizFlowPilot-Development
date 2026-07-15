@@ -653,6 +653,30 @@ export interface EventListResponse {
   limit: number;
 }
 
+// ─── Documents (file attachments) ─────────────────────────────────────────────
+
+export interface BusinessDocument {
+  id: string;
+  business_id: string;
+  entity_type: string;
+  entity_id: string;
+  uploaded_by: string | null;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface DocumentListResponse {
+  items: BusinessDocument[];
+  total: number;
+}
+
+export interface DocumentDownloadResponse {
+  url: string;
+  expires_in: number;
+}
+
 // ─── Org Chart ────────────────────────────────────────────────────────────
 
 export interface OrgChartNode {

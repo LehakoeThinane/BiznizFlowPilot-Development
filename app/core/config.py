@@ -151,6 +151,13 @@ class Settings(BaseSettings):
     # than erroring, same convention as sentry_dsn above.
     google_places_api_key: str = ""
 
+    # Document storage - Cloudflare R2 (S3-compatible). Empty means the
+    # feature 404s / no-ops rather than erroring, same convention as above.
+    r2_endpoint_url: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
+    r2_bucket_name: str = ""
+
     # AI / LLM
     ai_provider: str = "echo"  # echo | ollama | anthropic | groq
     ollama_base_url: str = "http://localhost:11434"

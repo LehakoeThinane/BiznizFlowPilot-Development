@@ -25,6 +25,7 @@ from app.models.meeting import Meeting, MeetingParticipant
 from app.models.messaging import Conversation, ConversationParticipant, Message
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
+from app.models.document import Document
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
 from app.models.platform_admin import PlatformAdmin
@@ -71,6 +72,7 @@ __all__ = [
     "Invoice",
     "InvoiceLineItem",
     "Notification",
+    "Document",
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",
