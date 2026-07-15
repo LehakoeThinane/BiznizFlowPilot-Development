@@ -18,6 +18,7 @@ from app.core.enums import EventType
 from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
+from app.repositories.organization import OrganizationRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.hr import (
     DepartmentCreate,
@@ -47,6 +48,21 @@ router = APIRouter(prefix="/api/v1/hr", tags=["hr"], dependencies=[Depends(requi
 def _require_manager(user: CurrentUser) -> None:
     if user.role not in PRIVILEGED_ROLES:
         raise HTTPException(status_code=403, detail="Owner or manager required")
+
+
+def _validate_employee_email_domain(db: Session, user: CurrentUser, email: str | None) -> None:
+    """Reject employee emails outside the organization's authorized domains.
+
+    No-op if the organization has no domains configured (opt-in restriction,
+    same rule used for user invitations)."""
+    if not email:
+        return
+    org_repo = OrganizationRepository(db)
+    if not org_repo.domain_is_authorized(UUID(str(user.organization_id)), email):
+        raise HTTPException(
+            status_code=400,
+            detail="This email's domain is not authorized for your organization",
+        )
 
 
 def _emit(
@@ -238,6 +254,7 @@ def create_employee(
     db: Annotated[Session, Depends(get_db)] = None,
 ):
     _require_manager(current_user)
+    _validate_employee_email_domain(db, current_user, data.email)
     new_id = uuid4()
     if data.manager_id:
         _assert_no_manager_cycle(db, new_id, data.manager_id)
@@ -269,6 +286,7 @@ def update_employee(
     db: Annotated[Session, Depends(get_db)] = None,
 ):
     _require_manager(current_user)
+    _validate_employee_email_domain(db, current_user, data.email)
     emp = db.query(Employee).filter(
         Employee.id == emp_id, Employee.business_id == current_user.business_id
     ).first()

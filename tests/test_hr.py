@@ -3,8 +3,24 @@
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.security import create_access_token
+from app.schemas.auth import CurrentUser
+
 
 def auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _auth_headers(user: CurrentUser) -> dict[str, str]:
+    token = create_access_token(
+        {
+            "user_id": str(user.user_id),
+            "business_id": str(user.business_id),
+            "email": user.email,
+            "role": user.role,
+            "full_name": user.full_name,
+        }
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -126,6 +142,74 @@ class TestEmployees:
         assert r.status_code == 200
         assert r.json()["total"] == 1
         assert r.json()["items"][0]["first_name"] == "Alice"
+
+
+class TestEmployeeEmailDomain:
+    def test_unrestricted_org_accepts_any_email(self, client: TestClient, token: str):
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "No", "last_name": "Restriction", "email": "person@gmail.com"},
+            headers=auth(token),
+        )
+        assert r.status_code == 201
+
+    def test_rejects_email_outside_authorized_domain(self, client: TestClient, owner_user, org_admin_user):
+        client.post(
+            "/api/v1/org/domains",
+            json={"domain": "mmnexus.co.za", "is_primary": True},
+            headers=_auth_headers(org_admin_user),
+        )
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Personal", "last_name": "Email", "email": "someone@gmail.com"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 400
+        assert "not authorized" in r.json()["detail"]
+
+    def test_accepts_email_matching_authorized_domain(self, client: TestClient, owner_user, org_admin_user):
+        client.post(
+            "/api/v1/org/domains",
+            json={"domain": "mmnexus.co.za", "is_primary": True},
+            headers=_auth_headers(org_admin_user),
+        )
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Work", "last_name": "Email", "email": "sifiso@mmnexus.co.za"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+
+    def test_no_email_is_always_allowed(self, client: TestClient, owner_user, org_admin_user):
+        client.post(
+            "/api/v1/org/domains",
+            json={"domain": "mmnexus.co.za", "is_primary": True},
+            headers=_auth_headers(org_admin_user),
+        )
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "No", "last_name": "Email"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+
+    def test_update_also_validates_domain(self, client: TestClient, owner_user, org_admin_user):
+        emp = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Update", "last_name": "Me"},
+            headers=_auth_headers(owner_user),
+        ).json()
+        client.post(
+            "/api/v1/org/domains",
+            json={"domain": "mmnexus.co.za", "is_primary": True},
+            headers=_auth_headers(org_admin_user),
+        )
+        r = client.patch(
+            f"/api/v1/hr/employees/{emp['id']}",
+            json={"email": "someone@gmail.com"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 400
 
 
 class TestOrgChart:
