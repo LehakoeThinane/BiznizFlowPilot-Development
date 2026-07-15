@@ -47,6 +47,7 @@ export default function MessagesPage() {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimeRef = useRef<string | null>(null);
+  const pollingRef = useRef(false);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -70,7 +71,12 @@ export default function MessagesPage() {
         .then((d) => {
           const incoming = d.items ?? [];
           if (incoming.length === 0) return incoming;
-          setMessages((prev) => (since ? [...prev, ...incoming] : incoming));
+          setMessages((prev) => {
+            if (!since) return incoming;
+            const existingIds = new Set(prev.map((m) => m.id));
+            const deduped = incoming.filter((m) => !existingIds.has(m.id));
+            return deduped.length > 0 ? [...prev, ...deduped] : prev;
+          });
           lastMessageTimeRef.current = incoming[incoming.length - 1].created_at;
           return incoming;
         });
@@ -89,12 +95,18 @@ export default function MessagesPage() {
       .finally(() => setLoadingMessages(false));
 
     const interval = setInterval(() => {
-      loadMessages(selectedId, lastMessageTimeRef.current ?? undefined).then((incoming) => {
-        if (incoming.length > 0) {
-          apiRequest(`/api/v1/messaging/conversations/${selectedId}/read`, { method: "POST", authToken: token }).catch(() => {});
-          void loadConversations();
-        }
-      });
+      if (pollingRef.current) return;
+      pollingRef.current = true;
+      loadMessages(selectedId, lastMessageTimeRef.current ?? undefined)
+        .then((incoming) => {
+          if (incoming.length > 0) {
+            apiRequest(`/api/v1/messaging/conversations/${selectedId}/read`, { method: "POST", authToken: token }).catch(() => {});
+            void loadConversations();
+          }
+        })
+        .finally(() => {
+          pollingRef.current = false;
+        });
     }, 4_000);
     return () => clearInterval(interval);
   }, [selectedId, loadMessages, loadConversations, token]);
@@ -135,7 +147,7 @@ export default function MessagesPage() {
       const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/messages`, {
         method: "POST", authToken: token, body: { content: text },
       });
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       lastMessageTimeRef.current = msg.created_at;
       void loadConversations();
     } catch (err: unknown) {
