@@ -25,6 +25,15 @@ def _fake_places(n: int = 2) -> list[PlaceResult]:
     ]
 
 
+@pytest.fixture(autouse=True)
+def _no_real_email_scraping():
+    """Email enrichment makes a real HTTP request per website - stub it out
+    by default so these tests don't hit the network. Tests that care about
+    the enrichment behavior override this with their own patch."""
+    with patch("app.services.lead_gen.find_email", return_value=None):
+        yield
+
+
 class TestLeadGenGooglePlaces:
     def test_owner_creates_leads_from_search_results(self, test_db: Session, owner_user: CurrentUser):
         service = LeadGenService(test_db)
@@ -85,3 +94,38 @@ class TestLeadGenGooglePlaces:
             .first()
         )
         assert notif is not None
+
+
+class TestLeadGenEmailEnrichment:
+    def test_scraped_email_lands_on_customer(self, test_db: Session, owner_user: CurrentUser):
+        service = LeadGenService(test_db)
+
+        with patch("app.services.lead_gen.search_text", return_value=_fake_places(1)), \
+             patch("app.services.lead_gen.find_email", return_value="info@plumbing0.co.za"):
+            service.find_via_google_places(owner_user.business_id, owner_user, query="plumbers")
+
+        customer = test_db.query(Customer).filter(Customer.external_ref == "google_places:place_0").first()
+        assert customer.email == "info@plumbing0.co.za"
+
+    def test_no_email_found_leaves_customer_email_null(self, test_db: Session, owner_user: CurrentUser):
+        service = LeadGenService(test_db)
+
+        with patch("app.services.lead_gen.search_text", return_value=_fake_places(1)), \
+             patch("app.services.lead_gen.find_email", return_value=None):
+            service.find_via_google_places(owner_user.business_id, owner_user, query="plumbers")
+
+        customer = test_db.query(Customer).filter(Customer.external_ref == "google_places:place_0").first()
+        assert customer.email is None
+
+    def test_result_without_website_skips_scraping(self, test_db: Session, owner_user: CurrentUser):
+        service = LeadGenService(test_db)
+        no_website = PlaceResult(
+            place_id="place_no_site", name="No Website Co", address="1 Main St",
+            phone="011 0000000", website=None,
+        )
+
+        with patch("app.services.lead_gen.search_text", return_value=[no_website]), \
+             patch("app.services.lead_gen.find_email") as mock_find_email:
+            service.find_via_google_places(owner_user.business_id, owner_user, query="plumbers")
+
+        mock_find_email.assert_not_called()

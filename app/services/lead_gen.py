@@ -13,6 +13,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.integrations.email_scraper import find_email
 from app.integrations.google_places import GooglePlacesError, search_text
 from app.models.lead import Lead
 from app.repositories.customer import CustomerRepository
@@ -56,11 +57,14 @@ class LeadGenService:
                 skipped += 1
                 continue
 
+            email = find_email(place.website) if place.website else None
+
             customer = self.customer_repo.create(
                 business_id=business_id,
                 commit=False,
                 name=place.name,
                 phone=place.phone,
+                email=email,
                 company=place.name,
                 website=place.website,
                 external_ref=external_ref,
