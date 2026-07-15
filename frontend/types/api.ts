@@ -308,6 +308,12 @@ export interface LeadListResponse {
   limit: number;
 }
 
+export interface LeadGenSearchResponse {
+  created_count: number;
+  skipped_duplicates: number;
+  leads: Lead[];
+}
+
 export interface Customer {
   id: string;
   business_id: string;
@@ -335,6 +341,7 @@ export interface Task {
   business_id: string;
   lead_id: string | null;
   assigned_to: string | null;
+  assignee_ids: string[];
   title: string;
   description: string | null;
   status: TaskStatusBackend;

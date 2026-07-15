@@ -284,6 +284,55 @@ class TestPlatformAdminManagement:
         assert r.status_code == 400
 
 
+class TestPlatformAdminChangePassword:
+    def test_wrong_current_password_rejected(self, client, platform_admin: PlatformAdmin):
+        r = client.post(
+            "/platform/v1/admins/me/change-password",
+            json={"current_password": "wrong-password", "new_password": "newpassword456"},
+            headers=_platform_headers(platform_admin),
+        )
+        assert r.status_code == 400
+
+    def test_too_short_new_password_rejected(self, client, platform_admin: PlatformAdmin):
+        r = client.post(
+            "/platform/v1/admins/me/change-password",
+            json={"current_password": "password123", "new_password": "short"},
+            headers=_platform_headers(platform_admin),
+        )
+        assert r.status_code == 422
+
+    def test_successful_change_allows_login_with_new_password(self, client, platform_admin: PlatformAdmin):
+        email = platform_admin.email  # captured once - fixture detaches after first request
+        r = client.post(
+            "/platform/v1/admins/me/change-password",
+            json={"current_password": "password123", "new_password": "newpassword456"},
+            headers=_platform_headers(platform_admin),
+        )
+        assert r.status_code == 200
+
+        r = client.post(
+            "/platform/v1/auth/login",
+            json={"email": email, "password": "newpassword456"},
+        )
+        assert r.status_code == 200
+
+        r = client.post(
+            "/platform/v1/auth/login",
+            json={"email": email, "password": "password123"},
+        )
+        assert r.status_code == 401
+
+    def test_old_token_rejected_after_password_change(self, client, platform_admin: PlatformAdmin):
+        stale_headers = _platform_headers(platform_admin)
+        client.post(
+            "/platform/v1/admins/me/change-password",
+            json={"current_password": "password123", "new_password": "newpassword456"},
+            headers=stale_headers,
+        )
+        r = client.get("/platform/v1/admins/me", headers=stale_headers)
+        assert r.status_code == 401
+
+
 class TestPlatformCrossTenantIsolationFromDashboard:
     """A tenant user, even an owner, must never reach platform endpoints."""
 

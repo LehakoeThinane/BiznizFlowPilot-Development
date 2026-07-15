@@ -1,6 +1,7 @@
 """Task model - work item entity."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, Uuid
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
 
@@ -117,6 +118,36 @@ class Task(BaseModel):
             "the task.",
     )
 
+    assignees = relationship("TaskAssignee", back_populates="task", cascade="all, delete-orphan")
+
+    @property
+    def assignee_ids(self) -> list:
+        """Full assignee set (primary `assigned_to` included, if also in the join table)."""
+        return [a.user_id for a in self.assignees]
+
     def __repr__(self) -> str:
         """String representation."""
         return f"<Task id={self.id} title='{self.title}' status='{self.status}'>"
+
+
+class TaskAssignee(BaseModel):
+    """A user assigned to a Task, in addition to the primary `assigned_to`.
+
+    Enables multi-person assignment: `assigned_to` remains the single
+    "primary" assignee used by existing staff-visibility/filtering logic,
+    while this table holds the full assignee set (primary included).
+    """
+
+    __tablename__ = "task_assignees"
+    __table_args__ = (
+        Index("ix_task_assignees_task_user", "task_id", "user_id", unique=True),
+    )
+
+    task_id = Column(Uuid, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Uuid, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    task = relationship("Task", back_populates="assignees")
+    user = relationship("User", foreign_keys=[user_id])
+
+    def __repr__(self) -> str:
+        return f"<TaskAssignee task_id={self.task_id} user_id={self.user_id}>"

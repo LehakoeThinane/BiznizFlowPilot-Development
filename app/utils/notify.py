@@ -50,3 +50,36 @@ def notify_business(
                 is_read=False,
             )
         )
+
+
+def notify_user(
+    db: Session,
+    business_id: UUID,
+    user_id: UUID,
+    type_: str,
+    title: str,
+    message: str,
+    action_url: str | None = None,
+    related_type: str | None = None,
+    related_id: UUID | None = None,
+) -> None:
+    """Queue a notification for one specific user - for instant, targeted
+    alerts (e.g. "a new lead was assigned to you") rather than the
+    broadcast-to-a-role shape of notify_business.
+
+    Does NOT commit — same contract as notify_business.
+    """
+    db.add(
+        Notification(
+            id=uuid4(),
+            business_id=business_id,
+            user_id=user_id,
+            type=type_,
+            title=title,
+            message=message,
+            action_url=action_url,
+            related_type=related_type,
+            related_id=related_id,
+            is_read=False,
+        )
+    )

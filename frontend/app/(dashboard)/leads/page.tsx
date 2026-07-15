@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
 import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
-import type { Customer, CustomerListResponse, Lead, LeadListResponse } from "@/types/api";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
+import type { Customer, CustomerListResponse, Lead, LeadGenSearchResponse, LeadListResponse } from "@/types/api";
 
 type LeadStatusUi = "all" | "new" | "contacted" | "qualified" | "converted" | "lost";
 type LeadSortField = "name" | "email" | "status" | "source" | "created";
@@ -110,6 +111,12 @@ export default function LeadsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSavingCreate, setIsSavingCreate] = useState(false);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  const [isFindLeadsOpen, setIsFindLeadsOpen] = useState(false);
+  const [findQuery, setFindQuery] = useState("");
+  const [isSearchingLeads, setIsSearchingLeads] = useState(false);
+  const [findResultMessage, setFindResultMessage] = useState<string | null>(null);
+  const [findError, setFindError] = useState<string | null>(null);
 
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [orderNotes, setOrderNotes] = useState("");
@@ -463,6 +470,49 @@ export default function LeadsPage() {
     });
   }
 
+  async function handleFindLeads() {
+    const token = getStoredToken();
+    if (!token) {
+      logout();
+      window.location.replace("/login");
+      return;
+    }
+
+    if (!findQuery.trim()) {
+      setFindError("Enter what you're looking for, e.g. \"plumbers in Johannesburg\".");
+      return;
+    }
+
+    setIsSearchingLeads(true);
+    setFindError(null);
+    setFindResultMessage(null);
+
+    try {
+      const result = await apiRequest<LeadGenSearchResponse>("/api/v1/leads/find", {
+        method: "POST",
+        authToken: token,
+        body: { query: findQuery.trim(), max_results: 10 },
+      });
+
+      setFindResultMessage(
+        result.created_count > 0
+          ? `Found ${result.created_count} new lead${result.created_count === 1 ? "" : "s"}` +
+            (result.skipped_duplicates > 0 ? ` (${result.skipped_duplicates} already in your pipeline).` : ".")
+          : `No new leads - ${result.skipped_duplicates} result(s) were already in your pipeline.`
+      );
+      await loadLeads();
+    } catch (requestError) {
+      if (requestError instanceof ApiError && requestError.status === 401) {
+        logout();
+        window.location.replace("/login");
+        return;
+      }
+      setFindError(requestError instanceof Error ? requestError.message : "Search failed.");
+    } finally {
+      setIsSearchingLeads(false);
+    }
+  }
+
   async function handleCreateLead() {
     const token = getStoredToken();
     if (!token) {
@@ -646,17 +696,31 @@ export default function LeadsPage() {
             Manage lead pipeline, customer identity, and conversion status.
           </p>
         </div>
-        <button
-          type="button"
-          className="erp-button-primary px-4 py-2 text-sm font-semibold"
-          onClick={() => {
-            resetCreateForm();
-            setIsCreateOpen(true);
-            setError(null);
-          }}
-        >
-          Add Lead
-        </button>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="erp-panel px-4 py-2 text-sm font-semibold text-tertiary-fixed-dim transition-colors hover:border-tertiary-fixed-dim/40"
+            onClick={() => {
+              setFindQuery("");
+              setFindError(null);
+              setFindResultMessage(null);
+              setIsFindLeadsOpen(true);
+            }}
+          >
+            Find Leads
+          </button>
+          <button
+            type="button"
+            className="erp-button-primary px-4 py-2 text-sm font-semibold"
+            onClick={() => {
+              resetCreateForm();
+              setIsCreateOpen(true);
+              setError(null);
+            }}
+          >
+            Add Lead
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -939,6 +1003,69 @@ export default function LeadsPage() {
         </div>
       ) : null}
 
+      {isFindLeadsOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center">
+          <button
+            type="button"
+            className="absolute inset-0 h-full w-full bg-slate-900/30"
+            onClick={() => setIsFindLeadsOpen(false)}
+            aria-label="Close find leads panel"
+          />
+          <div className="erp-panel relative z-10 w-full max-w-lg p-6">
+            <div className="mb-1 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-white">Find Leads</h2>
+              <button
+                type="button"
+                className="rounded-md border border-outline-variant px-3 py-1 text-sm text-on-surface-variant hover:bg-surface-container-high"
+                onClick={() => setIsFindLeadsOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+            <p className="mb-4 text-xs text-on-surface-variant">
+              Searches Google for real businesses matching what you type, and creates a lead for
+              each new result automatically.
+            </p>
+
+            <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="find-leads-query">
+              What are you looking for?
+            </label>
+            <input
+              id="find-leads-query"
+              type="text"
+              className="erp-input w-full px-3 py-2 text-sm"
+              placeholder="e.g. plumbers in Johannesburg"
+              value={findQuery}
+              onChange={(event) => setFindQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") void handleFindLeads();
+              }}
+              disabled={isSearchingLeads}
+            />
+
+            {findError && (
+              <p className="mt-3 rounded-md border border-red-900/40 bg-red-950/30 px-3 py-2 text-sm text-red-400">
+                {findError}
+              </p>
+            )}
+            {findResultMessage && (
+              <p className="mt-3 rounded-md border border-tertiary-fixed-dim/30 bg-tertiary-fixed-dim/10 px-3 py-2 text-sm text-tertiary-fixed-dim">
+                {findResultMessage}
+              </p>
+            )}
+
+            <button
+              type="button"
+              className="erp-button-primary mt-4 w-full py-2 text-sm font-semibold disabled:opacity-60"
+              onClick={() => void handleFindLeads()}
+              disabled={isSearchingLeads}
+            >
+              {isSearchingLeads ? "Searching..." : "Search"}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {selectedLead ? (
         <div className="fixed inset-0 z-40 flex">
           <button
@@ -999,6 +1126,7 @@ export default function LeadsPage() {
                         {selectedLead.notes?.trim() || "No notes"}
                       </p>
                     </div>
+                    <ActivityTimeline entityType="lead" entityId={selectedLead.id} />
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"

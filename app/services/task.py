@@ -15,6 +15,7 @@ from app.models.task import Task
 from app.repositories.task import TaskRepository
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.auth import CurrentUser
+from app.utils.notify import notify_user
 
 
 class TaskService:
@@ -76,12 +77,22 @@ class TaskService:
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: TaskCreate) -> Task:
         """Create task.
-        
+
         🧨 RBAC: Only owner/manager can create.
         """
         require_role(current_user, PRIVILEGED_ROLES, "create tasks")
 
-        task = self.repo.create(business_id=business_id, commit=False, **data.model_dump())
+        payload = data.model_dump()
+        assignee_ids = payload.pop("assignee_ids", None) or []
+        if assignee_ids and not payload.get("assigned_to"):
+            payload["assigned_to"] = assignee_ids[0]
+
+        task = self.repo.create(business_id=business_id, commit=False, **payload)
+
+        if assignee_ids:
+            self.repo.set_assignees(task.id, assignee_ids)
+        elif task.assigned_to:
+            self.repo.set_assignees(task.id, [task.assigned_to])
 
         self._emit_event(
             event_type=EventType.TASK_CREATED,
@@ -97,9 +108,23 @@ class TaskService:
             },
         )
 
+        self._notify_assignees(business_id, current_user, task, assignee_ids or ([task.assigned_to] if task.assigned_to else []))
+
         self.db.commit()
         self.db.refresh(task)
         return task
+
+    def _notify_assignees(self, business_id: UUID, current_user: CurrentUser, task: Task, user_ids: list) -> None:
+        """Instantly notify each assignee, excluding whoever triggered the change."""
+        for user_id in user_ids:
+            if user_id and str(user_id) != str(current_user.user_id):
+                notify_user(
+                    self.db, business_id, user_id, "system",
+                    "New task assigned",
+                    f"You were assigned to '{task.title}'.",
+                    action_url="/tasks",
+                    related_type="task", related_id=task.id,
+                )
 
     def get(self, business_id: UUID, current_user: CurrentUser, task_id: UUID) -> Task | None:
         """Get task by ID.
@@ -110,11 +135,17 @@ class TaskService:
         if not task:
             return None
 
-        # Staff can only view tasks assigned to them
-        if current_user.role == "staff" and task.assigned_to != current_user.id:
+        # Staff can only view tasks assigned to them (primary or co-assignee)
+        if current_user.role == "staff" and not self._is_assignee(task, current_user):
             raise ValueError("Permission denied: Staff can only view their own tasks")
 
         return task
+
+    @staticmethod
+    def _is_assignee(task: Task, current_user: CurrentUser) -> bool:
+        if task.assigned_to and str(task.assigned_to) == str(current_user.user_id):
+            return True
+        return any(str(uid) == str(current_user.user_id) for uid in task.assignee_ids)
 
     def list(self, business_id: UUID, current_user: CurrentUser, skip: int = 0, limit: int = 100) -> tuple[list[Task], int]:
         """List tasks.
@@ -173,11 +204,12 @@ class TaskService:
         if not task:
             return None
 
-        # Staff can only update their own tasks
-        if current_user.role == "staff" and task.assigned_to != current_user.id:
+        # Staff can only update their own tasks (primary or co-assignee)
+        if current_user.role == "staff" and not self._is_assignee(task, current_user):
             raise ValueError("Permission denied: Staff can only update their own tasks")
 
         old_status = task.status
+        old_assignee_ids = set(task.assignee_ids)
 
         # Validate state transition if status is being updated
         if data.status is not None and data.status != task.status:
@@ -185,6 +217,10 @@ class TaskService:
                 raise ValueError(f"Invalid state transition: {task.status} → {data.status}")
 
         update_data = data.model_dump(exclude_unset=True)
+        assignee_ids_provided = "assignee_ids" in update_data
+        new_assignee_ids = update_data.pop("assignee_ids", None) or []
+        if assignee_ids_provided and "assigned_to" not in update_data:
+            update_data["assigned_to"] = new_assignee_ids[0] if new_assignee_ids else None
 
         # Mark completed_at when status changes to completed
         if data.status == "completed":
@@ -199,6 +235,11 @@ class TaskService:
             ) from e
 
         if updated_task:
+            if assignee_ids_provided:
+                self.repo.set_assignees(updated_task.id, new_assignee_ids)
+                newly_added = [uid for uid in new_assignee_ids if str(uid) not in {str(u) for u in old_assignee_ids}]
+                self._notify_assignees(business_id, current_user, updated_task, newly_added)
+
             # Emit the most specific event type
             if data.status == "completed" and old_status != "completed":
                 self._emit_event(
@@ -253,6 +294,7 @@ class TaskService:
             ) from e
 
         if updated_task:
+            self.repo.set_assignees(updated_task.id, [assigned_to])
             self._emit_event(
                 event_type=EventType.TASK_ASSIGNED,
                 business_id=business_id,
@@ -265,6 +307,8 @@ class TaskService:
                     "new_assigned_to": str(assigned_to),
                 },
             )
+            if str(assigned_to) != str(old_assigned):
+                self._notify_assignees(business_id, current_user, updated_task, [assigned_to])
             self.db.commit()
             self.db.refresh(updated_task)
 

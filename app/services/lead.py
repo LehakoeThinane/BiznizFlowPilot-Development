@@ -12,6 +12,7 @@ from app.models.lead import Lead
 from app.repositories.lead import LeadRepository
 from app.schemas.lead import LeadCreate, LeadUpdate
 from app.schemas.auth import CurrentUser
+from app.utils.notify import notify_business, notify_user
 
 
 class LeadService:
@@ -86,6 +87,22 @@ class LeadService:
             description=f"Lead created with status '{lead.status}'",
             data={"status": lead.status, "source": lead.source},
         )
+
+        lead_desc = f"New lead from {lead.source}" if lead.source else "New lead"
+        if lead.assigned_to:
+            notify_user(
+                self.db, business_id, lead.assigned_to, "system",
+                "New lead assigned to you",
+                f"{lead_desc} has been assigned to you - follow up promptly.",
+                action_url="/leads", related_type="lead", related_id=lead.id,
+            )
+        else:
+            notify_business(
+                self.db, business_id, "system",
+                "New lead needs an owner",
+                f"{lead_desc} came in unassigned - assign it to a rep.",
+                action_url="/leads", related_type="lead", related_id=lead.id,
+            )
 
         self.db.commit()
         self.db.refresh(lead)
@@ -203,6 +220,15 @@ class LeadService:
                     "new_assigned_to": str(assigned_to),
                 },
             )
+
+            if assigned_to != old_assigned:
+                notify_user(
+                    self.db, business_id, assigned_to, "system",
+                    "A lead was assigned to you",
+                    "Follow up promptly to keep your response time fast.",
+                    action_url="/leads", related_type="lead", related_id=lead_id,
+                )
+
             self.db.commit()
             self.db.refresh(updated_lead)
 

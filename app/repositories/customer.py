@@ -18,6 +18,16 @@ class CustomerRepository(BaseRepository[Customer]):
         """Initialize repository."""
         super().__init__(db, Customer)
 
+    def get_by_external_ref(self, business_id: UUID, external_ref: str) -> Customer | None:
+        """Get customer by lead-gen dedup key within business.
+
+        🧨 CRITICAL: Filters by business_id to prevent data leaks.
+        """
+        return self.db.query(Customer).filter(
+            Customer.business_id == business_id,
+            Customer.external_ref == external_ref,
+        ).first()
+
     def get_by_email(self, business_id: UUID, email: str) -> Customer | None:
         """Get customer by email within business.
         

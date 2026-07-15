@@ -148,6 +148,26 @@ class PlatformAuthService:
         self.db.refresh(admin)
         return admin
 
+    def change_password(self, platform_admin_id: UUID, current_password: str, new_password: str) -> None:
+        """Change a platform admin's own password.
+
+        Raises:
+            ValueError: If the admin doesn't exist or current_password is wrong.
+        """
+        admin = self.repo.get_by_id(platform_admin_id)
+        if not admin:
+            raise ValueError("Account not found")
+        if not verify_password(current_password, admin.hashed_password):
+            raise ValueError("Current password is incorrect")
+
+        admin.hashed_password = hash_password(new_password)
+
+        record_audit(
+            self.db, platform_admin_id, "platform_admin.change_password",
+            target_type="platform_admin", target_id=admin.id,
+        )
+        self.db.commit()
+
     @staticmethod
     def _create_tokens(admin: PlatformAdmin) -> PlatformTokenResponse:
         """Create access and refresh tokens for a platform admin.

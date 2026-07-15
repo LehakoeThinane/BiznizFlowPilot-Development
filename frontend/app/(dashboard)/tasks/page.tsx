@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { getCurrentUser, getStoredToken, logout } from "@/lib/auth";
 import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
 import type {
   BusinessUser,
   BusinessUserListResponse,
@@ -30,7 +31,7 @@ interface TaskEditorState {
   description: string;
   status: Exclude<TaskStatusUi, "all">;
   priority: Exclude<TaskPriorityUi, "all">;
-  assignedToId: string;
+  assigneeIds: string[];
   dueDate: string;
 }
 
@@ -42,8 +43,6 @@ const STATUS_COLUMNS: { key: Exclude<TaskStatusUi, "all">; label: string }[] = [
   { key: "completed", label: "Completed" },
   { key: "overdue", label: "Overdue" },
 ];
-const UUID_PATTERN =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function toUiStatus(status: Task["status"]): Exclude<TaskStatusUi, "all"> {
   return status;
@@ -105,7 +104,7 @@ function defaultEditor(): TaskEditorState {
     description: "",
     status: "pending",
     priority: "medium",
-    assignedToId: "",
+    assigneeIds: [],
     dueDate: "",
   };
 }
@@ -114,17 +113,6 @@ function toErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === "string") return error;
   if (error instanceof Error && error.message.trim()) return error.message;
   return fallback;
-}
-
-function normalizeOptionalUuid(value: string): string | null {
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  if (!UUID_PATTERN.test(trimmed)) {
-    return null;
-  }
-  return trimmed;
 }
 
 function csvValue(value: string): string {
@@ -261,13 +249,21 @@ export default function TasksPage() {
     [assigneeOptions, currentUser],
   );
 
+  const resolveAssignees = useCallback(
+    (assigneeIds: string[] | null | undefined): string => {
+      if (!assigneeIds || assigneeIds.length === 0) return "-";
+      return assigneeIds.map((id) => resolveAssignee(id)).join(", ");
+    },
+    [resolveAssignee],
+  );
+
   const hydrateEditorFromTask = useCallback((task: Task) => {
     setEditor({
       title: task.title,
       description: task.description ?? "",
       status: toUiStatus(task.status),
       priority: toUiPriority(task.priority),
-      assignedToId: task.assigned_to ?? "",
+      assigneeIds: task.assignee_ids?.length ? task.assignee_ids : task.assigned_to ? [task.assigned_to] : [],
       dueDate: toInputDateTime(task.due_date),
     });
   }, []);
@@ -499,7 +495,7 @@ export default function TasksPage() {
         task.description ?? "",
         toUiStatus(task.status),
         toUiPriority(task.priority),
-        resolveAssignee(task.assigned_to),
+        resolveAssignees(task.assignee_ids),
         formatDate(task.due_date),
         formatDate(task.created_at),
       ]);
@@ -507,7 +503,7 @@ export default function TasksPage() {
 
     const datePart = new Date().toISOString().slice(0, 10);
     downloadCsv(`tasks-${datePart}.csv`, rows);
-  }, [resolveAssignee, visibleTasks]);
+  }, [resolveAssignees, visibleTasks]);
 
   async function openTaskDetails(task: Task) {
     const token = getStoredToken();
@@ -555,11 +551,6 @@ export default function TasksPage() {
       setError("Title is required.");
       return;
     }
-    const normalizedAssignee = normalizeOptionalUuid(editor.assignedToId);
-    if (editor.assignedToId.trim() && !normalizedAssignee) {
-      setError("Assigned user is invalid. Please choose from the list.");
-      return;
-    }
 
     setIsSavingCreate(true);
     setError(null);
@@ -573,7 +564,7 @@ export default function TasksPage() {
               description: editor.description.trim() || null,
               status: toBackendStatus(editor.status),
               priority: toBackendPriority(editor.priority),
-              assigned_to: normalizedAssignee,
+              assignee_ids: editor.assigneeIds,
               due_date: editor.dueDate ? new Date(editor.dueDate).toISOString() : null,
             },
           });
@@ -606,11 +597,6 @@ export default function TasksPage() {
       setError("Title is required.");
       return;
     }
-    const normalizedAssignee = normalizeOptionalUuid(editor.assignedToId);
-    if (editor.assignedToId.trim() && !normalizedAssignee) {
-      setError("Assigned user is invalid. Please choose from the list.");
-      return;
-    }
 
     setIsSavingEdit(true);
     setError(null);
@@ -624,7 +610,7 @@ export default function TasksPage() {
               description: editor.description.trim() || null,
               status: toBackendStatus(editor.status),
               priority: toBackendPriority(editor.priority),
-              assigned_to: normalizedAssignee,
+              assignee_ids: editor.assigneeIds,
               due_date: editor.dueDate ? new Date(editor.dueDate).toISOString() : null,
             },
           });
@@ -893,7 +879,7 @@ export default function TasksPage() {
           tasks={boardTasks}
           onOpenTask={(task) => void openTaskDetails(task)}
           onDropTask={(taskId, newStatus) => void handleDropTask(taskId, newStatus)}
-          resolveAssignee={resolveAssignee}
+          resolveAssignees={resolveAssignees}
         />
       ) : visibleTasks.length === 0 ? (
         <div className="erp-panel p-5 text-sm text-muted">
@@ -1031,7 +1017,7 @@ export default function TasksPage() {
                         {priority}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-[#aaa]">{resolveAssignee(task.assigned_to)}</td>
+                    <td className="px-4 py-3 text-[#aaa]">{resolveAssignees(task.assignee_ids)}</td>
                     <td className="px-4 py-3 text-[#aaa]">{formatDate(task.due_date)}</td>
                     <td className="px-4 py-3 text-[#aaa]">{formatDate(task.created_at)}</td>
                   </tr>
@@ -1145,7 +1131,7 @@ export default function TasksPage() {
                       />
                       <DetailItem
                         label="Assigned To"
-                        value={resolveAssignee(selectedTask.assigned_to)}
+                        value={resolveAssignees(selectedTask.assignee_ids)}
                       />
                       <DetailItem label="Due Date" value={formatDate(selectedTask.due_date)} />
                       <DetailItem label="Created" value={formatDate(selectedTask.created_at)} />
@@ -1156,6 +1142,8 @@ export default function TasksPage() {
                         {selectedTask.description?.trim() || "No description"}
                       </p>
                     </div>
+
+                    <ActivityTimeline entityType="task" entityId={selectedTask.id} />
 
                     <div className="flex flex-wrap gap-2">
                       {(selectedTask.status === "pending" ||
@@ -1237,12 +1225,12 @@ function TaskBoard({
   tasks,
   onOpenTask,
   onDropTask,
-  resolveAssignee,
+  resolveAssignees,
 }: {
   tasks: Task[];
   onOpenTask: (task: Task) => void;
   onDropTask: (taskId: string, newStatus: Exclude<TaskStatusUi, "all">) => void;
-  resolveAssignee: (assignedTo: string | null) => string;
+  resolveAssignees: (assigneeIds: string[] | null | undefined) => string;
 }) {
   const [dragOverColumn, setDragOverColumn] = useState<Exclude<TaskStatusUi, "all"> | null>(null);
 
@@ -1304,7 +1292,7 @@ function TaskBoard({
                           {priority}
                         </span>
                         <span className="truncate text-xs text-muted">
-                          {resolveAssignee(task.assigned_to)}
+                          {resolveAssignees(task.assignee_ids)}
                         </span>
                       </div>
                       {task.due_date ? (
@@ -1429,46 +1417,52 @@ function TaskForm({
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label
-            className="mb-1 block text-sm font-medium text-[#aaa]"
-            htmlFor="task-assigned"
-          >
-            Assigned To (optional)
-          </label>
-          <select
-            id="task-assigned"
-            value={editor.assignedToId}
-            onChange={(event) => update("assignedToId", event.target.value)}
-            className="erp-input w-full px-3 py-2 text-sm"
-          >
-            <option value="">Unassigned</option>
-            {assigneeOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.label}
-              </option>
-            ))}
-            {editor.assignedToId &&
-            !assigneeOptions.some((option) => option.id === editor.assignedToId) ? (
-              <option value={editor.assignedToId}>
-                Current assignee ({editor.assignedToId.slice(0, 8)}...)
-              </option>
-            ) : null}
-          </select>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-[#aaa]">
+          Assigned To (optional, select any number of people)
+        </label>
+        <div className="max-h-40 overflow-y-auto rounded-md border border-border bg-white/5 p-2">
+          {assigneeOptions.length === 0 ? (
+            <p className="px-1 py-1 text-xs text-muted">No teammates to assign yet.</p>
+          ) : (
+            assigneeOptions.map((option) => {
+              const checked = editor.assigneeIds.includes(option.id);
+              return (
+                <label
+                  key={option.id}
+                  className="flex cursor-pointer items-center gap-2 rounded px-1 py-1.5 text-sm text-[#ddd] hover:bg-white/5"
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() =>
+                      update(
+                        "assigneeIds",
+                        checked
+                          ? editor.assigneeIds.filter((id) => id !== option.id)
+                          : [...editor.assigneeIds, option.id],
+                      )
+                    }
+                  />
+                  {option.label}
+                </label>
+              );
+            })
+          )}
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="task-due">
-            Due Date (optional)
-          </label>
-          <input
-            id="task-due"
-            type="datetime-local"
-            value={editor.dueDate}
-            onChange={(event) => update("dueDate", event.target.value)}
-            className="erp-input w-full px-3 py-2 text-sm"
-          />
-        </div>
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-[#aaa]" htmlFor="task-due">
+          Due Date (optional)
+        </label>
+        <input
+          id="task-due"
+          type="datetime-local"
+          value={editor.dueDate}
+          onChange={(event) => update("dueDate", event.target.value)}
+          className="erp-input w-full px-3 py-2 text-sm"
+        />
       </div>
 
       <button

@@ -1,18 +1,27 @@
 """Customer model - contact/company information."""
 
-from sqlalchemy import Column, ForeignKey, String, Text, Uuid
+from sqlalchemy import Column, ForeignKey, Index, String, Text, Uuid, text
 
 from app.models.base import BaseModel
 
 
 class Customer(BaseModel):
     """Customer entity.
-    
+
     Represents a contact or company that can have leads and tasks.
     Belongs to a business (multi-tenant).
     """
 
     __tablename__ = "customers"
+    __table_args__ = (
+        Index(
+            "uq_customers_business_external_ref",
+            "business_id",
+            "external_ref",
+            unique=True,
+            postgresql_where=text("external_ref IS NOT NULL"),
+        ),
+    )
 
     SAFE_CONTEXT_FIELDS = {
         "id",
@@ -20,6 +29,7 @@ class Customer(BaseModel):
         "email",
         "phone",
         "company",
+        "website",
         "notes",
     }
 
@@ -61,6 +71,19 @@ class Customer(BaseModel):
         Text,
         nullable=True,
         doc="Additional notes about customer",
+    )
+
+    website = Column(
+        String(500),
+        nullable=True,
+        doc="Customer/company website",
+    )
+
+    external_ref = Column(
+        String(255),
+        nullable=True,
+        doc="Provider-tagged dedup key for lead-gen imports, e.g. "
+            "'google_places:<place_id>' - NULL for manually-created customers.",
     )
 
     def __repr__(self) -> str:
