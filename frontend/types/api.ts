@@ -677,6 +677,19 @@ export interface DocumentDownloadResponse {
   expires_in: number;
 }
 
+export interface DocumentShareLink {
+  id: string;
+  document_id: string;
+  url: string;
+  created_by: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface DocumentShareLinkListResponse {
+  items: DocumentShareLink[];
+}
+
 // ─── Org Chart ────────────────────────────────────────────────────────────
 
 export interface OrgChartNode {

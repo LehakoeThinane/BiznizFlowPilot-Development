@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import csv
 import io
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Annotated
 from uuid import UUID, uuid4
@@ -73,9 +73,16 @@ def _emit(
 def _period_bounds(period: str) -> tuple[date, date, str]:
     now = datetime.now(timezone.utc)
     y, m = now.year, now.month
+    # Expense/revenue dates are chosen by the user in their own local
+    # timezone, not UTC - a business ahead of UTC (e.g. SAST, UTC+2) can
+    # already be "tomorrow" locally while this server-side `now` is still
+    # "today". A 1-day buffer covers any timezone (max realistic offset is
+    # UTC+14) so a just-logged entry is never silently excluded from the
+    # current period's upper bound.
+    end_buffer = timedelta(days=1)
     if period == "this_month":
         start = date(y, m, 1)
-        end = now.date()
+        end = now.date() + end_buffer
         label = now.strftime("%B %Y")
     elif period == "last_month":
         if m == 1:
@@ -89,7 +96,7 @@ def _period_bounds(period: str) -> tuple[date, date, str]:
         label = date(y, m, 1).strftime("%B %Y")
     elif period == "ytd":
         start = date(y, 1, 1)
-        end = now.date()
+        end = now.date() + end_buffer
         label = f"YTD {y}"
     else:  # this_year
         start = date(y, 1, 1)

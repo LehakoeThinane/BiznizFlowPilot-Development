@@ -11,6 +11,8 @@ import type {
   BusinessUserListResponse,
   DocumentDownloadResponse,
   DocumentListResponse,
+  DocumentShareLink,
+  DocumentShareLinkListResponse,
   EventListResponse,
 } from "@/types/api";
 
@@ -61,6 +63,9 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
   const [isPosting, setIsPosting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [busyDocId, setBusyDocId] = useState<string | null>(null);
+  const [shareOpenDocId, setShareOpenDocId] = useState<string | null>(null);
+  const [shareLinks, setShareLinks] = useState<Record<string, DocumentShareLink[]>>({});
+  const [isSharing, setIsSharing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const token = getStoredToken();
@@ -181,6 +186,61 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
     }
   }
 
+  async function loadShareLinks(docId: string) {
+    try {
+      const resp = await apiRequest<DocumentShareLinkListResponse>(
+        `/api/v1/documents/${docId}/share`,
+        { authToken: token },
+      );
+      setShareLinks((prev) => ({ ...prev, [docId]: resp.items ?? [] }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load share links");
+    }
+  }
+
+  function handleToggleShare(doc: BusinessDocument) {
+    if (shareOpenDocId === doc.id) {
+      setShareOpenDocId(null);
+      return;
+    }
+    setShareOpenDocId(doc.id);
+    void loadShareLinks(doc.id);
+  }
+
+  async function handleCreateShareLink(doc: BusinessDocument, expiresInDays: number) {
+    setIsSharing(true);
+    setError(null);
+    try {
+      await apiRequest<DocumentShareLink>(`/api/v1/documents/${doc.id}/share`, {
+        method: "POST",
+        authToken: token,
+        body: { expires_in_days: expiresInDays },
+      });
+      await loadShareLinks(doc.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create share link");
+    } finally {
+      setIsSharing(false);
+    }
+  }
+
+  async function handleRevokeShareLink(doc: BusinessDocument, linkId: string) {
+    setIsSharing(true);
+    setError(null);
+    try {
+      await apiRequest<void>(`/api/v1/documents/share/${linkId}`, { method: "DELETE", authToken: token });
+      await loadShareLinks(doc.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to revoke share link");
+    } finally {
+      setIsSharing(false);
+    }
+  }
+
+  function handleCopyLink(url: string) {
+    navigator.clipboard?.writeText(url).catch(() => {});
+  }
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
@@ -196,6 +256,7 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
         <input
           ref={fileInputRef}
           type="file"
+          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.svg,.csv,.txt,.zip"
           className="hidden"
           onChange={(e) => void handleFileSelected(e.target.files?.[0])}
         />
@@ -204,28 +265,83 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
       {documents.length > 0 && (
         <div className="mb-4 space-y-1.5">
           {documents.map((doc) => (
-            <div
-              key={doc.id}
-              className="flex items-center justify-between gap-2 rounded-md border border-border bg-white/5 px-3 py-2 text-sm"
-            >
-              <button
-                type="button"
-                onClick={() => void handleDownload(doc)}
-                disabled={busyDocId === doc.id}
-                className="min-w-0 flex-1 truncate text-left text-[#ddd] hover:text-white hover:underline disabled:opacity-40"
-                title={doc.filename}
-              >
-                {doc.filename}
-              </button>
-              <span className="shrink-0 text-xs text-muted">{formatSize(doc.size_bytes)}</span>
-              <button
-                type="button"
-                onClick={() => void handleDeleteDocument(doc)}
-                disabled={busyDocId === doc.id}
-                className="shrink-0 text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40"
-              >
-                Delete
-              </button>
+            <div key={doc.id} className="rounded-md border border-border bg-white/5 px-3 py-2 text-sm">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleDownload(doc)}
+                  disabled={busyDocId === doc.id}
+                  className="min-w-0 flex-1 truncate text-left text-[#ddd] hover:text-white hover:underline disabled:opacity-40"
+                  title={doc.filename}
+                >
+                  {doc.filename}
+                </button>
+                <span className="shrink-0 text-xs text-muted">{formatSize(doc.size_bytes)}</span>
+                <button
+                  type="button"
+                  onClick={() => handleToggleShare(doc)}
+                  className="shrink-0 text-xs text-[#8ab4f8] hover:text-[#a9c8ff]"
+                >
+                  {shareOpenDocId === doc.id ? "Hide share" : "Share"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDeleteDocument(doc)}
+                  disabled={busyDocId === doc.id}
+                  className="shrink-0 text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40"
+                >
+                  Delete
+                </button>
+              </div>
+
+              {shareOpenDocId === doc.id && (
+                <div className="mt-2 space-y-2 border-t border-border pt-2">
+                  {(shareLinks[doc.id] ?? []).map((link) => (
+                    <div key={link.id} className="flex items-center gap-2 text-xs">
+                      <input
+                        readOnly
+                        value={link.url}
+                        className="erp-input min-w-0 flex-1 px-2 py-1 text-xs"
+                        onFocus={(e) => e.target.select()}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(link.url)}
+                        className="shrink-0 rounded border border-border px-2 py-1 text-[#ccc] hover:bg-white/5"
+                      >
+                        Copy
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleRevokeShareLink(doc, link.id)}
+                        disabled={isSharing}
+                        className="shrink-0 text-rose-400 hover:text-rose-300 disabled:opacity-40"
+                      >
+                        Revoke
+                      </button>
+                      <span className="shrink-0 text-muted">
+                        expires {new Date(link.expires_at).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                  {(shareLinks[doc.id]?.length ?? 0) === 0 && (
+                    <p className="text-xs text-muted">No active share links.</p>
+                  )}
+                  <div className="flex items-center gap-2">
+                    {[3, 7, 14, 30].map((days) => (
+                      <button
+                        key={days}
+                        type="button"
+                        onClick={() => void handleCreateShareLink(doc, days)}
+                        disabled={isSharing}
+                        className="rounded border border-border px-2 py-1 text-xs text-[#ccc] hover:bg-white/5 disabled:opacity-40"
+                      >
+                        + {days}d link
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

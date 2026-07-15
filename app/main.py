@@ -18,6 +18,7 @@ from app.api import (
     chat,
     customers,
     dashboard,
+    document_share,
     documents,
     events,
     finance,
@@ -142,6 +143,7 @@ app.include_router(auth.router, prefix=settings.api_v1_prefix)
 
 # Billing routes (no auth required — see app/api/billing.py docstring)
 app.include_router(billing.router)
+app.include_router(document_share.public_router)
 
 # CRM routes (auth required)
 # require_active_trial: a no-op for every tier except an expired trial,
@@ -152,6 +154,7 @@ app.include_router(billing.router)
 # plan/trial status, and upgrade.
 app.include_router(customers.router, dependencies=[Depends(require_active_trial)])
 app.include_router(documents.router, dependencies=[Depends(require_active_trial)])
+app.include_router(document_share.router, dependencies=[Depends(require_active_trial)])
 app.include_router(events.router, dependencies=[Depends(require_active_trial)])
 app.include_router(leads.router, dependencies=[Depends(require_active_trial)])
 app.include_router(tasks.router, dependencies=[Depends(require_active_trial)])
