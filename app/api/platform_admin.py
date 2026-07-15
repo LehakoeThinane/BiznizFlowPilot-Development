@@ -9,7 +9,7 @@ which validates against the fully separate platform_admins table/token type.
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -550,6 +550,25 @@ def get_my_platform_admin(
         impersonation_allowed=admin.impersonation_allowed,
         last_login_at=admin.last_login_at.isoformat() if admin.last_login_at else None,
     )
+
+
+@router.post("/admins/me/change-password", response_model=dict)
+def change_my_platform_admin_password(
+    current_admin: Annotated[CurrentPlatformAdmin, Depends(get_current_platform_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    current_password: str = Body(...),
+    new_password: str = Body(...),
+) -> dict:
+    """Change the current platform admin's own password."""
+    if len(new_password) < 8:
+        raise HTTPException(status_code=422, detail="New password must be at least 8 characters")
+    try:
+        PlatformAuthService(db).change_password(
+            current_admin.platform_admin_id, current_password, new_password
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"message": "Password changed successfully"}
 
 
 @router.post("/admins", response_model=PlatformAdminResponse, status_code=status.HTTP_201_CREATED)

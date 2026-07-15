@@ -6,10 +6,37 @@ from uuid import uuid4
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.exceptions import ConcurrencyConflictError
+from app.core.security import hash_password
+from app.models.business import Business
+from app.models.notification import Notification
 from app.models.task import Task
+from app.models.user import User
 from app.services.task import TaskService
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.schemas.auth import CurrentUser
+
+
+def _second_staff_user(test_db: Session, business: Business) -> CurrentUser:
+    """Create an extra staff user in the same business, for co-assignee tests."""
+    user = User(
+        id=uuid4(),
+        business_id=business.id,
+        email=f"staff2-{uuid4().hex[:8]}@test.com",
+        hashed_password=hash_password("password123"),
+        first_name="Second",
+        last_name="Staff",
+        role="staff",
+        is_active=True,
+    )
+    test_db.add(user)
+    test_db.commit()
+    return CurrentUser(
+        user_id=str(user.id),
+        business_id=str(business.id),
+        email=user.email,
+        role="staff",
+        full_name=f"{user.first_name} {user.last_name}",
+    )
 
 
 class TestTaskCreate:
@@ -236,6 +263,95 @@ class TestTaskRBAC:
 
         with pytest.raises(PermissionError, match="cannot"):
             service.delete(manager_user.business_id, manager_user, task2.id)
+
+
+class TestTaskMultiAssignee:
+    """Test multi-person task assignment."""
+
+    def test_create_with_multiple_assignees(self, test_db: Session, owner_user: CurrentUser, owner_business: Business):
+        service = TaskService(test_db)
+        staff1 = _second_staff_user(test_db, owner_business)
+        staff2 = _second_staff_user(test_db, owner_business)
+
+        task = service.create(
+            owner_user.business_id, owner_user,
+            TaskCreate(title="Ship the release", assignee_ids=[staff1.user_id, staff2.user_id]),
+        )
+
+        assert str(task.assigned_to) == str(staff1.user_id)
+        assert {str(uid) for uid in task.assignee_ids} == {str(staff1.user_id), str(staff2.user_id)}
+
+    def test_create_notifies_every_assignee(self, test_db: Session, owner_user: CurrentUser, owner_business: Business):
+        service = TaskService(test_db)
+        staff1 = _second_staff_user(test_db, owner_business)
+        staff2 = _second_staff_user(test_db, owner_business)
+
+        task = service.create(
+            owner_user.business_id, owner_user,
+            TaskCreate(title="Deploy to prod", assignee_ids=[staff1.user_id, staff2.user_id]),
+        )
+
+        notified_user_ids = {
+            str(n.user_id)
+            for n in test_db.query(Notification).filter(Notification.related_id == task.id).all()
+        }
+        assert notified_user_ids == {str(staff1.user_id), str(staff2.user_id)}
+
+    def test_co_assignee_can_view_task(self, test_db: Session, owner_user: CurrentUser, owner_business: Business):
+        service = TaskService(test_db)
+        staff1 = _second_staff_user(test_db, owner_business)
+        staff2 = _second_staff_user(test_db, owner_business)
+
+        task = service.create(
+            owner_user.business_id, owner_user,
+            TaskCreate(title="Co-owned task", assignee_ids=[staff1.user_id, staff2.user_id]),
+        )
+
+        # staff2 is a co-assignee, not the primary assigned_to - must still be able to view/update
+        fetched = service.get(staff2.business_id, staff2, task.id)
+        assert fetched is not None
+        assert fetched.id == task.id
+
+    def test_unrelated_staff_cannot_view(self, test_db: Session, owner_user: CurrentUser, owner_business: Business, staff_user: CurrentUser):
+        service = TaskService(test_db)
+        staff1 = _second_staff_user(test_db, owner_business)
+
+        task = service.create(
+            owner_user.business_id, owner_user,
+            TaskCreate(title="Not for you", assignee_ids=[staff1.user_id]),
+        )
+
+        with pytest.raises(ValueError, match="Permission denied"):
+            service.get(staff_user.business_id, staff_user, task.id)
+
+    def test_update_replaces_assignee_set_and_notifies_only_new(
+        self, test_db: Session, owner_user: CurrentUser, owner_business: Business
+    ):
+        service = TaskService(test_db)
+        staff1 = _second_staff_user(test_db, owner_business)
+        staff2 = _second_staff_user(test_db, owner_business)
+        staff3 = _second_staff_user(test_db, owner_business)
+
+        task = service.create(
+            owner_user.business_id, owner_user,
+            TaskCreate(title="Reassign me", assignee_ids=[staff1.user_id, staff2.user_id]),
+        )
+
+        updated = service.update(
+            owner_user.business_id, owner_user, task.id,
+            TaskUpdate(assignee_ids=[staff2.user_id, staff3.user_id]),
+        )
+
+        assert {str(uid) for uid in updated.assignee_ids} == {str(staff2.user_id), str(staff3.user_id)}
+
+        # Only staff3 is newly added - staff2 was already an assignee and shouldn't be re-notified
+        all_notifications = test_db.query(Notification).filter(
+            Notification.related_id == task.id, Notification.title == "New task assigned"
+        ).all()
+        staff2_notification_count = sum(1 for n in all_notifications if str(n.user_id) == str(staff2.user_id))
+        staff3_notification_count = sum(1 for n in all_notifications if str(n.user_id) == str(staff3.user_id))
+        assert staff2_notification_count == 1  # only from the original create, not re-notified on update
+        assert staff3_notification_count == 1
 
 
 class TestTaskFiltering:

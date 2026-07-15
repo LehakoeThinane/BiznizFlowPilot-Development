@@ -341,6 +341,7 @@ export interface Task {
   business_id: string;
   lead_id: string | null;
   assigned_to: string | null;
+  assignee_ids: string[];
   title: string;
   description: string | null;
   status: TaskStatusBackend;

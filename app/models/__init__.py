@@ -10,7 +10,7 @@ from app.models.business import Business
 from app.models.user import User
 from app.models.customer import Customer
 from app.models.lead import Lead
-from app.models.task import Task
+from app.models.task import Task, TaskAssignee
 from app.models.event import Event
 from app.models.workflow import Workflow, WorkflowAction, WorkflowDefinition, WorkflowRun
 from app.models.product import Product
@@ -39,6 +39,7 @@ __all__ = [
     "Customer",
     "Lead",
     "Task",
+    "TaskAssignee",
     "Event",
     "Workflow",
     "WorkflowAction",
