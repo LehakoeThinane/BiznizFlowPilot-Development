@@ -9,11 +9,36 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.dependencies import get_current_user
 from app.integrations.object_storage import ObjectStorageError
+from app.models.document import Document
 from app.schemas.auth import CurrentUser
-from app.schemas.document import DocumentDownloadResponse, DocumentListResponse, DocumentResponse
+from app.schemas.document import (
+    DocumentAccessRequestListResponse,
+    DocumentAccessRequestResponse,
+    DocumentDownloadResponse,
+    DocumentListResponse,
+    DocumentResponse,
+    DocumentRestrictUpdate,
+)
 from app.services.document import DocumentService
+from app.services.document_access import DocumentAccessService
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
+
+
+def _to_response(doc: Document, current_user: CurrentUser, access_service: DocumentAccessService) -> DocumentResponse:
+    return DocumentResponse(
+        id=doc.id,
+        business_id=doc.business_id,
+        entity_type=doc.entity_type,
+        entity_id=doc.entity_id,
+        uploaded_by=doc.uploaded_by,
+        filename=doc.filename,
+        content_type=doc.content_type,
+        size_bytes=doc.size_bytes,
+        restricted=doc.restricted,
+        has_access=access_service.has_access(doc, current_user),
+        created_at=doc.created_at,
+    )
 
 
 @router.post("", response_model=DocumentResponse, status_code=201)
@@ -34,7 +59,7 @@ async def upload_document(
             file.filename or "upload", content, file.content_type,
         )
         db.commit()
-        return doc
+        return _to_response(doc, current_user, DocumentAccessService(db))
     except ObjectStorageError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
@@ -53,8 +78,11 @@ def list_documents(
 ):
     """List documents attached to an entity."""
     service = DocumentService(db)
+    access_service = DocumentAccessService(db)
     docs = service.list_by_entity(current_user.business_id, current_user, entity_type, entity_id)
-    return DocumentListResponse(items=[DocumentResponse.model_validate(d) for d in docs], total=len(docs))
+    return DocumentListResponse(
+        items=[_to_response(d, current_user, access_service) for d in docs], total=len(docs),
+    )
 
 
 @router.get("/{document_id}/download-url", response_model=DocumentDownloadResponse)
@@ -69,6 +97,8 @@ def get_download_url(
         url = service.get_download_url(current_user.business_id, current_user, document_id)
     except ObjectStorageError as e:
         raise HTTPException(status_code=503, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
     if not url:
         raise HTTPException(status_code=404, detail="Document not found")
@@ -98,3 +128,84 @@ def delete_document(
 
     if not deleted:
         raise HTTPException(status_code=404, detail="Document not found")
+
+
+@router.patch("/{document_id}/restrict", response_model=DocumentResponse)
+def set_document_restricted(
+    document_id: UUID,
+    data: DocumentRestrictUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Toggle whether a document requires approved access to view/download."""
+    try:
+        access_service = DocumentAccessService(db)
+        doc = access_service.set_restricted(current_user.business_id, current_user, document_id, data.restricted)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _to_response(doc, current_user, access_service)
+
+
+@router.post("/{document_id}/access-requests", response_model=DocumentAccessRequestResponse, status_code=201)
+def request_document_access(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Request access to a restricted document - notifies owner/manager for review."""
+    try:
+        req = DocumentAccessService(db).request_access(current_user.business_id, current_user, document_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return req
+
+
+@router.get("/{document_id}/access-requests", response_model=DocumentAccessRequestListResponse)
+def list_document_access_requests(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """List access requests for a document. Owner/manager only."""
+    try:
+        requests = DocumentAccessService(db).list_requests(current_user.business_id, current_user, document_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    return DocumentAccessRequestListResponse(items=requests)
+
+
+@router.post("/access-requests/{request_id}/approve", response_model=DocumentAccessRequestResponse)
+def approve_document_access_request(
+    request_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Approve a pending access request. Owner/manager only."""
+    try:
+        req = DocumentAccessService(db).approve(current_user.business_id, current_user, request_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Access request not found")
+    return req
+
+
+@router.post("/access-requests/{request_id}/deny", response_model=DocumentAccessRequestResponse)
+def deny_document_access_request(
+    request_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Deny a pending access request. Owner/manager only."""
+    try:
+        req = DocumentAccessService(db).deny(current_user.business_id, current_user, request_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if not req:
+        raise HTTPException(status_code=404, detail="Access request not found")
+    return req

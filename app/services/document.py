@@ -18,6 +18,7 @@ from app.integrations import object_storage
 from app.models.document import Document
 from app.repositories.document import DocumentRepository
 from app.schemas.auth import CurrentUser
+from app.services.document_access import DocumentAccessService
 from app.services.event import EventService
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25MB
@@ -37,6 +38,7 @@ class DocumentService:
         self.db = db
         self.repo = DocumentRepository(db)
         self._event_service = EventService(db)
+        self._access_service = DocumentAccessService(db)
 
     def upload(
         self,
@@ -95,7 +97,12 @@ class DocumentService:
         doc = self.repo.get(business_id=business_id, entity_id=document_id)
         if not doc:
             return None
+        if not self._access_service.has_access(doc, current_user):
+            raise PermissionError("This document is restricted - request access first")
         return object_storage.presigned_download_url(doc.storage_key, doc.filename)
+
+    def has_access(self, doc: Document, current_user: CurrentUser) -> bool:
+        return self._access_service.has_access(doc, current_user)
 
     def delete(self, business_id: UUID, current_user: CurrentUser, document_id: UUID) -> bool:
         doc = self.repo.get(business_id=business_id, entity_id=document_id)

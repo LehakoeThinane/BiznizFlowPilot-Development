@@ -9,6 +9,8 @@ import type {
   BusinessEvent,
   BusinessUser,
   BusinessUserListResponse,
+  DocumentAccessRequest,
+  DocumentAccessRequestListResponse,
   DocumentDownloadResponse,
   DocumentListResponse,
   DocumentShareLink,
@@ -66,6 +68,9 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
   const [shareOpenDocId, setShareOpenDocId] = useState<string | null>(null);
   const [shareLinks, setShareLinks] = useState<Record<string, DocumentShareLink[]>>({});
   const [isSharing, setIsSharing] = useState(false);
+  const [accessOpenDocId, setAccessOpenDocId] = useState<string | null>(null);
+  const [accessRequests, setAccessRequests] = useState<Record<string, DocumentAccessRequest[]>>({});
+  const [isManagingAccess, setIsManagingAccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const token = getStoredToken();
@@ -241,6 +246,76 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
     navigator.clipboard?.writeText(url).catch(() => {});
   }
 
+  async function handleToggleRestricted(doc: BusinessDocument) {
+    setBusyDocId(doc.id);
+    setError(null);
+    try {
+      const updated = await apiRequest<BusinessDocument>(`/api/v1/documents/${doc.id}/restrict`, {
+        method: "PATCH",
+        authToken: token,
+        body: { restricted: !doc.restricted },
+      });
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to update restriction");
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  async function handleRequestAccess(doc: BusinessDocument) {
+    setBusyDocId(doc.id);
+    setError(null);
+    try {
+      await apiRequest<DocumentAccessRequest>(`/api/v1/documents/${doc.id}/access-requests`, {
+        method: "POST",
+        authToken: token,
+      });
+      alert("Access requested — you'll be notified once it's reviewed.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to request access");
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  async function loadAccessRequests(docId: string) {
+    try {
+      const resp = await apiRequest<DocumentAccessRequestListResponse>(
+        `/api/v1/documents/${docId}/access-requests`,
+        { authToken: token },
+      );
+      setAccessRequests((prev) => ({ ...prev, [docId]: resp.items ?? [] }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load access requests");
+    }
+  }
+
+  function handleToggleAccessPanel(doc: BusinessDocument) {
+    if (accessOpenDocId === doc.id) {
+      setAccessOpenDocId(null);
+      return;
+    }
+    setAccessOpenDocId(doc.id);
+    void loadAccessRequests(doc.id);
+  }
+
+  async function handleReviewRequest(doc: BusinessDocument, requestId: string, decision: "approve" | "deny") {
+    setIsManagingAccess(true);
+    setError(null);
+    try {
+      await apiRequest<DocumentAccessRequest>(`/api/v1/documents/access-requests/${requestId}/${decision}`, {
+        method: "POST",
+        authToken: token,
+      });
+      await loadAccessRequests(doc.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to review access request");
+    } finally {
+      setIsManagingAccess(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
@@ -267,16 +342,49 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
           {documents.map((doc) => (
             <div key={doc.id} className="rounded-md border border-border bg-white/5 px-3 py-2 text-sm">
               <div className="flex items-center justify-between gap-2">
+                {doc.has_access ? (
+                  <button
+                    type="button"
+                    onClick={() => void handleDownload(doc)}
+                    disabled={busyDocId === doc.id}
+                    className="min-w-0 flex-1 truncate text-left text-[#ddd] hover:text-white hover:underline disabled:opacity-40"
+                    title={doc.filename}
+                  >
+                    {doc.restricted ? "🔒 " : ""}{doc.filename}
+                  </button>
+                ) : (
+                  <span className="min-w-0 flex-1 truncate text-[#888]" title={doc.filename}>
+                    🔒 {doc.filename}
+                  </span>
+                )}
+                <span className="shrink-0 text-xs text-muted">{formatSize(doc.size_bytes)}</span>
+                {!doc.has_access && (
+                  <button
+                    type="button"
+                    onClick={() => void handleRequestAccess(doc)}
+                    disabled={busyDocId === doc.id}
+                    className="shrink-0 rounded border border-border px-2 py-1 text-xs text-[#ccc] hover:bg-white/5 disabled:opacity-40"
+                  >
+                    Request access
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => void handleDownload(doc)}
+                  onClick={() => void handleToggleRestricted(doc)}
                   disabled={busyDocId === doc.id}
-                  className="min-w-0 flex-1 truncate text-left text-[#ddd] hover:text-white hover:underline disabled:opacity-40"
-                  title={doc.filename}
+                  className="shrink-0 text-xs text-[#ccc] hover:text-white disabled:opacity-40"
                 >
-                  {doc.filename}
+                  {doc.restricted ? "Unrestrict" : "Restrict"}
                 </button>
-                <span className="shrink-0 text-xs text-muted">{formatSize(doc.size_bytes)}</span>
+                {doc.restricted && (
+                  <button
+                    type="button"
+                    onClick={() => handleToggleAccessPanel(doc)}
+                    className="shrink-0 text-xs text-[#8ab4f8] hover:text-[#a9c8ff]"
+                  >
+                    {accessOpenDocId === doc.id ? "Hide access" : "Access"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => handleToggleShare(doc)}
@@ -293,6 +401,41 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
                   Delete
                 </button>
               </div>
+
+              {accessOpenDocId === doc.id && (
+                <div className="mt-2 space-y-2 border-t border-border pt-2">
+                  {(accessRequests[doc.id] ?? []).length === 0 && (
+                    <p className="text-xs text-muted">No access requests yet.</p>
+                  )}
+                  {(accessRequests[doc.id] ?? []).map((req) => (
+                    <div key={req.id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className="text-[#ddd]">
+                        {resolveActor(req.user_id)} · <span className="capitalize">{req.status}</span>
+                      </span>
+                      {req.status === "pending" && (
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleReviewRequest(doc, req.id, "approve")}
+                            disabled={isManagingAccess}
+                            className="rounded border border-emerald-700/40 px-2 py-1 text-emerald-400 hover:bg-emerald-900/20 disabled:opacity-40"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleReviewRequest(doc, req.id, "deny")}
+                            disabled={isManagingAccess}
+                            className="rounded border border-rose-700/40 px-2 py-1 text-rose-400 hover:bg-rose-900/20 disabled:opacity-40"
+                          >
+                            Deny
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {shareOpenDocId === doc.id && (
                 <div className="mt-2 space-y-2 border-t border-border pt-2">
