@@ -1,10 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
-import type { BusinessEvent, BusinessUser, BusinessUserListResponse, EventListResponse } from "@/types/api";
+import type {
+  BusinessDocument,
+  BusinessEvent,
+  BusinessUser,
+  BusinessUserListResponse,
+  DocumentDownloadResponse,
+  DocumentListResponse,
+  EventListResponse,
+} from "@/types/api";
 
 const EVENT_TYPE_LABELS: Record<string, string> = {
   lead_created: "Lead Created", lead_updated: "Lead Updated",
@@ -37,13 +45,23 @@ function formatTime(iso: string): string {
   });
 }
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function ActivityTimeline({ entityType, entityId }: { entityType: string; entityId: string }) {
   const [events, setEvents] = useState<BusinessEvent[]>([]);
+  const [documents, setDocuments] = useState<BusinessDocument[]>([]);
   const [users, setUsers] = useState<BusinessUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [isPosting, setIsPosting] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [busyDocId, setBusyDocId] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const token = getStoredToken();
 
@@ -55,12 +73,17 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
         `/api/v1/events?entity_type=${encodeURIComponent(entityType)}&entity_id=${entityId}&limit=100`,
         { authToken: token },
       ),
+      apiRequest<DocumentListResponse>(
+        `/api/v1/documents?entity_type=${encodeURIComponent(entityType)}&entity_id=${entityId}`,
+        { authToken: token },
+      ).catch(() => ({ total: 0, items: [] })),
       apiRequest<BusinessUserListResponse>("/api/v1/users?skip=0&limit=200", { authToken: token }).catch(
         () => ({ total: 0, items: [] }),
       ),
     ])
-      .then(([eventsResp, usersResp]) => {
+      .then(([eventsResp, docsResp, usersResp]) => {
         setEvents(eventsResp.items ?? []);
+        setDocuments(docsResp.items ?? []);
         setUsers(usersResp.items ?? []);
       })
       .catch((e: unknown) => {
@@ -105,8 +128,109 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
     }
   }
 
+  async function handleFileSelected(file: File | undefined) {
+    if (!file) return;
+    setIsUploading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("entity_type", entityType);
+      formData.append("entity_id", entityId);
+      formData.append("file", file);
+      await apiRequest<BusinessDocument>("/api/v1/documents", {
+        method: "POST",
+        authToken: token,
+        body: formData,
+      });
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to upload file");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function handleDownload(doc: BusinessDocument) {
+    setBusyDocId(doc.id);
+    setError(null);
+    try {
+      const { url } = await apiRequest<DocumentDownloadResponse>(
+        `/api/v1/documents/${doc.id}/download-url`,
+        { authToken: token },
+      );
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to get download link");
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
+  async function handleDeleteDocument(doc: BusinessDocument) {
+    if (!confirm(`Delete "${doc.filename}"?`)) return;
+    setBusyDocId(doc.id);
+    setError(null);
+    try {
+      await apiRequest<void>(`/api/v1/documents/${doc.id}`, { method: "DELETE", authToken: token });
+      setDocuments((prev) => prev.filter((d) => d.id !== doc.id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to delete file");
+    } finally {
+      setBusyDocId(null);
+    }
+  }
+
   return (
     <div>
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs uppercase tracking-wide text-muted">Attachments</p>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="rounded-md border border-border px-2 py-1 text-xs text-[#ccc] hover:bg-white/5 disabled:opacity-40"
+        >
+          {isUploading ? "Uploading…" : "+ Attach file"}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          className="hidden"
+          onChange={(e) => void handleFileSelected(e.target.files?.[0])}
+        />
+      </div>
+
+      {documents.length > 0 && (
+        <div className="mb-4 space-y-1.5">
+          {documents.map((doc) => (
+            <div
+              key={doc.id}
+              className="flex items-center justify-between gap-2 rounded-md border border-border bg-white/5 px-3 py-2 text-sm"
+            >
+              <button
+                type="button"
+                onClick={() => void handleDownload(doc)}
+                disabled={busyDocId === doc.id}
+                className="min-w-0 flex-1 truncate text-left text-[#ddd] hover:text-white hover:underline disabled:opacity-40"
+                title={doc.filename}
+              >
+                {doc.filename}
+              </button>
+              <span className="shrink-0 text-xs text-muted">{formatSize(doc.size_bytes)}</span>
+              <button
+                type="button"
+                onClick={() => void handleDeleteDocument(doc)}
+                disabled={busyDocId === doc.id}
+                className="shrink-0 text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40"
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <p className="mb-2 text-xs uppercase tracking-wide text-muted">Activity</p>
 
       <div className="mb-3 flex items-start gap-2">

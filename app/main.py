@@ -18,6 +18,7 @@ from app.api import (
     chat,
     customers,
     dashboard,
+    documents,
     events,
     finance,
     hr,
@@ -150,6 +151,7 @@ app.include_router(billing.router)
 # reachable so an expired-trial account can still log in, read its own
 # plan/trial status, and upgrade.
 app.include_router(customers.router, dependencies=[Depends(require_active_trial)])
+app.include_router(documents.router, dependencies=[Depends(require_active_trial)])
 app.include_router(events.router, dependencies=[Depends(require_active_trial)])
 app.include_router(leads.router, dependencies=[Depends(require_active_trial)])
 app.include_router(tasks.router, dependencies=[Depends(require_active_trial)])
