@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { getCurrentUser, getStoredToken, logout } from "@/lib/auth";
 import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
 import type {
   BusinessUser,
   BusinessUserListResponse,
@@ -1141,6 +1142,8 @@ export default function TasksPage() {
                         {selectedTask.description?.trim() || "No description"}
                       </p>
                     </div>
+
+                    <ActivityTimeline entityType="task" entityId={selectedTask.id} />
 
                     <div className="flex flex-wrap gap-2">
                       {(selectedTask.status === "pending" ||

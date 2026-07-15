@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
 import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
+import { ActivityTimeline } from "@/components/ActivityTimeline";
 import type { Customer, CustomerListResponse, Lead, LeadGenSearchResponse, LeadListResponse } from "@/types/api";
 
 type LeadStatusUi = "all" | "new" | "contacted" | "qualified" | "converted" | "lost";
@@ -1125,6 +1126,7 @@ export default function LeadsPage() {
                         {selectedLead.notes?.trim() || "No notes"}
                       </p>
                     </div>
+                    <ActivityTimeline entityType="lead" entityId={selectedLead.id} />
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
