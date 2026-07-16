@@ -93,6 +93,18 @@ class DocumentService:
     def list_by_entity(self, business_id: UUID, current_user: CurrentUser, entity_type: str, entity_id: UUID) -> list[Document]:
         return self.repo.get_by_entity(business_id, entity_type, entity_id)
 
+    def list_library(
+        self,
+        business_id: UUID,
+        current_user: CurrentUser,
+        entity_type: str | None = None,
+        search: str | None = None,
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[Document], int]:
+        """Business-wide document listing for the standalone library page."""
+        return self.repo.get_library(business_id, entity_type=entity_type, search=search, skip=skip, limit=limit)
+
     def get_download_url(self, business_id: UUID, current_user: CurrentUser, document_id: UUID) -> str | None:
         doc = self.repo.get(business_id=business_id, entity_id=document_id)
         if not doc:

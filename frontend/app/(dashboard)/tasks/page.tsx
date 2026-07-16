@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ApiError, apiRequest } from "@/lib/api";
 import { getCurrentUser, getStoredToken, logout } from "@/lib/auth";
@@ -329,6 +330,15 @@ export default function TasksPage() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, [loadTasks]);
+
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (openId) {
+      void openTaskDetails({ id: openId } as Task);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSortChange = useCallback((field: TaskSortField) => {
     setSortField((previousField) => {
