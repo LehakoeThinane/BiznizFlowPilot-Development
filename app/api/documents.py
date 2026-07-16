@@ -90,6 +90,24 @@ def list_documents(
     )
 
 
+@router.get("/library", response_model=DocumentListResponse)
+def list_document_library(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    entity_type: str | None = None,
+    search: str | None = None,
+    skip: int = 0,
+    limit: int = 50,
+):
+    """Business-wide document listing for the standalone library page."""
+    service = DocumentService(db)
+    access_service = DocumentAccessService(db)
+    docs, total = service.list_library(
+        current_user.business_id, current_user, entity_type=entity_type, search=search, skip=skip, limit=limit,
+    )
+    return DocumentListResponse(items=[_to_response(d, current_user, access_service) for d in docs], total=total)
+
+
 @router.get("/{document_id}/download-url", response_model=DocumentDownloadResponse)
 def get_download_url(
     document_id: UUID,

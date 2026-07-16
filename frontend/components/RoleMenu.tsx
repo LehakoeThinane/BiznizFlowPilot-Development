@@ -73,6 +73,13 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["owner", "manager"],
   },
   {
+    label: "Documents",
+    icon: "folder",
+    href: "/documents",
+    matches: ["/documents"],
+    roles: ["owner", "manager", "staff"],
+  },
+  {
     label: "Activity",
     icon: "history",
     href: "/activity",
