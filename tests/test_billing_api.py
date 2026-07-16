@@ -1,26 +1,30 @@
 """API-level tests for the public billing routes - checkout start and the
-Stripe webhook receiver."""
+PayFast ITN receiver."""
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
-import stripe
+import pytest
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.integrations.payfast import build_signature
 from app.models.organization import Organization
+from app.models.pending_checkout import PendingCheckout
 from app.services.billing import BillingError
 
 
-class TestStartCheckout:
-    def test_returns_checkout_url(self, client, monkeypatch):
-        monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_fake")
-        monkeypatch.setattr(settings, "stripe_price_ids", {"starter": "price_123"})
+@pytest.fixture(autouse=True)
+def _configured_payfast(monkeypatch):
+    monkeypatch.setattr(settings, "payfast_passphrase", "jt7NOE43FZPn")
 
+
+class TestStartCheckout:
+    def test_returns_checkout_url(self, client):
         with patch(
             "app.api.billing.create_checkout_session",
-            return_value="https://checkout.stripe.com/pay/cs_test_xyz",
+            return_value="https://sandbox.payfast.co.za/eng/process?merchant_id=10000100",
         ):
             response = client.post(
                 "/api/v1/billing/checkout",
@@ -28,7 +32,7 @@ class TestStartCheckout:
             )
 
         assert response.status_code == 200
-        assert response.json() == {"checkout_url": "https://checkout.stripe.com/pay/cs_test_xyz"}
+        assert response.json() == {"checkout_url": "https://sandbox.payfast.co.za/eng/process?merchant_id=10000100"}
 
     def test_billing_error_returns_400(self, client):
         with patch(
@@ -51,105 +55,59 @@ class TestStartCheckout:
         assert response.status_code == 422
 
 
-class TestStripeWebhook:
-    def test_valid_checkout_completed_provisions_organization(self, client, test_db: Session):
-        fake_event = {
-            "type": "checkout.session.completed",
-            "data": {
-                "object": {
-                    "id": "cs_test_1",
-                    "customer": "cus_test_1",
-                    "metadata": {
-                        "org_name": "Webhook Co",
-                        "subsidiary_name": "Webhook Co",
-                        "primary_domain": "webhookco.com",
-                        "owner_email": "owner@webhookco.com",
-                        "plan_tier": "starter",
-                    },
-                }
-            },
-        }
+class TestPayfastItn:
+    def _pending(self, test_db: Session) -> PendingCheckout:
+        pending = PendingCheckout(
+            org_name="Webhook Co",
+            subsidiary_name="Webhook Co",
+            owner_email="owner@webhookco.com",
+            plan_tier="starter",
+        )
+        test_db.add(pending)
+        test_db.commit()
+        test_db.refresh(pending)
+        return pending
+
+    def test_valid_itn_provisions_organization(self, client, test_db: Session):
+        pending = self._pending(test_db)
+        fields = {"m_payment_id": str(pending.id), "amount_gross": "8750.00", "token": "tok_1"}
+        fields["signature"] = build_signature(fields, settings.payfast_passphrase)
+
         with (
-            patch("app.api.billing.verify_webhook", return_value=fake_event),
+            patch("app.services.billing.validate_source_ip", return_value=True),
+            patch("app.services.billing.confirm_with_payfast", return_value=True),
             patch("app.services.billing.send_invite_email"),
         ):
-            response = client.post(
-                "/api/v1/billing/webhook",
-                content=b"{}",
-                headers={"stripe-signature": "t=1,v1=fake"},
-            )
+            response = client.post("/api/v1/billing/payfast/notify", data=fields)
 
         assert response.status_code == 200
         assert response.json() == {"received": True}
-        org = test_db.query(Organization).filter(Organization.stripe_customer_id == "cus_test_1").first()
+        org = test_db.query(Organization).filter(Organization.payfast_token == "tok_1").first()
         assert org is not None
         assert org.name == "Webhook Co"
 
-    def test_invalid_signature_returns_400(self, client):
-        with patch(
-            "app.api.billing.verify_webhook",
-            side_effect=stripe.error.SignatureVerificationError("bad", "sig"),
-        ):
+    def test_rejected_itn_is_still_acknowledged_with_200(self, client, test_db: Session):
+        """A failed validation is logged and dropped, not surfaced as an
+        error - PayFast shouldn't retry-storm a spoofed/malformed ITN."""
+        with patch("app.services.billing.validate_source_ip", return_value=False):
             response = client.post(
-                "/api/v1/billing/webhook",
-                content=b"{}",
-                headers={"stripe-signature": "bad"},
-            )
-
-        assert response.status_code == 400
-
-    def test_unhandled_event_type_is_acknowledged_and_ignored(self, client, test_db: Session):
-        fake_event = {"type": "customer.subscription.updated", "data": {"object": {}}}
-        with patch("app.api.billing.verify_webhook", return_value=fake_event):
-            response = client.post(
-                "/api/v1/billing/webhook",
-                content=b"{}",
-                headers={"stripe-signature": "t=1,v1=fake"},
+                "/api/v1/billing/payfast/notify",
+                data={"m_payment_id": "does-not-matter", "signature": "x"},
             )
 
         assert response.status_code == 200
         assert response.json() == {"received": True}
 
-    def test_missing_metadata_returns_400(self, client, test_db: Session):
-        fake_event = {
-            "type": "checkout.session.completed",
-            "data": {"object": {"id": "cs_test_2", "customer": "cus_test_2", "metadata": {}}},
-        }
-        with patch("app.api.billing.verify_webhook", return_value=fake_event):
-            response = client.post(
-                "/api/v1/billing/webhook",
-                content=b"{}",
-                headers={"stripe-signature": "t=1,v1=fake"},
-            )
-
-        # Missing metadata raises BillingError inside handle_checkout_completed,
-        # which the route maps to 400 (a bad/incomplete event), not 500.
-        assert response.status_code == 400
-
     def test_unexpected_processing_error_returns_500(self, client, test_db: Session):
         """A genuine bug/transient failure (not a BillingError) maps to 500,
-        so Stripe's normal retry schedule kicks in instead of giving up."""
-        fake_event = {
-            "type": "checkout.session.completed",
-            "data": {
-                "object": {
-                    "id": "cs_test_3",
-                    "customer": "cus_test_3",
-                    "metadata": {
-                        "org_name": "Boom Co",
-                        "owner_email": "owner@boomco.com",
-                    },
-                }
-            },
-        }
-        with (
-            patch("app.api.billing.verify_webhook", return_value=fake_event),
-            patch("app.api.billing.handle_checkout_completed", side_effect=RuntimeError("db exploded")),
+        so PayFast's normal retry schedule kicks in instead of giving up."""
+        with patch(
+            "app.api.billing.verify_and_process_itn",
+            side_effect=RuntimeError("db exploded"),
         ):
             response = client.post(
-                "/api/v1/billing/webhook",
-                content=b"{}",
-                headers={"stripe-signature": "t=1,v1=fake"},
+                "/api/v1/billing/payfast/notify",
+                data={"m_payment_id": "does-not-matter", "signature": "x"},
             )
 
         assert response.status_code == 500

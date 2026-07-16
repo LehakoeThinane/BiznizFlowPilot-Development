@@ -111,16 +111,19 @@ class Settings(BaseSettings):
     # Frontend base URL (used in emails)
     frontend_url: str = "http://localhost:3000"
 
-    # Billing (Stripe) — self-serve signup: checkout success automatically
-    # provisions the Organization via a webhook. No safe fallback exists
-    # (like secret_key's dev default) because Stripe calls cannot be signed
-    # or verified without real API credentials from a Stripe account.
-    stripe_secret_key: str = ""
-    stripe_publishable_key: str = ""
-    stripe_webhook_secret: str = ""
-    # Maps a plan tier name to its Stripe Price ID (created in the Stripe
-    # Dashboard/API) - e.g. {"starter": "price_...", "professional": "price_..."}
-    stripe_price_ids: dict[str, str] = {}
+    # Billing (PayFast) — self-serve signup: checkout success automatically
+    # provisions the Organization via the ITN (PayFast's webhook). No safe
+    # fallback exists (like secret_key's dev default) because a checkout
+    # redirect cannot be signed without real merchant credentials.
+    payfast_merchant_id: str = ""
+    payfast_merchant_key: str = ""
+    payfast_passphrase: str = ""
+    payfast_sandbox: bool = True
+    # Mirrors the ZAR prices shown on the marketing site's pricing table
+    # (kept in sync by hand - the two repos have no shared source of truth).
+    # "enterprise" is deliberately absent: Custom pricing isn't self-serve
+    # checkout, so an unknown-tier lookup here is what blocks it server-side.
+    payfast_plan_prices: dict[str, str] = {"starter": "8750.00", "professional": "35000.00"}
 
     # Email delivery — set RESEND_API_KEY to use Resend; otherwise falls back to SMTP
     resend_api_key: str = ""
