@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.integrations.payfast import build_signature, confirm_with_payfast, payfast_host, validate_source_ip
-from app.models.pending_checkout import PendingCheckout
+from app.repositories.pending_checkout import PendingCheckoutRepository
 from app.schemas.billing import CheckoutRequest
 from app.services.email import send_invite_email
 from app.services.invitation import InvitationService
@@ -51,15 +51,12 @@ def create_checkout_session(db: Session, data: CheckoutRequest) -> str:
     if not amount:
         raise BillingError(f"Unknown plan tier: {data.plan_tier!r}")
 
-    pending = PendingCheckout(
+    pending = PendingCheckoutRepository(db).create(
         org_name=data.org_name,
         subsidiary_name=data.subsidiary_name or data.org_name,
         owner_email=data.owner_email,
         plan_tier=data.plan_tier,
     )
-    db.add(pending)
-    db.commit()
-    db.refresh(pending)
 
     fields = {
         "merchant_id": settings.payfast_merchant_id,
@@ -104,7 +101,7 @@ def verify_and_process_itn(db: Session, raw_body: bytes, fields: dict[str, str],
         m_payment_id = uuid.UUID(fields.get("m_payment_id", ""))
     except ValueError as exc:
         raise BillingError("Invalid m_payment_id") from exc
-    pending = db.query(PendingCheckout).filter(PendingCheckout.id == m_payment_id).first()
+    pending = PendingCheckoutRepository(db).get(m_payment_id)
     if pending is None:
         raise BillingError("No matching pending checkout")
 
