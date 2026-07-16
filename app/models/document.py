@@ -1,6 +1,6 @@
 """Document model - a file attached to any entity (lead, task, invoice, etc.)."""
 
-from sqlalchemy import BigInteger, Column, ForeignKey, Index, String, Uuid
+from sqlalchemy import BigInteger, Boolean, Column, ForeignKey, Index, String, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -49,6 +49,10 @@ class Document(BaseModel):
     content_type = Column(String(100), nullable=True, doc="MIME type")
     size_bytes = Column(BigInteger, nullable=False, doc="File size in bytes")
     storage_key = Column(String(500), nullable=False, unique=True, doc="R2 object key")
+    restricted = Column(
+        Boolean, nullable=False, default=False, server_default="false",
+        doc="When true, only the uploader/owner/manager and explicitly-approved users can view/download",
+    )
 
     uploader = relationship("User", foreign_keys=[uploaded_by])
 

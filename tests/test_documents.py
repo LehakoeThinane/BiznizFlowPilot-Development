@@ -68,6 +68,18 @@ class TestDocumentUpload:
         with pytest.raises(ValueError, match="empty"):
             service.upload(owner_user.business_id, owner_user, "lead", uuid4(), "empty.txt", b"", "text/plain")
 
+    def test_rejects_disallowed_extension(self, test_db: Session, owner_user: CurrentUser):
+        service = DocumentService(test_db)
+
+        with pytest.raises(ValueError, match="not allowed"):
+            service.upload(owner_user.business_id, owner_user, "lead", uuid4(), "virus.exe", b"data", "application/octet-stream")
+
+    def test_allows_expected_business_document_types(self, test_db: Session, owner_user: CurrentUser):
+        service = DocumentService(test_db)
+        for filename in ["report.pdf", "sheet.xlsx", "photo.jpg", "notes.txt", "archive.zip"]:
+            doc = service.upload(owner_user.business_id, owner_user, "lead", uuid4(), filename, b"data", "application/octet-stream")
+            assert doc.filename == filename
+
     def test_storage_failure_propagates(self, test_db: Session, owner_user: CurrentUser):
         service = DocumentService(test_db)
         with patch("app.services.document.object_storage.upload", side_effect=ObjectStorageError("boom")):

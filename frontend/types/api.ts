@@ -664,7 +664,23 @@ export interface BusinessDocument {
   filename: string;
   content_type: string | null;
   size_bytes: number;
+  restricted: boolean;
+  has_access: boolean;
   created_at: string;
+}
+
+export interface DocumentAccessRequest {
+  id: string;
+  document_id: string;
+  user_id: string;
+  status: "pending" | "approved" | "denied";
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+}
+
+export interface DocumentAccessRequestListResponse {
+  items: DocumentAccessRequest[];
 }
 
 export interface DocumentListResponse {
@@ -675,6 +691,19 @@ export interface DocumentListResponse {
 export interface DocumentDownloadResponse {
   url: string;
   expires_in: number;
+}
+
+export interface DocumentShareLink {
+  id: string;
+  document_id: string;
+  url: string;
+  created_by: string | null;
+  expires_at: string;
+  created_at: string;
+}
+
+export interface DocumentShareLinkListResponse {
+  items: DocumentShareLink[];
 }
 
 // ─── Org Chart ────────────────────────────────────────────────────────────

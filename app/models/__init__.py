@@ -26,6 +26,8 @@ from app.models.messaging import Conversation, ConversationParticipant, Message
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
 from app.models.document import Document
+from app.models.document_share_link import DocumentShareLink
+from app.models.document_access_request import DocumentAccessRequest
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
 from app.models.platform_admin import PlatformAdmin
@@ -73,6 +75,8 @@ __all__ = [
     "InvoiceLineItem",
     "Notification",
     "Document",
+    "DocumentShareLink",
+    "DocumentAccessRequest",
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",

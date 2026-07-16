@@ -7,6 +7,7 @@ Delete is restricted to the uploader themselves, or owner/manager.
 
 from __future__ import annotations
 
+import os
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -17,9 +18,19 @@ from app.integrations import object_storage
 from app.models.document import Document
 from app.repositories.document import DocumentRepository
 from app.schemas.auth import CurrentUser
+from app.services.document_access import DocumentAccessService
 from app.services.event import EventService
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25MB
+
+# Ordinary business-document types only - deliberately excludes anything
+# executable (.exe, .bat, .sh, .js, .msi, etc.) as a defense-in-depth
+# measure against uploading/distributing malware through the platform.
+ALLOWED_EXTENSIONS = {
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
+    ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
+    ".csv", ".txt", ".zip",
+}
 
 
 class DocumentService:
@@ -27,6 +38,7 @@ class DocumentService:
         self.db = db
         self.repo = DocumentRepository(db)
         self._event_service = EventService(db)
+        self._access_service = DocumentAccessService(db)
 
     def upload(
         self,
@@ -42,6 +54,11 @@ class DocumentService:
             raise ValueError(f"File exceeds the {MAX_UPLOAD_BYTES // (1024 * 1024)}MB upload limit")
         if not content:
             raise ValueError("File is empty")
+
+        extension = os.path.splitext(filename)[1].lower()
+        if extension not in ALLOWED_EXTENSIONS:
+            allowed = ", ".join(sorted(ALLOWED_EXTENSIONS))
+            raise ValueError(f"'{extension or 'unknown'}' files are not allowed. Allowed types: {allowed}")
 
         storage_key = object_storage.upload(business_id, entity_type, entity_id, filename, content, content_type or "")
 
@@ -80,7 +97,12 @@ class DocumentService:
         doc = self.repo.get(business_id=business_id, entity_id=document_id)
         if not doc:
             return None
+        if not self._access_service.has_access(doc, current_user):
+            raise PermissionError("This document is restricted - request access first")
         return object_storage.presigned_download_url(doc.storage_key, doc.filename)
+
+    def has_access(self, doc: Document, current_user: CurrentUser) -> bool:
+        return self._access_service.has_access(doc, current_user)
 
     def delete(self, business_id: UUID, current_user: CurrentUser, document_id: UUID) -> bool:
         doc = self.repo.get(business_id=business_id, entity_id=document_id)

@@ -32,3 +32,11 @@ class DocumentRepository(BaseRepository[Document]):
             .order_by(Document.created_at.desc())
             .all()
         )
+
+    def get_by_id_for_public_share(self, document_id: UUID) -> Document | None:
+        """🧨 The one sanctioned unscoped lookup on this model - used only by the
+        public, unauthenticated share-link redemption flow (DocumentShareService.
+        resolve_public_download), where a cryptographically random, unguessable
+        token has already been validated as the caller's sole credential in
+        place of a business_id. Never call this from any authenticated path."""
+        return self.db.query(Document).filter(Document.id == document_id).first()
