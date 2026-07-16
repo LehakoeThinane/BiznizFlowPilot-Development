@@ -28,6 +28,7 @@ from app.models.notification import Notification
 from app.models.document import Document
 from app.models.document_share_link import DocumentShareLink
 from app.models.document_access_request import DocumentAccessRequest
+from app.models.document_version import DocumentVersion
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
 from app.models.platform_admin import PlatformAdmin
@@ -77,6 +78,7 @@ __all__ = [
     "Document",
     "DocumentShareLink",
     "DocumentAccessRequest",
+    "DocumentVersion",
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",
