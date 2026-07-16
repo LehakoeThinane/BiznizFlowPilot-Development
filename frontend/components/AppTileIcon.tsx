@@ -40,6 +40,9 @@ const PATHS: Record<string, string> = {
   auto_awesome:
     "M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3Z M5 15.5l.9 2.1L8 18.5l-2.1.9L5 21.5l-.9-2.1L2 18.5l2.1-.9L5 15.5Z",
   bolt: "M13 2 4 14h6l-1 8 9-12h-6l1-8Z",
+  folder: "M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z",
+  description:
+    "M6 2h8l5 5v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z M14 2v5h5 M8 13h8 M8 17h5",
 };
 
 export function AppTileIcon({ name, className }: { name: string; className?: string }) {
