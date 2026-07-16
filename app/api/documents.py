@@ -18,9 +18,11 @@ from app.schemas.document import (
     DocumentListResponse,
     DocumentResponse,
     DocumentRestrictUpdate,
+    DocumentVersionListResponse,
 )
 from app.services.document import DocumentService
 from app.services.document_access import DocumentAccessService
+from app.services.document_checkout import DocumentCheckoutService
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -37,6 +39,9 @@ def _to_response(doc: Document, current_user: CurrentUser, access_service: Docum
         size_bytes=doc.size_bytes,
         restricted=doc.restricted,
         has_access=access_service.has_access(doc, current_user),
+        version=doc.version,
+        checked_out_by=doc.checked_out_by,
+        checked_out_at=doc.checked_out_at,
         created_at=doc.created_at,
     )
 
@@ -209,3 +214,104 @@ def deny_document_access_request(
     if not req:
         raise HTTPException(status_code=404, detail="Access request not found")
     return req
+
+
+@router.post("/{document_id}/checkout", response_model=DocumentResponse)
+def check_out_document(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Lock a document for editing - checkout-style, one editor at a time."""
+    try:
+        service = DocumentCheckoutService(db)
+        doc = service.check_out(current_user.business_id, current_user, document_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _to_response(doc, current_user, DocumentAccessService(db))
+
+
+@router.post("/{document_id}/checkout/cancel", response_model=DocumentResponse)
+def cancel_document_checkout(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Release a checkout without checking in a new version."""
+    try:
+        service = DocumentCheckoutService(db)
+        doc = service.cancel_checkout(current_user.business_id, current_user, document_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _to_response(doc, current_user, DocumentAccessService(db))
+
+
+@router.post("/{document_id}/checkin", response_model=DocumentResponse)
+async def check_in_document(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    """Upload a new version, archiving the current one, and release the checkout."""
+    content = await file.read()
+    try:
+        service = DocumentCheckoutService(db)
+        doc = service.check_in(
+            current_user.business_id, current_user, document_id,
+            file.filename or "upload", content, file.content_type,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _to_response(doc, current_user, DocumentAccessService(db))
+
+
+@router.get("/{document_id}/versions", response_model=DocumentVersionListResponse)
+def list_document_versions(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """List archived prior versions of a document, newest first."""
+    try:
+        versions = DocumentCheckoutService(db).list_versions(current_user.business_id, current_user, document_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    return DocumentVersionListResponse(items=versions)
+
+
+@router.get("/{document_id}/versions/{version_id}/download-url", response_model=DocumentDownloadResponse)
+def get_version_download_url(
+    document_id: UUID,
+    version_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Get a short-lived signed URL for downloading a specific prior version."""
+    try:
+        url = DocumentCheckoutService(db).get_version_download_url(
+            current_user.business_id, current_user, document_id, version_id,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    if not url:
+        raise HTTPException(status_code=404, detail="Version not found")
+    return DocumentDownloadResponse(url=url, expires_in=300)

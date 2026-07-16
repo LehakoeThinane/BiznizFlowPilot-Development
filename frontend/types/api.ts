@@ -666,7 +666,25 @@ export interface BusinessDocument {
   size_bytes: number;
   restricted: boolean;
   has_access: boolean;
+  version: number;
+  checked_out_by: string | null;
+  checked_out_at: string | null;
   created_at: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  document_id: string;
+  version_number: number;
+  uploaded_by: string | null;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number;
+  created_at: string;
+}
+
+export interface DocumentVersionListResponse {
+  items: DocumentVersion[];
 }
 
 export interface DocumentAccessRequest {

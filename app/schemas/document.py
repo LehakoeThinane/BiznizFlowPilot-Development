@@ -22,6 +22,9 @@ class DocumentResponse(BaseModel):
     size_bytes: int
     restricted: bool = False
     has_access: bool = True
+    version: int = 1
+    checked_out_by: Optional[UUID] = None
+    checked_out_at: Optional[datetime] = None
     created_at: datetime
 
 
@@ -57,3 +60,20 @@ class DocumentAccessRequestResponse(BaseModel):
 
 class DocumentAccessRequestListResponse(BaseModel):
     items: list[DocumentAccessRequestResponse]
+
+
+class DocumentVersionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    document_id: UUID
+    version_number: int
+    uploaded_by: Optional[UUID] = None
+    filename: str
+    content_type: Optional[str] = None
+    size_bytes: int
+    created_at: datetime
+
+
+class DocumentVersionListResponse(BaseModel):
+    items: list[DocumentVersionResponse]

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { apiRequest } from "@/lib/api";
-import { getStoredToken } from "@/lib/auth";
+import { getCurrentUser, getStoredToken } from "@/lib/auth";
 import type {
   BusinessDocument,
   BusinessEvent,
@@ -15,6 +15,8 @@ import type {
   DocumentListResponse,
   DocumentShareLink,
   DocumentShareLinkListResponse,
+  DocumentVersion,
+  DocumentVersionListResponse,
   EventListResponse,
 } from "@/types/api";
 
@@ -71,7 +73,13 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
   const [accessOpenDocId, setAccessOpenDocId] = useState<string | null>(null);
   const [accessRequests, setAccessRequests] = useState<Record<string, DocumentAccessRequest[]>>({});
   const [isManagingAccess, setIsManagingAccess] = useState(false);
+  const [versionsOpenDocId, setVersionsOpenDocId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<Record<string, DocumentVersion[]>>({});
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [checkinTargetDocId, setCheckinTargetDocId] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const checkinInputRef = useRef<HTMLInputElement>(null);
 
   const token = getStoredToken();
 
@@ -90,11 +98,13 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
       apiRequest<BusinessUserListResponse>("/api/v1/users?skip=0&limit=200", { authToken: token }).catch(
         () => ({ total: 0, items: [] }),
       ),
+      getCurrentUser().catch(() => null),
     ])
-      .then(([eventsResp, docsResp, usersResp]) => {
+      .then(([eventsResp, docsResp, usersResp, currentUser]) => {
         setEvents(eventsResp.items ?? []);
         setDocuments(docsResp.items ?? []);
         setUsers(usersResp.items ?? []);
+        setCurrentUserId(currentUser?.user_id ?? null);
       })
       .catch((e: unknown) => {
         setEvents([]);
@@ -316,8 +326,108 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
     }
   }
 
+  async function handleCheckOut(doc: BusinessDocument) {
+    setIsCheckingOut(true);
+    setError(null);
+    try {
+      const updated = await apiRequest<BusinessDocument>(`/api/v1/documents/${doc.id}/checkout`, {
+        method: "POST",
+        authToken: token,
+      });
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to check out document");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  }
+
+  async function handleCancelCheckout(doc: BusinessDocument) {
+    setIsCheckingOut(true);
+    setError(null);
+    try {
+      const updated = await apiRequest<BusinessDocument>(`/api/v1/documents/${doc.id}/checkout/cancel`, {
+        method: "POST",
+        authToken: token,
+      });
+      setDocuments((prev) => prev.map((d) => (d.id === doc.id ? updated : d)));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to cancel checkout");
+    } finally {
+      setIsCheckingOut(false);
+    }
+  }
+
+  function handleStartCheckin(doc: BusinessDocument) {
+    setCheckinTargetDocId(doc.id);
+    checkinInputRef.current?.click();
+  }
+
+  async function handleCheckinFileSelected(file: File | undefined) {
+    if (!file || !checkinTargetDocId) return;
+    setIsCheckingOut(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const updated = await apiRequest<BusinessDocument>(`/api/v1/documents/${checkinTargetDocId}/checkin`, {
+        method: "POST",
+        authToken: token,
+        body: formData,
+      });
+      setDocuments((prev) => prev.map((d) => (d.id === updated.id ? updated : d)));
+      if (versionsOpenDocId === updated.id) void loadVersions(updated.id);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to check in new version");
+    } finally {
+      setIsCheckingOut(false);
+      setCheckinTargetDocId(null);
+      if (checkinInputRef.current) checkinInputRef.current.value = "";
+    }
+  }
+
+  async function loadVersions(docId: string) {
+    try {
+      const resp = await apiRequest<DocumentVersionListResponse>(`/api/v1/documents/${docId}/versions`, {
+        authToken: token,
+      });
+      setVersions((prev) => ({ ...prev, [docId]: resp.items ?? [] }));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load version history");
+    }
+  }
+
+  function handleToggleVersions(doc: BusinessDocument) {
+    if (versionsOpenDocId === doc.id) {
+      setVersionsOpenDocId(null);
+      return;
+    }
+    setVersionsOpenDocId(doc.id);
+    void loadVersions(doc.id);
+  }
+
+  async function handleDownloadVersion(doc: BusinessDocument, versionId: string) {
+    setError(null);
+    try {
+      const { url } = await apiRequest<DocumentDownloadResponse>(
+        `/api/v1/documents/${doc.id}/versions/${versionId}/download-url`,
+        { authToken: token },
+      );
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to get download link for that version");
+    }
+  }
+
   return (
     <div>
+      <input
+        ref={checkinInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.svg,.csv,.txt,.zip"
+        className="hidden"
+        onChange={(e) => void handleCheckinFileSelected(e.target.files?.[0])}
+      />
       <div className="mb-2 flex items-center justify-between">
         <p className="text-xs uppercase tracking-wide text-muted">Attachments</p>
         <button
@@ -385,6 +495,49 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
                     {accessOpenDocId === doc.id ? "Hide access" : "Access"}
                   </button>
                 )}
+                {doc.checked_out_by ? (
+                  <>
+                    <span className="shrink-0 text-xs text-amber-400">
+                      {doc.checked_out_by === currentUserId ? "Checked out by you" : "Checked out"}
+                    </span>
+                    {doc.checked_out_by === currentUserId && (
+                      <button
+                        type="button"
+                        onClick={() => handleStartCheckin(doc)}
+                        disabled={isCheckingOut}
+                        className="shrink-0 rounded border border-border px-2 py-1 text-xs text-[#ccc] hover:bg-white/5 disabled:opacity-40"
+                      >
+                        Check in
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => void handleCancelCheckout(doc)}
+                      disabled={isCheckingOut}
+                      className="shrink-0 text-xs text-[#ccc] hover:text-white disabled:opacity-40"
+                    >
+                      Cancel checkout
+                    </button>
+                  </>
+                ) : (
+                  doc.has_access && (
+                    <button
+                      type="button"
+                      onClick={() => void handleCheckOut(doc)}
+                      disabled={isCheckingOut}
+                      className="shrink-0 rounded border border-border px-2 py-1 text-xs text-[#ccc] hover:bg-white/5 disabled:opacity-40"
+                    >
+                      Check out
+                    </button>
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleToggleVersions(doc)}
+                  className="shrink-0 text-xs text-[#8ab4f8] hover:text-[#a9c8ff]"
+                >
+                  v{doc.version}
+                </button>
                 <button
                   type="button"
                   onClick={() => handleToggleShare(doc)}
@@ -401,6 +554,29 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
                   Delete
                 </button>
               </div>
+
+              {versionsOpenDocId === doc.id && (
+                <div className="mt-2 space-y-2 border-t border-border pt-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-[#ddd]">Current: {doc.filename} (v{doc.version})</span>
+                  </div>
+                  {(versions[doc.id] ?? []).length === 0 ? (
+                    <p className="text-xs text-muted">No prior versions.</p>
+                  ) : (
+                    (versions[doc.id] ?? []).map((v) => (
+                      <button
+                        key={v.id}
+                        type="button"
+                        onClick={() => void handleDownloadVersion(doc, v.id)}
+                        className="flex w-full items-center justify-between gap-2 text-left text-xs text-[#ccc] hover:text-white hover:underline"
+                      >
+                        <span>v{v.version_number}: {v.filename}</span>
+                        <span className="shrink-0 text-muted">{formatTime(v.created_at)}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
 
               {accessOpenDocId === doc.id && (
                 <div className="mt-2 space-y-2 border-t border-border pt-2">

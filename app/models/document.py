@@ -1,6 +1,6 @@
 """Document model - a file attached to any entity (lead, task, invoice, etc.)."""
 
-from sqlalchemy import BigInteger, Boolean, Column, ForeignKey, Index, String, Uuid
+from sqlalchemy import BigInteger, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -54,7 +54,15 @@ class Document(BaseModel):
         doc="When true, only the uploader/owner/manager and explicitly-approved users can view/download",
     )
 
+    version = Column(Integer, nullable=False, default=1, server_default="1", doc="Current version number")
+    checked_out_by = Column(
+        Uuid, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+        doc="User currently editing this document (checkout-style locking) - null when not checked out",
+    )
+    checked_out_at = Column(DateTime(timezone=True), nullable=True)
+
     uploader = relationship("User", foreign_keys=[uploaded_by])
+    checked_out_user = relationship("User", foreign_keys=[checked_out_by])
 
     def __repr__(self) -> str:
         return f"<Document id={self.id} filename='{self.filename}'>"
