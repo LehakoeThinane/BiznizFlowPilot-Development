@@ -29,6 +29,7 @@ from app.models.document import Document
 from app.models.document_share_link import DocumentShareLink
 from app.models.document_access_request import DocumentAccessRequest
 from app.models.document_version import DocumentVersion
+from app.models.folder import Folder
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
 from app.models.platform_admin import PlatformAdmin
@@ -79,6 +80,7 @@ __all__ = [
     "DocumentShareLink",
     "DocumentAccessRequest",
     "DocumentVersion",
+    "Folder",
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",

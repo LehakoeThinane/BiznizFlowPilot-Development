@@ -687,6 +687,19 @@ export interface DocumentVersionListResponse {
   items: DocumentVersion[];
 }
 
+export interface BusinessFolder {
+  id: string;
+  business_id: string;
+  parent_folder_id: string | null;
+  name: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export interface FolderListResponse {
+  items: BusinessFolder[];
+}
+
 export interface DocumentAccessRequest {
   id: string;
   document_id: string;
