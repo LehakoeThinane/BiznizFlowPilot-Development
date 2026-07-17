@@ -22,6 +22,7 @@ from app.api import (
     documents,
     events,
     finance,
+    folders,
     hr,
     invites,
     inventory,
@@ -154,6 +155,7 @@ app.include_router(document_share.public_router)
 # plan/trial status, and upgrade.
 app.include_router(customers.router, dependencies=[Depends(require_active_trial)])
 app.include_router(documents.router, dependencies=[Depends(require_active_trial)])
+app.include_router(folders.router, dependencies=[Depends(require_active_trial)])
 app.include_router(document_share.router, dependencies=[Depends(require_active_trial)])
 app.include_router(events.router, dependencies=[Depends(require_active_trial)])
 app.include_router(leads.router, dependencies=[Depends(require_active_trial)])

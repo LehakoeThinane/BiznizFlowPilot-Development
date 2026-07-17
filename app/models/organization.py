@@ -71,16 +71,17 @@ class Organization(BaseModel):
         doc="Plan seat allowance for org-level rollup metering (schema placeholder, no enforcement logic yet)",
     )
 
-    stripe_customer_id = Column(
+    payfast_token = Column(
         String(255),
         nullable=True,
         unique=True,
         index=True,
-        doc="Stripe Customer ID from the checkout session that provisioned "
-            "this organization (self-serve signups only - null for "
-            "platform-admin-provisioned orgs). The uniqueness constraint is "
-            "what makes the checkout-completed webhook idempotent: a "
-            "redelivered event can't provision the same customer twice.",
+        doc="PayFast recurring-billing token from the checkout that "
+            "provisioned this organization (self-serve signups only - null "
+            "for platform-admin-provisioned orgs). The uniqueness "
+            "constraint is what makes the ITN handler idempotent: a "
+            "redelivered notification can't provision the same customer "
+            "twice.",
     )
 
     domains = relationship(

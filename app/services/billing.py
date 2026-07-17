@@ -1,24 +1,29 @@
-"""Billing service - Stripe checkout for self-serve signup, and the webhook
-handler that automatically provisions a new client Organization once payment
-succeeds.
+"""Billing service - PayFast checkout for self-serve signup, and the ITN
+(Instant Transaction Notification) handler that automatically provisions a
+new client Organization once payment succeeds.
 
 No owner password is collected at checkout - the owner sets their own
 credentials by accepting the same invite-token email used everywhere else in
 this codebase (see app/services/invitation.py), so BiznizFlowPilot never sees
 or sets a client's password, self-serve or not.
+
+PayFast has no server-side "session" object like Stripe's Checkout Session -
+checkout is a signed redirect to their hosted payment page, and the only way
+to carry our own context (org name, email, plan) across that redirect is a
+PendingCheckout row, looked back up by id when the ITN arrives.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
-
-import stripe
+import uuid
+from urllib.parse import urlencode
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.organization import Organization
+from app.integrations.payfast import build_signature, confirm_with_payfast, payfast_host, validate_source_ip
+from app.repositories.pending_checkout import PendingCheckoutRepository
 from app.schemas.billing import CheckoutRequest
 from app.services.email import send_invite_email
 from app.services.invitation import InvitationService
@@ -31,108 +36,105 @@ class BillingError(Exception):
     """Raised for a billing operation the caller should surface as an HTTP error."""
 
 
-def create_checkout_session(data: CheckoutRequest) -> str:
-    """Create a Stripe Checkout Session for a new subscription and return its URL.
+def create_checkout_session(db: Session, data: CheckoutRequest) -> str:
+    """Create a PendingCheckout row and return a signed PayFast redirect URL.
 
-    Company/owner details travel through as Checkout metadata, since the
-    webhook handler only receives the Stripe event - not this request - when
-    payment completes. primary_domain is derived from owner_email rather than
-    collected separately, so the owner's own eventual invite is guaranteed to
-    match the domain restriction it's checked against (see
+    primary_domain is derived from owner_email rather than collected
+    separately, so the owner's own eventual invite is guaranteed to match the
+    domain restriction it's checked against (see
     InvitationService.create_invitation / domain_is_authorized).
     """
-    if not settings.stripe_secret_key:
+    if not (settings.payfast_merchant_id and settings.payfast_merchant_key):
         raise BillingError("Billing is not configured")
 
-    price_id = settings.stripe_price_ids.get(data.plan_tier)
-    if not price_id:
+    amount = settings.payfast_plan_prices.get(data.plan_tier)
+    if not amount:
         raise BillingError(f"Unknown plan tier: {data.plan_tier!r}")
 
-    primary_domain = data.owner_email.rsplit("@", 1)[-1].lower()
-
-    stripe.api_key = settings.stripe_secret_key
-    try:
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": price_id, "quantity": 1}],
-            customer_email=data.owner_email,
-            success_url=f"{settings.frontend_url}/checkout/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{settings.frontend_url}/checkout/cancelled",
-            metadata={
-                "org_name": data.org_name,
-                "subsidiary_name": data.subsidiary_name or data.org_name,
-                "primary_domain": primary_domain,
-                "owner_email": data.owner_email,
-                "plan_tier": data.plan_tier,
-            },
-        )
-    except stripe.error.StripeError as exc:
-        logger.exception("billing.checkout.stripe_error")
-        raise BillingError(f"Could not start checkout: {exc}") from exc
-
-    if not session.url:
-        raise BillingError("Stripe did not return a checkout URL")
-    return session.url
-
-
-def verify_webhook(payload: bytes, sig_header: str) -> stripe.Event:
-    """Verify a Stripe webhook signature and return the parsed Event.
-
-    Raises stripe.error.SignatureVerificationError on an invalid/forged
-    signature - callers must map that to a 400, not a 500.
-    """
-    if not settings.stripe_webhook_secret:
-        raise BillingError("Webhook secret is not configured")
-    return stripe.Webhook.construct_event(payload, sig_header, settings.stripe_webhook_secret)
-
-
-def handle_checkout_completed(db: Session, session_data: dict[str, Any]) -> None:
-    """Provision the Organization for a completed self-serve checkout.
-
-    Idempotent: Stripe delivers webhooks at-least-once, so if an
-    Organization already exists for this Stripe customer (a redelivered
-    event), this is a no-op rather than a duplicate provision.
-    """
-    stripe_customer_id = session_data.get("customer")
-    metadata = session_data.get("metadata") or {}
-    org_name = metadata.get("org_name")
-    owner_email = metadata.get("owner_email")
-
-    if not stripe_customer_id or not org_name or not owner_email:
-        logger.error(
-            "billing.webhook.missing_metadata",
-            extra={"session_id": session_data.get("id")},
-        )
-        raise BillingError("Checkout session is missing required metadata")
-
-    existing = (
-        db.query(Organization)
-        .filter(Organization.stripe_customer_id == stripe_customer_id)
-        .first()
+    pending = PendingCheckoutRepository(db).create(
+        org_name=data.org_name,
+        subsidiary_name=data.subsidiary_name or data.org_name,
+        owner_email=data.owner_email,
+        plan_tier=data.plan_tier,
     )
-    if existing is not None:
-        logger.info(
-            "billing.webhook.duplicate_delivery",
-            extra={"stripe_customer_id": stripe_customer_id, "organization_id": str(existing.id)},
-        )
+
+    fields = {
+        "merchant_id": settings.payfast_merchant_id,
+        "merchant_key": settings.payfast_merchant_key,
+        "return_url": f"{settings.frontend_url}/checkout/success",
+        "cancel_url": f"{settings.frontend_url}/checkout/cancelled",
+        "notify_url": f"{settings.api_base_url}/api/v1/billing/payfast/notify",
+        "name_first": data.org_name,
+        "email_address": data.owner_email,
+        "m_payment_id": str(pending.id),
+        "amount": amount,
+        "item_name": f"BiznizFlowPilot - {data.plan_tier.title()} plan",
+        "subscription_type": "1",
+        "frequency": "3",  # monthly
+        "cycles": "0",  # indefinite, until cancelled
+    }
+    fields["signature"] = build_signature(fields, settings.payfast_passphrase)
+    return f"https://{payfast_host()}/eng/process?{urlencode(fields)}"
+
+
+def verify_and_process_itn(db: Session, raw_body: bytes, fields: dict[str, str], client_ip: str) -> None:
+    """Validate an incoming PayFast ITN and, if genuine and new, provision the
+    Organization it paid for.
+
+    Four checks, in PayFast's documented order - a failure at any step raises
+    BillingError, which the caller (app/api/billing.py) logs and acknowledges
+    with 200 rather than retrying, since a failed check here almost always
+    means a spoofed or malformed request rather than a transient failure.
+    """
+    received_signature = fields.get("signature", "")
+    signable_fields = {k: v for k, v in fields.items() if k != "signature"}
+    if build_signature(signable_fields, settings.payfast_passphrase) != received_signature:
+        raise BillingError("Signature mismatch")
+
+    if not validate_source_ip(client_ip):
+        raise BillingError(f"Untrusted source IP: {client_ip}")
+
+    if not confirm_with_payfast(raw_body):
+        raise BillingError("PayFast server confirmation failed")
+
+    try:
+        m_payment_id = uuid.UUID(fields.get("m_payment_id", ""))
+    except ValueError as exc:
+        raise BillingError("Invalid m_payment_id") from exc
+    pending = PendingCheckoutRepository(db).get(m_payment_id)
+    if pending is None:
+        raise BillingError("No matching pending checkout")
+
+    expected_amount = settings.payfast_plan_prices.get(pending.plan_tier)
+    try:
+        amounts_match = expected_amount is not None and abs(float(fields.get("amount_gross", 0)) - float(expected_amount)) < 0.01
+    except ValueError:
+        amounts_match = False
+    if not amounts_match:
+        raise BillingError("Amount mismatch")
+
+    if pending.status == "completed":
+        logger.info("billing.itn.duplicate_delivery", extra={"pending_checkout_id": str(pending.id)})
         return
 
     org_service = OrganizationService(db)
+    primary_domain = pending.owner_email.rsplit("@", 1)[-1].lower()
     shell = org_service.create_organization_shell(
-        org_name=org_name,
-        billing_email=owner_email,
-        subsidiary_name=metadata.get("subsidiary_name") or org_name,
-        primary_domain=metadata.get("primary_domain"),
-        plan_tier=metadata.get("plan_tier") or "starter",
+        org_name=pending.org_name,
+        billing_email=pending.owner_email,
+        subsidiary_name=pending.subsidiary_name or pending.org_name,
+        primary_domain=primary_domain,
+        plan_tier=pending.plan_tier,
     )
-    shell.organization.stripe_customer_id = stripe_customer_id
+    shell.organization.payfast_token = fields.get("token")
     shell.organization.subscription_status = "active"
+    pending.status = "completed"
     db.flush()
 
     invitation, raw_token = InvitationService(db).create_invitation(
         business_id=shell.business.id,
         organization_id=shell.organization.id,
-        email=owner_email,
+        email=pending.owner_email,
         role="owner",
         invited_by=None,
         inviter_role="system",
@@ -141,7 +143,7 @@ def handle_checkout_completed(db: Session, session_data: dict[str, Any]) -> None
 
     try:
         send_invite_email(
-            to_email=owner_email,
+            to_email=pending.owner_email,
             organization_name=shell.organization.name,
             business_name=shell.business.name,
             invited_by_name="BiznizFlowPilot",
@@ -152,11 +154,11 @@ def handle_checkout_completed(db: Session, session_data: dict[str, Any]) -> None
 
     db.commit()
     logger.info(
-        "billing.webhook.provisioned",
+        "billing.itn.provisioned",
         extra={
             "organization_id": str(shell.organization.id),
             "business_id": str(shell.business.id),
             "invitation_id": str(invitation.id),
-            "stripe_customer_id": stripe_customer_id,
+            "pending_checkout_id": str(pending.id),
         },
     )

@@ -55,6 +55,22 @@ class DocumentRepository(BaseRepository[Document]):
         items = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
         return items, total
 
+    def has_any_for_entity(self, business_id: UUID, entity_type: str, entity_id: UUID) -> bool:
+        """Whether any document is attached to this entity within business.
+
+        🧨 CRITICAL: Filters by business_id.
+        """
+        return (
+            self.db.query(Document.id)
+            .filter(
+                Document.business_id == business_id,
+                Document.entity_type == entity_type,
+                Document.entity_id == entity_id,
+            )
+            .first()
+            is not None
+        )
+
     def get_by_id_for_public_share(self, document_id: UUID) -> Document | None:
         """🧨 The one sanctioned unscoped lookup on this model - used only by the
         public, unauthenticated share-link redemption flow (DocumentShareService.
