@@ -7,11 +7,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.models.customer import Customer
-from app.models.meeting import Meeting
 from app.models.messaging import Conversation, Message
 from app.models.poll import Poll
 from app.models.user import User
+from app.repositories.customer import CustomerRepository
+from app.repositories.meeting import MeetingRepository
 from app.repositories.messaging import ConversationRepository
 from app.repositories.poll import PollRepository
 from app.schemas.auth import CurrentUser
@@ -58,6 +58,8 @@ class MessagingService:
         self.db = db
         self.repo = ConversationRepository(db)
         self.polls = PollRepository(db)
+        self.customers = CustomerRepository(db)
+        self.meetings = MeetingRepository(db)
 
     def get_or_create_direct_conversation(self, business_id: UUID, current_user: CurrentUser, other_user_id: UUID) -> Conversation:
         if other_user_id == current_user.user_id:
@@ -144,7 +146,7 @@ class MessagingService:
 
     def share_contact(self, business_id: UUID, current_user: CurrentUser, conversation_id: UUID, customer_id: UUID, caption: str | None = None) -> Message:
         self._require_participant(business_id, current_user, conversation_id)
-        customer = self.db.query(Customer).filter(Customer.id == customer_id, Customer.business_id == business_id).first()
+        customer = self.customers.get(business_id=business_id, entity_id=customer_id)
         if not customer:
             raise LookupError("Customer not found")
         message = self.repo.add_typed_message(conversation_id, current_user.user_id, "contact", content=caption, shared_customer_id=customer.id)
@@ -156,7 +158,7 @@ class MessagingService:
 
     def share_meeting(self, business_id: UUID, current_user: CurrentUser, conversation_id: UUID, meeting_id: UUID, caption: str | None = None) -> Message:
         self._require_participant(business_id, current_user, conversation_id)
-        meeting = self.db.query(Meeting).filter(Meeting.id == meeting_id, Meeting.business_id == business_id).first()
+        meeting = self.meetings.get(business_id=business_id, entity_id=meeting_id)
         if not meeting:
             raise LookupError("Meeting not found")
         is_organizer = meeting.organizer_id == current_user.user_id
