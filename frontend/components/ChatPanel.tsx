@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { STICKERS } from "@/lib/stickers";
 import type {
   ChatConversationDetail,
   ChatMessage,
@@ -72,13 +73,38 @@ export function ChatPanel() {
   });
   const [suggestions, setSuggestions] = useState<MentionSearchResult[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
+
+  useEffect(() => {
+    if (!showEmoji) return;
+    function handleClick(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) setShowEmoji(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showEmoji]);
+
+  function insertEmoji(emoji: string) {
+    const el = inputRef.current;
+    const start = el?.selectionStart ?? input.length;
+    const end = el?.selectionEnd ?? input.length;
+    const newVal = input.slice(0, start) + emoji + input.slice(end);
+    setInput(newVal);
+    setShowEmoji(false);
+    setTimeout(() => {
+      el?.focus();
+      const pos = start + emoji.length;
+      el?.setSelectionRange(pos, pos);
+    }, 0);
+  }
 
   // ── @mention detection ──────────────────────────────────────────────────
 
@@ -368,6 +394,31 @@ export function ChatPanel() {
           {/* Input */}
           <div className="border-t border-slate-200 p-3">
             <div className="flex items-end gap-2">
+              <div className="relative" ref={emojiRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowEmoji((v) => !v)}
+                  className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors"
+                  aria-label="Emoji and stickers"
+                >
+                  🙂
+                </button>
+                {showEmoji && (
+                  <div className="absolute bottom-full left-0 z-10 mb-2 grid max-h-48 w-56 grid-cols-6 gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                    {STICKERS.map((s) => (
+                      <button
+                        key={s.key}
+                        type="button"
+                        title={s.label}
+                        onClick={() => insertEmoji(s.emoji)}
+                        className="flex aspect-square items-center justify-center rounded-lg text-xl hover:bg-slate-100 transition-colors"
+                      >
+                        {s.emoji}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -380,11 +431,10 @@ export function ChatPanel() {
               <button
                 onClick={handleSend}
                 disabled={!input.trim() || isSending}
-                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand text-white hover:bg-brand/90 disabled:opacity-40 transition-colors"
+                aria-label="Send"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-brand text-white hover:bg-brand/90 disabled:bg-slate-200 disabled:text-slate-400 transition-colors"
               >
-                <svg className="h-4 w-4 rotate-90" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                </svg>
+                <span className="material-symbols-outlined text-[20px]">send</span>
               </button>
             </div>
           </div>

@@ -23,6 +23,8 @@ from app.models.finance import Expense, ExpenseCategory
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.messaging import Conversation, ConversationParticipant, Message
+from app.models.message_attachment import MessageAttachment
+from app.models.poll import Poll, PollOption, PollVote
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
 from app.models.document import Document
@@ -74,6 +76,10 @@ __all__ = [
     "Conversation",
     "ConversationParticipant",
     "Message",
+    "MessageAttachment",
+    "Poll",
+    "PollOption",
+    "PollVote",
     "Invoice",
     "InvoiceLineItem",
     "Notification",

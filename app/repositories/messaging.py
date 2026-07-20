@@ -88,6 +88,16 @@ class ConversationRepository(BaseRepository[Conversation]):
         self.db.add(message)
         return message
 
+    def add_typed_message(self, conversation_id: UUID, sender_id: UUID, message_type: str, content: str | None = None, **refs) -> Message:
+        """Create a non-text message (attachment/contact/event/poll/sticker).
+
+        `refs` carries whichever of attachment_id/shared_customer_id/
+        shared_meeting_id/poll_id/sticker_key applies to `message_type`.
+        """
+        message = Message(conversation_id=conversation_id, sender_id=sender_id, message_type=message_type, content=content, **refs)
+        self.db.add(message)
+        return message
+
     def unread_count_for_conversation(self, conversation_id: UUID, user_id: UUID, last_read_at: datetime | None) -> int:
         q = self.db.query(func.count(Message.id)).filter(
             Message.conversation_id == conversation_id,

@@ -4,7 +4,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { useUser } from "@/contexts/UserContext";
-import type { Conversation, ConversationListResponse, DirectMessage, MessageListResponse } from "@/types/api";
+import type { Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, Poll } from "@/types/api";
+import { AttachmentMenu, type AttachmentAction } from "@/components/messages/AttachmentMenu";
+import { AudioAttachModal } from "@/components/messages/AudioAttachModal";
+import { CameraCaptureModal } from "@/components/messages/CameraCaptureModal";
+import { ContactPickerModal } from "@/components/messages/ContactPickerModal";
+import { EventComposerModal } from "@/components/messages/EventComposerModal";
+import { MessageBubble } from "@/components/messages/MessageBubble";
+import { PollComposerModal } from "@/components/messages/PollComposerModal";
+import { StickerPickerModal } from "@/components/messages/StickerPickerModal";
+
+type ModalAction = Exclude<AttachmentAction, "document" | "media">;
 
 interface OrgUser { id: string; email: string; first_name: string; last_name: string }
 interface OrgUserListResp { items: OrgUser[]; total: number }
@@ -45,9 +55,15 @@ export default function MessagesPage() {
   const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
   const [startingWith, setStartingWith] = useState<string | null>(null);
 
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
+  const [activeModal, setActiveModal] = useState<ModalAction | null>(null);
+  const documentInputRef = useRef<HTMLInputElement>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimeRef = useRef<string | null>(null);
   const pollingRef = useRef(false);
+  const messagesRef = useRef<DirectMessage[]>([]);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
 
@@ -115,6 +131,35 @@ export default function MessagesPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  // Poll-type messages carry live vote tallies that only change via votes, not
+  // new messages - the `since`-based fetch above won't refresh them, so poll
+  // each currently-visible poll's tally on the same cadence separately.
+  useEffect(() => {
+    if (!selectedId) return;
+    const interval = setInterval(() => {
+      const pollIds = Array.from(
+        new Set(messagesRef.current.filter((m) => m.message_type === "poll" && m.poll).map((m) => m.poll!.id)),
+      );
+      if (pollIds.length === 0) return;
+      Promise.all(
+        pollIds.map((id) => apiRequest<Poll>(`/api/v1/messaging/polls/${id}`, { authToken: token }).catch(() => null)),
+      ).then((results) => {
+        setMessages((cur) =>
+          cur.map((m) => {
+            if (m.message_type !== "poll" || !m.poll) return m;
+            const updated = results.find((r) => r && r.id === m.poll!.id);
+            return updated ? { ...m, poll: updated } : m;
+          }),
+        );
+      });
+    }, 4_000);
+    return () => clearInterval(interval);
+  }, [selectedId, token]);
+
   function openNewMessage() {
     setShowNewMessage(true);
     apiRequest<OrgUserListResp>("/api/v1/users", { authToken: token })
@@ -162,6 +207,106 @@ export default function MessagesPage() {
       e.preventDefault();
       handleSend();
     }
+  }
+
+  function appendMessage(msg: DirectMessage) {
+    setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+    lastMessageTimeRef.current = msg.created_at;
+    void loadConversations();
+  }
+
+  function handleAttachmentAction(action: AttachmentAction) {
+    if (action === "document") documentInputRef.current?.click();
+    else if (action === "media") mediaInputRef.current?.click();
+    else setActiveModal(action);
+  }
+
+  function handleFileInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (file) void uploadAttachment(file);
+  }
+
+  async function uploadAttachment(file: File) {
+    if (!selectedId) return;
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/attachments`, {
+        method: "POST", authToken: token, body: formData,
+      });
+      appendMessage(msg);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to upload attachment.");
+    }
+  }
+
+  async function handleSelectContact(customer: Customer) {
+    if (!selectedId) return;
+    try {
+      const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/contacts`, {
+        method: "POST", authToken: token, body: { customer_id: customer.id },
+      });
+      appendMessage(msg);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to share contact.");
+    }
+  }
+
+  async function handleSendSticker(stickerKey: string) {
+    if (!selectedId) return;
+    try {
+      const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/stickers`, {
+        method: "POST", authToken: token, body: { sticker_key: stickerKey },
+      });
+      appendMessage(msg);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to send sticker.");
+    }
+  }
+
+  async function handleCreatePoll(question: string, options: string[], allowMultiple: boolean) {
+    if (!selectedId) throw new Error("No conversation selected.");
+    const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/polls`, {
+      method: "POST", authToken: token, body: { question, options, allow_multiple: allowMultiple },
+    });
+    appendMessage(msg);
+  }
+
+  async function handleVote(pollId: string, optionIds: string[]) {
+    try {
+      const poll = await apiRequest<Poll>(`/api/v1/messaging/polls/${pollId}/vote`, {
+        method: "POST", authToken: token, body: { option_ids: optionIds },
+      });
+      setMessages((prev) => prev.map((m) => (m.message_type === "poll" && m.poll?.id === pollId ? { ...m, poll } : m)));
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to vote.");
+    }
+  }
+
+  async function handleShareExistingEvent(meetingId: string) {
+    if (!selectedId) throw new Error("No conversation selected.");
+    const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/events/share`, {
+      method: "POST", authToken: token, body: { meeting_id: meetingId },
+    });
+    appendMessage(msg);
+  }
+
+  async function handleScheduleNewEvent(data: { title: string; description: string; start: string; end: string; call_type: MeetingCallType }) {
+    if (!selectedId) throw new Error("No conversation selected.");
+    const msg = await apiRequest<DirectMessage>(`/api/v1/messaging/conversations/${selectedId}/events/schedule`, {
+      method: "POST",
+      authToken: token,
+      body: {
+        title: data.title,
+        description: data.description.trim() || null,
+        start_time: new Date(data.start).toISOString(),
+        end_time: new Date(data.end).toISOString(),
+        call_type: data.call_type,
+        participant_user_ids: [],
+      },
+    });
+    appendMessage(msg);
   }
 
   return (
@@ -249,15 +394,7 @@ export default function MessagesPage() {
                   const isMine = m.sender_id === user?.user_id;
                   return (
                     <div key={m.id} className={`flex flex-col ${isMine ? "items-end" : "items-start"} gap-1`}>
-                      <div
-                        className={`max-w-[75%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm ${
-                          isMine
-                            ? "rounded-tr-sm bg-blue-600 text-white"
-                            : "rounded-tl-sm bg-white/10 text-slate-100"
-                        }`}
-                      >
-                        {m.content}
-                      </div>
+                      <MessageBubble message={m} isMine={isMine} onVote={handleVote} />
                       <span className="px-1 text-[10px] text-slate-500">{formatTime(m.created_at)}</span>
                     </div>
                   );
@@ -268,6 +405,24 @@ export default function MessagesPage() {
 
             <div className="border-t border-outline-variant p-3">
               <div className="flex items-end gap-2">
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setShowAttachmentMenu((v) => !v)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Attach"
+                  >
+                    <span className="material-symbols-outlined">add</span>
+                  </button>
+                  {showAttachmentMenu && (
+                    <AttachmentMenu
+                      onSelect={handleAttachmentAction}
+                      onClose={() => setShowAttachmentMenu(false)}
+                    />
+                  )}
+                  <input ref={documentInputRef} type="file" className="hidden" onChange={handleFileInputChange} />
+                  <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileInputChange} />
+                </div>
                 <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
@@ -280,12 +435,10 @@ export default function MessagesPage() {
                   type="button"
                   onClick={handleSend}
                   disabled={!input.trim() || sending}
-                  className="erp-button-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-xl p-0 disabled:opacity-40 transition-colors"
+                  className="erp-button-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-xl p-0 disabled:bg-slate-600 disabled:text-slate-400 disabled:shadow-none transition-colors"
                   aria-label="Send"
                 >
-                  <svg className="h-4 w-4 rotate-90" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                  </svg>
+                  <span className="material-symbols-outlined text-[20px]">send</span>
                 </button>
               </div>
             </div>
@@ -334,6 +487,30 @@ export default function MessagesPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {activeModal === "camera" && (
+        <CameraCaptureModal onSend={uploadAttachment} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal === "audio" && (
+        <AudioAttachModal onSend={uploadAttachment} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal === "contact" && (
+        <ContactPickerModal token={token} onSelect={handleSelectContact} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal === "poll" && (
+        <PollComposerModal onCreate={handleCreatePoll} onClose={() => setActiveModal(null)} />
+      )}
+      {activeModal === "event" && (
+        <EventComposerModal
+          token={token}
+          onShareExisting={handleShareExistingEvent}
+          onScheduleNew={handleScheduleNewEvent}
+          onClose={() => setActiveModal(null)}
+        />
+      )}
+      {activeModal === "sticker" && (
+        <StickerPickerModal onSelect={handleSendSticker} onClose={() => setActiveModal(null)} />
       )}
     </div>
   );

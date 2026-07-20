@@ -818,13 +818,62 @@ export interface ConversationListResponse {
   items: Conversation[];
 }
 
+export type MessageType = "text" | "document" | "image" | "video" | "audio" | "contact" | "poll" | "event" | "sticker";
+
+export interface MessageAttachment {
+  id: string;
+  filename: string;
+  content_type: string | null;
+  size_bytes: number;
+  kind: "document" | "image" | "video" | "audio";
+  download_url: string | null;
+}
+
+export interface SharedCustomer {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+}
+
+export interface SharedMeeting {
+  id: string;
+  title: string;
+  start_time: string;
+  end_time: string;
+  call_type: string;
+  status: string;
+}
+
+export interface PollOption {
+  id: string;
+  text: string;
+  vote_count: number;
+}
+
+export interface Poll {
+  id: string;
+  question: string;
+  allow_multiple: boolean;
+  options: PollOption[];
+  my_vote_option_ids: string[];
+  total_votes: number;
+}
+
 export interface DirectMessage {
   id: string;
   conversation_id: string;
   sender_id: string | null;
   sender_name: string;
-  content: string;
+  content: string | null;
+  message_type: MessageType;
   created_at: string;
+  attachment: MessageAttachment | null;
+  shared_customer: SharedCustomer | null;
+  shared_meeting: SharedMeeting | null;
+  poll: Poll | null;
+  sticker_key: string | null;
 }
 
 export interface MessageListResponse {
