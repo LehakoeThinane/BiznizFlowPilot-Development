@@ -36,6 +36,7 @@ docs/_build/
 
 # Virtual environments
 .venv
+.venv*/
 env/
 venv/
 ENV/
