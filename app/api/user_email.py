@@ -112,7 +112,7 @@ def set_email_account(
 def delete_email_account(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> None:
+):
     service = UserEmailAccountService(db)
     service.delete_account(current_user.business_id, current_user.user_id)
 
