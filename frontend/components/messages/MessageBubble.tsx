@@ -1,6 +1,6 @@
 "use client";
 
-import { stickerEmoji } from "@/lib/stickers";
+import { getStickerArt } from "@/components/stickers/StickerArt";
 import type { DirectMessage } from "@/types/api";
 
 function formatBytes(bytes: number) {
@@ -35,7 +35,10 @@ export function MessageBubble({
   }`;
 
   if (message.message_type === "sticker" && message.sticker_key) {
-    return <div className="text-5xl leading-none">{stickerEmoji(message.sticker_key)}</div>;
+    const art = getStickerArt(message.sticker_key);
+    if (!art) return <div className="text-sm italic text-slate-500">Sticker</div>;
+    const Icon = art.Icon;
+    return <Icon className="h-20 w-20" />;
   }
 
   if (message.message_type === "image" && message.attachment) {

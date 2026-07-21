@@ -19,12 +19,13 @@ from app.schemas.meeting import MeetingCreate
 from app.schemas.messaging import ConversationSummary, LastMessagePreview, OtherUser
 from app.services.meeting import MeetingService
 
-# Curated built-in sticker set - keys must match frontend/lib/stickers.ts exactly,
-# since the server validates against this list rather than trusting arbitrary strings.
+# Curated built-in sticker set - keys must match the STICKER_ART catalog in
+# frontend/components/stickers/StickerArt.tsx exactly, since the server
+# validates against this list rather than trusting arbitrary strings.
 STICKER_KEYS = {
-    "smile", "laugh", "heart", "thumbs_up", "thumbs_down", "fire", "clap", "party",
-    "wave", "thinking", "cry", "angry", "cool", "wink", "star", "check", "cross",
-    "hundred", "pray", "muscle", "eyes", "rocket", "clown", "ghost",
+    "heart", "fire", "star", "party_popper", "balloons", "trophy", "check_badge",
+    "crown", "rocket", "coffee_cup", "moon_stars", "sun", "lightning", "gift",
+    "music_note", "thumbs_up",
 }
 
 _TYPE_PREVIEW = {
