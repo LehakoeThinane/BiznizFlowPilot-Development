@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -12,14 +14,24 @@ from sqlalchemy.orm.exc import StaleDataError
 from app.core.config import settings
 from app.core.enums import EventType
 from app.core.exceptions import ConcurrencyConflictError
-from app.models.meeting import Meeting
+from app.models.meeting import Meeting, MeetingExternalParticipant
 from app.models.notification import Notification
-from app.models.user import User
 from app.repositories.meeting import MeetingRepository
+from app.repositories.user import UserRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.meeting import MeetingCreate, MeetingUpdate
+from app.services.email import send_meeting_cancelled_email, send_meeting_invite_email, send_meeting_update_email
+from app.utils.ics import build_meeting_ics
+from app.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 _AGORA_ROLE_PUBLISHER = 1
+_RSVP_TOKEN_VALIDITY_DAYS_AFTER_MEETING = 1
+
+
+def _hash_token(raw_token: str) -> str:
+    return hashlib.sha256(raw_token.encode()).hexdigest()
 
 
 def derive_agora_uid(user_id: UUID) -> int:
@@ -93,15 +105,16 @@ class MeetingService:
 
     def create(self, business_id: UUID, current_user: CurrentUser, data: MeetingCreate) -> Meeting:
         invitee_ids = set(data.participant_user_ids)
-        found = (
-            self.db.query(User.id)
-            .filter(User.business_id == business_id, User.id.in_(invitee_ids), User.is_active.is_(True))
-            .all()
-        )
-        found_ids = {row[0] for row in found}
+        found_users = UserRepository(self.db).list_active_by_ids(business_id, invitee_ids)
+        found_ids = {u.id for u in found_users}
+        internal_emails = {u.email.lower() for u in found_users if u.email}
         missing = invitee_ids - found_ids
         if missing:
             raise ValueError(f"Unknown or inactive user(s): {', '.join(str(m) for m in missing)}")
+
+        # Normalize + dedupe external emails, and drop any that already match
+        # an invited internal user - no double-inviting the same person.
+        external_emails = sorted({e.lower() for e in data.external_emails} - internal_emails)
 
         meeting_id = uuid4()
         meeting = Meeting(
@@ -125,6 +138,13 @@ class MeetingService:
                 continue
             self.repo.add_participant(meeting_id, user_id, response_status="pending")
 
+        expires_at = data.end_time + timedelta(days=_RSVP_TOKEN_VALIDITY_DAYS_AFTER_MEETING)
+        pending_invites: list[tuple[str, str]] = []  # (email, raw_token)
+        for email in external_emails:
+            raw_token = secrets.token_urlsafe(32)
+            self.repo.add_external_participant(meeting_id, email, _hash_token(raw_token), expires_at)
+            pending_invites.append((email, raw_token))
+
         self._notify_users(
             business_id, [uid for uid in invitee_ids if uid != current_user.user_id],
             "Meeting invite",
@@ -138,12 +158,43 @@ class MeetingService:
             entity_id=meeting.id,
             actor_id=current_user.user_id,
             description=f"Meeting scheduled: '{meeting.title}'",
-            data={"call_type": meeting.call_type, "participant_count": len(invitee_ids)},
+            data={
+                "call_type": meeting.call_type,
+                "participant_count": len(invitee_ids),
+                "external_participant_count": len(external_emails),
+            },
         )
 
         self.db.commit()
         self.db.refresh(meeting)
+
+        for email, raw_token in pending_invites:
+            try:
+                self._send_external_invite_email(meeting, current_user, email, raw_token)
+            except Exception:
+                logger.exception("Failed to send meeting invite email to %s", email)
+
         return meeting
+
+    def _rsvp_urls(self, raw_token: str) -> tuple[str, str]:
+        base = f"{settings.frontend_url}/meeting-rsvp/{raw_token}"
+        return f"{base}?action=accept", f"{base}?action=decline"
+
+    def _send_external_invite_email(
+        self, meeting: Meeting, organizer: CurrentUser, email: str, raw_token: str
+    ) -> None:
+        ics = build_meeting_ics(
+            meeting_id=meeting.id, title=meeting.title, description=meeting.description,
+            start_time=meeting.start_time, end_time=meeting.end_time,
+            organizer_email=organizer.email, organizer_name=organizer.full_name,
+            attendee_email=email, sequence=meeting.version, method="REQUEST",
+        )
+        accept_url, decline_url = self._rsvp_urls(raw_token)
+        send_meeting_invite_email(
+            to_email=email, meeting_title=meeting.title, start_time_str=meeting.start_time.isoformat(),
+            organizer_name=organizer.full_name, accept_url=accept_url, decline_url=decline_url,
+            ics_bytes=ics, db=self.db, organization_id=organizer.organization_id,
+        )
 
     def get(self, business_id: UUID, meeting_id: UUID) -> Meeting | None:
         return self.repo.get(business_id=business_id, entity_id=meeting_id)
@@ -188,6 +239,22 @@ class MeetingService:
                 data={"updated_fields": list(update_data.keys())},
             )
 
+        cancelled = data.status == "cancelled"
+        external_updates: list[tuple[MeetingExternalParticipant, str | None]] = []
+        if meeting.external_participants:
+            new_expires_at = meeting.end_time + timedelta(days=_RSVP_TOKEN_VALIDITY_DAYS_AFTER_MEETING)
+            for ext in meeting.external_participants:
+                raw_token = None
+                if not cancelled:
+                    # Mint a fresh token per update - the previous email's link
+                    # stops working, matching this app's "raw token only ever
+                    # exists in the email it was sent in" convention elsewhere
+                    # (see UserInvitation) rather than reusing a static link.
+                    raw_token = secrets.token_urlsafe(32)
+                    ext.token_hash = _hash_token(raw_token)
+                    ext.expires_at = new_expires_at
+                external_updates.append((ext, raw_token))
+
         try:
             self.db.commit()
         except StaleDataError as e:
@@ -196,7 +263,46 @@ class MeetingService:
                 "This meeting was changed by someone else - refresh and try again"
             ) from e
         self.db.refresh(meeting)
+
+        for ext, raw_token in external_updates:
+            try:
+                if cancelled:
+                    self._send_external_cancel_email(meeting, current_user, ext.email)
+                else:
+                    self._send_external_update_email(meeting, current_user, ext.email, raw_token)
+            except Exception:
+                logger.exception("Failed to send meeting %s email to %s", "cancellation" if cancelled else "update", ext.email)
+
         return meeting
+
+    def _send_external_update_email(
+        self, meeting: Meeting, organizer: CurrentUser, email: str, raw_token: str
+    ) -> None:
+        ics = build_meeting_ics(
+            meeting_id=meeting.id, title=meeting.title, description=meeting.description,
+            start_time=meeting.start_time, end_time=meeting.end_time,
+            organizer_email=organizer.email, organizer_name=organizer.full_name,
+            attendee_email=email, sequence=meeting.version, method="REQUEST",
+        )
+        accept_url, decline_url = self._rsvp_urls(raw_token)
+        send_meeting_update_email(
+            to_email=email, meeting_title=meeting.title, start_time_str=meeting.start_time.isoformat(),
+            organizer_name=organizer.full_name, accept_url=accept_url, decline_url=decline_url,
+            ics_bytes=ics, db=self.db, organization_id=organizer.organization_id,
+        )
+
+    def _send_external_cancel_email(self, meeting: Meeting, organizer: CurrentUser, email: str) -> None:
+        ics = build_meeting_ics(
+            meeting_id=meeting.id, title=meeting.title, description=meeting.description,
+            start_time=meeting.start_time, end_time=meeting.end_time,
+            organizer_email=organizer.email, organizer_name=organizer.full_name,
+            attendee_email=email, sequence=meeting.version, method="CANCEL",
+        )
+        send_meeting_cancelled_email(
+            to_email=email, meeting_title=meeting.title, start_time_str=meeting.start_time.isoformat(),
+            organizer_name=organizer.full_name, ics_bytes=ics,
+            db=self.db, organization_id=organizer.organization_id,
+        )
 
     def respond(self, business_id: UUID, current_user: CurrentUser, meeting_id: UUID, response_status: str) -> Meeting | None:
         meeting = self.repo.get(business_id=business_id, entity_id=meeting_id)
@@ -291,3 +397,32 @@ class MeetingService:
             "uid": uid,
             "expires_at": datetime.fromtimestamp(expire_ts, tz=timezone.utc),
         }
+
+    # ── External (no-login) RSVP ─────────────────────────────────────────
+    # Deliberately a separate code path from respond() above, not a reuse
+    # of it - respond() is keyed on (meeting_id, current_user.user_id) and
+    # this flow has no current_user at all; the token itself is the
+    # credential, exactly like InvitationService.validate_token.
+
+    def get_external_participant_by_token(self, raw_token: str) -> MeetingExternalParticipant:
+        """Raises ValueError if the token is invalid or expired."""
+        participant = self.repo.get_external_participant_by_token_hash(_hash_token(raw_token))
+        if not participant:
+            raise ValueError("Invalid or expired meeting invite link")
+
+        expires_at = participant.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            raise ValueError("Invalid or expired meeting invite link")
+
+        return participant
+
+    def respond_external(self, raw_token: str, response_status: str) -> MeetingExternalParticipant:
+        """Accept or decline an external meeting invite via its token. No auth required."""
+        participant = self.get_external_participant_by_token(raw_token)
+        participant.response_status = response_status
+        participant.responded_at = datetime.now(timezone.utc)
+        self.db.commit()
+        self.db.refresh(participant)
+        return participant

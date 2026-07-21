@@ -7,6 +7,7 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NotificationBell } from "@/components/NotificationBell";
 import { RoleMenu } from "@/components/RoleMenu";
+import { TrialBanner } from "@/components/TrialBanner";
 import { UserContext } from "@/contexts/UserContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { logout } from "@/lib/auth";
@@ -304,6 +305,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </div>
               </div>
             </header>
+
+            <TrialBanner />
 
             <main className="flex-1 overflow-y-auto p-4 md:p-6">
               {children}

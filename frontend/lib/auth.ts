@@ -53,3 +53,32 @@ export async function acceptInvite(payload: {
   setAccessToken(tokens.access_token);
   return tokens;
 }
+
+export async function signupTrial(payload: {
+  organization_name: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+}): Promise<TokenResponse> {
+  const tokens = await apiRequest<TokenResponse>("/api/v1/signup/trial", {
+    method: "POST",
+    body: payload,
+    _skipRefresh: true,
+  });
+  setAccessToken(tokens.access_token);
+  return tokens;
+}
+
+export async function signupTrialWithGoogle(payload: {
+  organization_name: string;
+  credential: string;
+}): Promise<TokenResponse> {
+  const tokens = await apiRequest<TokenResponse>("/api/v1/signup/trial/google", {
+    method: "POST",
+    body: payload,
+    _skipRefresh: true,
+  });
+  setAccessToken(tokens.access_token);
+  return tokens;
+}

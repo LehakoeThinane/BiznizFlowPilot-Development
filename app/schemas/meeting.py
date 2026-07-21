@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
 # ── Meetings ───────────────────────────────────────────────────────────────
@@ -17,12 +17,15 @@ class MeetingCreate(BaseModel):
     start_time: datetime
     end_time: datetime
     call_type: Literal["voice", "video"] = "video"
-    participant_user_ids: list[UUID] = Field(..., min_length=1)
+    participant_user_ids: list[UUID] = Field(default_factory=list)
+    external_emails: list[EmailStr] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="after")
     def _validate_times(self) -> "MeetingCreate":
         if self.end_time <= self.start_time:
             raise ValueError("end_time must be after start_time")
+        if not self.participant_user_ids and not self.external_emails:
+            raise ValueError("At least one internal participant or external email is required")
         return self
 
 
@@ -48,6 +51,13 @@ class MeetingParticipantOut(BaseModel):
     joined_at: datetime | None
 
 
+class MeetingExternalParticipantOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    email: str
+    response_status: str
+    responded_at: datetime | None
+
+
 class MeetingOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
@@ -62,6 +72,7 @@ class MeetingOut(BaseModel):
     status: str
     created_at: datetime
     participants: list[MeetingParticipantOut] = []
+    external_participants: list[MeetingExternalParticipantOut] = []
 
 
 class MeetingListResponse(BaseModel):
@@ -69,6 +80,22 @@ class MeetingListResponse(BaseModel):
     total: int
     skip: int
     limit: int
+
+
+# ── External (no-login) RSVP ─────────────────────────────────────────────────
+
+class MeetingRsvpDetailOut(BaseModel):
+    title: str
+    description: str | None
+    start_time: datetime
+    end_time: datetime
+    call_type: str
+    organizer_name: str = ""
+    response_status: str
+
+
+class MeetingRsvpRespondRequest(BaseModel):
+    response_status: Literal["accepted", "declined"]
 
 
 # ── Agora ──────────────────────────────────────────────────────────────────

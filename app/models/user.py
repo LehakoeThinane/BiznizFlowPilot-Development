@@ -90,6 +90,22 @@ class User(BaseModel):
         doc="Account locked until this UTC time after too many failed logins",
     )
 
+    auth_provider = Column(
+        String(20),
+        nullable=False,
+        default="password",
+        server_default="password",
+        doc="How this account authenticates: 'password' or 'google'",
+    )
+
+    google_sub = Column(
+        String(255),
+        nullable=True,
+        unique=True,
+        index=True,
+        doc="Google account subject ID, set for accounts created/linked via Google Sign-In",
+    )
+
     # Relationships
     business = relationship(
         "Business",

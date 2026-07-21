@@ -345,3 +345,101 @@ class TestPlatformCrossTenantIsolationFromDashboard:
             "/platform/v1/organizations", json=PROVISION_BODY, headers=_tenant_headers(owner_user)
         )
         assert r.status_code == 401
+
+
+class TestOrganizationEmailConfig:
+    EMAIL_CONFIG_BODY = {
+        "smtp_host": "smtp.office365.com",
+        "smtp_port": 587,
+        "smtp_username": "meetings@theircompany.com",
+        "smtp_password": "their-real-password",
+        "smtp_from_email": "meetings@theircompany.com",
+        "smtp_from_name": "Their Company",
+    }
+
+    def _create_org(self, client, headers) -> str:
+        return client.post("/platform/v1/organizations", json=PROVISION_BODY, headers=headers).json()["id"]
+
+    def test_get_email_config_defaults_to_unconfigured(self, client, platform_admin: PlatformAdmin):
+        headers = _platform_headers(platform_admin)
+        org_id = self._create_org(client, headers)
+        r = client.get(f"/platform/v1/organizations/{org_id}/email-config", headers=headers)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["smtp_host"] is None
+        assert body["smtp_password_set"] is False
+
+    def test_put_sets_config_and_never_echoes_password(self, client, platform_super_admin: PlatformAdmin):
+        headers = _platform_headers(platform_super_admin)
+        org_id = self._create_org(client, headers)
+        r = client.put(
+            f"/platform/v1/organizations/{org_id}/email-config",
+            json=self.EMAIL_CONFIG_BODY,
+            headers=headers,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["smtp_host"] == "smtp.office365.com"
+        assert body["smtp_password_set"] is True
+        assert "smtp_password" not in body
+        assert "their-real-password" not in str(body)
+
+    def test_put_with_null_password_leaves_existing_password_unchanged(
+        self, client, platform_super_admin: PlatformAdmin, test_db
+    ):
+        headers = _platform_headers(platform_super_admin)
+        org_id = self._create_org(client, headers)
+        client.put(f"/platform/v1/organizations/{org_id}/email-config", json=self.EMAIL_CONFIG_BODY, headers=headers)
+
+        # Re-save without a password (e.g. just changing the from name).
+        body = dict(self.EMAIL_CONFIG_BODY)
+        body.pop("smtp_password")
+        body["smtp_from_name"] = "Their Company Ltd"
+        r = client.put(f"/platform/v1/organizations/{org_id}/email-config", json=body, headers=headers)
+        assert r.status_code == 200
+        assert r.json()["smtp_password_set"] is True
+        assert r.json()["smtp_from_name"] == "Their Company Ltd"
+
+        # The originally-stored password still decrypts correctly.
+        from uuid import UUID
+
+        from app.core.crypto import decrypt_secret
+        from app.repositories.organization import OrganizationRepository
+
+        org = OrganizationRepository(test_db).get_by_id(UUID(org_id))
+        assert decrypt_secret(org.smtp_password_encrypted) == "their-real-password"
+
+    def test_delete_reverts_to_platform_default(self, client, platform_super_admin: PlatformAdmin):
+        headers = _platform_headers(platform_super_admin)
+        org_id = self._create_org(client, headers)
+        client.put(f"/platform/v1/organizations/{org_id}/email-config", json=self.EMAIL_CONFIG_BODY, headers=headers)
+
+        r = client.delete(f"/platform/v1/organizations/{org_id}/email-config", headers=headers)
+        assert r.status_code == 204
+
+        r2 = client.get(f"/platform/v1/organizations/{org_id}/email-config", headers=headers)
+        assert r2.json()["smtp_host"] is None
+        assert r2.json()["smtp_password_set"] is False
+
+    def test_non_admin_platform_role_cannot_set_email_config(self, client, platform_admin: PlatformAdmin):
+        """platform_admin fixture has the 'support' role - not admin/super_admin."""
+        headers = _platform_headers(platform_admin)
+        org_id = self._create_org(client, headers)
+        r = client.put(
+            f"/platform/v1/organizations/{org_id}/email-config",
+            json=self.EMAIL_CONFIG_BODY,
+            headers=headers,
+        )
+        assert r.status_code == 403
+
+    def test_non_admin_platform_role_cannot_clear_email_config(self, client, platform_admin: PlatformAdmin):
+        headers = _platform_headers(platform_admin)
+        org_id = self._create_org(client, headers)
+        r = client.delete(f"/platform/v1/organizations/{org_id}/email-config", headers=headers)
+        assert r.status_code == 403
+
+    def test_email_config_requires_platform_auth(self, client, platform_admin: PlatformAdmin):
+        headers = _platform_headers(platform_admin)
+        org_id = self._create_org(client, headers)
+        r = client.get(f"/platform/v1/organizations/{org_id}/email-config")
+        assert r.status_code == 401

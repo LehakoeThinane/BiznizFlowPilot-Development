@@ -84,6 +84,21 @@ class Organization(BaseModel):
             "twice.",
     )
 
+    # Per-org custom SMTP sender, configured by a platform admin at
+    # onboarding (see app/api/platform_admin.py's email-config routes).
+    # NULL means not configured - app/services/email.py falls back to the
+    # platform-wide Resend/SMTP settings in app/core/config.py.
+    smtp_host = Column(String(255), nullable=True, doc="Org's own SMTP relay host, e.g. smtp.office365.com")
+    smtp_port = Column(Integer, nullable=True, doc="465 => implicit SSL, anything else => STARTTLS")
+    smtp_username = Column(String(255), nullable=True)
+    smtp_password_encrypted = Column(
+        String(500),
+        nullable=True,
+        doc="Fernet ciphertext (app/core/crypto.py) - never the plaintext password.",
+    )
+    smtp_from_email = Column(String(255), nullable=True)
+    smtp_from_name = Column(String(255), nullable=True)
+
     domains = relationship(
         "OrganizationDomain",
         back_populates="organization",

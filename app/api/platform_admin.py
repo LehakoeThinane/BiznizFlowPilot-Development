@@ -28,6 +28,8 @@ from app.schemas.platform import (
     OrganizationAdminListResponse,
     OrganizationAdminResponse,
     OrganizationAdminUpdate,
+    OrganizationEmailConfigResponse,
+    OrganizationEmailConfigUpdate,
     OrganizationProvisionRequest,
     PlatformAdminCreate,
     PlatformAdminResponse,
@@ -526,6 +528,90 @@ def update_organization(
     db.refresh(org)
 
     return _org_to_admin_response(db, org)
+
+
+def _org_to_email_config_response(org: Organization) -> OrganizationEmailConfigResponse:
+    return OrganizationEmailConfigResponse(
+        smtp_host=org.smtp_host,
+        smtp_port=org.smtp_port,
+        smtp_username=org.smtp_username,
+        smtp_password_set=bool(org.smtp_password_encrypted),
+        smtp_from_email=org.smtp_from_email,
+        smtp_from_name=org.smtp_from_name,
+    )
+
+
+@router.get("/organizations/{organization_id}/email-config", response_model=OrganizationEmailConfigResponse)
+def get_organization_email_config(
+    organization_id: UUID,
+    _: Annotated[CurrentPlatformAdmin, Depends(get_current_platform_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> OrganizationEmailConfigResponse:
+    """View an organization's custom SMTP sender config - the password itself is never returned."""
+    org = OrganizationRepository(db).get_by_id(organization_id)
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    return _org_to_email_config_response(org)
+
+
+@router.put("/organizations/{organization_id}/email-config", response_model=OrganizationEmailConfigResponse)
+def set_organization_email_config(
+    organization_id: UUID,
+    body: OrganizationEmailConfigUpdate,
+    current_admin: Annotated[CurrentPlatformAdmin, Depends(require_platform_role("admin", "super_admin"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> OrganizationEmailConfigResponse:
+    """Set/replace an organization's custom SMTP sender - so its meeting
+    invites (and future business emails) come from the business's own
+    domain instead of the platform default. Requires admin/super_admin."""
+    service = OrganizationService(db)
+    org = service.set_email_config(
+        organization_id,
+        smtp_host=body.smtp_host,
+        smtp_port=body.smtp_port,
+        smtp_username=body.smtp_username,
+        smtp_password=body.smtp_password,
+        smtp_from_email=body.smtp_from_email,
+        smtp_from_name=body.smtp_from_name,
+    )
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    record_audit(
+        db,
+        current_admin.platform_admin_id,
+        "organization.email_config_updated",
+        target_type="organization",
+        target_id=org.id,
+        # Never include the password itself in the audit trail.
+        meta_data={"smtp_host": body.smtp_host, "smtp_from_email": body.smtp_from_email},
+    )
+
+    db.commit()
+    db.refresh(org)
+    return _org_to_email_config_response(org)
+
+
+@router.delete("/organizations/{organization_id}/email-config", status_code=status.HTTP_204_NO_CONTENT)
+def clear_organization_email_config(
+    organization_id: UUID,
+    current_admin: Annotated[CurrentPlatformAdmin, Depends(require_platform_role("admin", "super_admin"))],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    """Revert an organization to the platform-default email sender."""
+    service = OrganizationService(db)
+    org = service.clear_email_config(organization_id)
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    record_audit(
+        db,
+        current_admin.platform_admin_id,
+        "organization.email_config_cleared",
+        target_type="organization",
+        target_id=org.id,
+    )
+    db.commit()
 
 
 # ── Platform admin management ────────────────────────────────────────────────

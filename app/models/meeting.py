@@ -1,6 +1,6 @@
 """Meeting model - scheduled calls between users, with Agora-backed voice/video."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, Uuid
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -43,6 +43,9 @@ class Meeting(BaseModel):
 
     organizer    = relationship("User", foreign_keys=[organizer_id])
     participants = relationship("MeetingParticipant", back_populates="meeting", cascade="all, delete-orphan")
+    external_participants = relationship(
+        "MeetingExternalParticipant", back_populates="meeting", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<Meeting id={self.id} title='{self.title}' status='{self.status}'>"
@@ -67,3 +70,33 @@ class MeetingParticipant(BaseModel):
 
     def __repr__(self) -> str:
         return f"<MeetingParticipant meeting_id={self.meeting_id} user_id={self.user_id} status='{self.response_status}'>"
+
+
+class MeetingExternalParticipant(BaseModel):
+    """A person with no account, invited to a Meeting by raw email address.
+
+    Uniqueness is scoped per (meeting_id, email), not per business - unlike
+    UserInvitation, the same external address can legitimately be invited to
+    many unrelated meetings. RSVP happens via token_hash, with no login
+    (see app/api/meeting_rsvp.py) - the raw token only ever exists in the
+    invite email, exactly like UserInvitation.token_hash.
+    """
+
+    __tablename__ = "meeting_external_participants"
+    __table_args__ = (
+        UniqueConstraint("meeting_id", "email", name="uq_meeting_external_participants_meeting_email"),
+        Index("ix_meeting_external_participants_meeting", "meeting_id"),
+    )
+
+    meeting_id = Column(Uuid, ForeignKey("meetings.id", ondelete="CASCADE"), nullable=False, index=True)
+    email      = Column(String(255), nullable=False)
+    token_hash = Column(String(128), nullable=False, unique=True)
+
+    response_status = Column(String(20), nullable=False, server_default="pending", doc="pending | accepted | declined")
+    expires_at   = Column(DateTime(timezone=True), nullable=False)
+    responded_at = Column(DateTime(timezone=True), nullable=True)
+
+    meeting = relationship("Meeting", back_populates="external_participants")
+
+    def __repr__(self) -> str:
+        return f"<MeetingExternalParticipant meeting_id={self.meeting_id} email='{self.email}' status='{self.response_status}'>"

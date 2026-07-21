@@ -3,9 +3,11 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
+from app.core.crypto import encrypt_secret
 from app.models.business import Business
 from app.models.organization import Organization
 from app.repositories.organization import OrganizationRepository
@@ -99,3 +101,40 @@ class OrganizationService:
             sent += 1
 
         return sent
+
+    def set_email_config(
+        self,
+        organization_id: UUID,
+        smtp_host: str,
+        smtp_port: int,
+        smtp_username: str,
+        smtp_password: str | None,
+        smtp_from_email: str,
+        smtp_from_name: str,
+    ) -> Optional[Organization]:
+        """Set/replace an org's custom SMTP sender. smtp_password=None leaves
+        the already-stored (encrypted) password untouched - caller commits."""
+        org = self.org_repo.get_by_id(organization_id)
+        if not org:
+            return None
+        org.smtp_host = smtp_host
+        org.smtp_port = smtp_port
+        org.smtp_username = smtp_username
+        if smtp_password:
+            org.smtp_password_encrypted = encrypt_secret(smtp_password)
+        org.smtp_from_email = smtp_from_email
+        org.smtp_from_name = smtp_from_name
+        return org
+
+    def clear_email_config(self, organization_id: UUID) -> Optional[Organization]:
+        """Revert an org to the platform-default sender - caller commits."""
+        org = self.org_repo.get_by_id(organization_id)
+        if not org:
+            return None
+        org.smtp_host = None
+        org.smtp_port = None
+        org.smtp_username = None
+        org.smtp_password_encrypted = None
+        org.smtp_from_email = None
+        org.smtp_from_name = None
+        return org

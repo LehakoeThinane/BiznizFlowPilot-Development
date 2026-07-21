@@ -28,6 +28,7 @@ from app.api import (
     inventory,
     invoice,
     leads,
+    meeting_rsvp,
     meetings,
     messaging,
     metrics,
@@ -40,8 +41,10 @@ from app.api import (
     purchase_requisitions,
     sales_orders,
     search,
+    signup,
     suppliers,
     tasks,
+    user_email,
     users,
     workflow_definitions,
     workflows,
@@ -142,9 +145,15 @@ def health_check(db: Session = Depends(get_db)) -> dict:
 # Auth routes (no auth required)
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
 
+# Free-trial signup routes (no auth required — see app/api/signup.py docstring)
+app.include_router(signup.router, prefix=settings.api_v1_prefix)
+
 # Billing routes (no auth required — see app/api/billing.py docstring)
 app.include_router(billing.router)
 app.include_router(document_share.public_router)
+
+# Meeting RSVP (no auth required — see app/api/meeting_rsvp.py docstring)
+app.include_router(meeting_rsvp.public_router)
 
 # CRM routes (auth required)
 # require_active_trial: a no-op for every tier except an expired trial,
@@ -168,6 +177,9 @@ app.include_router(meetings.router, dependencies=[Depends(require_active_trial)]
 
 # Direct messaging (auth required)
 app.include_router(messaging.router, dependencies=[Depends(require_active_trial)])
+
+# Per-user email inbox (auth required, self-service)
+app.include_router(user_email.router, dependencies=[Depends(require_active_trial)])
 
 # Organization / subsidiary management (auth required, IT Admin for mutations)
 # Deliberately NOT gated by require_active_trial - the frontend needs this
@@ -210,8 +222,23 @@ app.include_router(platform_admin.router)
 # ============================================================================
 
 
-def _serialize_current_user(current_user: CurrentUser) -> dict:
-    """Normalize authenticated user response payload."""
+def _serialize_current_user(current_user: CurrentUser, db: Session) -> dict:
+    """Normalize authenticated user response payload.
+
+    Includes plan_tier/trial_ends_at so the frontend can show a trial-status
+    banner - resolved via organization_id exactly like app/core/entitlements.py
+    does, not stored on the JWT itself.
+    """
+    from app.repositories.organization import OrganizationRepository
+
+    plan_tier = None
+    trial_ends_at = None
+    if current_user.organization_id:
+        org = OrganizationRepository(db).get_by_id(current_user.organization_id)
+        if org:
+            plan_tier = org.plan_tier
+            trial_ends_at = org.trial_ends_at
+
     return {
         "user_id": current_user.user_id,
         "business_id": current_user.business_id,
@@ -219,22 +246,28 @@ def _serialize_current_user(current_user: CurrentUser) -> dict:
         "role": current_user.role,
         "full_name": current_user.full_name,
         "avatar_url": current_user.avatar_url,
+        "plan_tier": plan_tier,
+        "trial_ends_at": trial_ends_at,
     }
 
 
 @app.get(f"{settings.api_v1_prefix}/me")
-def get_current_user_info(current_user: CurrentUser = Depends(get_current_user)) -> dict:
+def get_current_user_info(
+    current_user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
+) -> dict:
     """Get current authenticated user information.
-    
+
     Protected route - requires valid JWT token.
     """
-    return _serialize_current_user(current_user)
+    return _serialize_current_user(current_user, db)
 
 
 @app.get(f"{settings.api_v1_prefix}/users/me")
-def get_current_user_info_compat(current_user: CurrentUser = Depends(get_current_user)) -> dict:
+def get_current_user_info_compat(
+    current_user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
+) -> dict:
     """Compatibility alias for deployments using /api/v1/users/me."""
-    return _serialize_current_user(current_user)
+    return _serialize_current_user(current_user, db)
 
 
 @app.patch(f"{settings.api_v1_prefix}/users/me")

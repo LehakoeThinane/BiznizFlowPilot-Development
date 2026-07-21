@@ -4,11 +4,26 @@ Priority order:
   1. Resend  — when RESEND_API_KEY is set in .env
   2. SMTP    — when smtp_host/smtp_username are configured
   3. Dev log — when neither is configured (logs to console)
+
+Every send_* function optionally accepts (db, organization_id): when that
+Organization has a custom SMTP sender configured (app/api/platform_admin.py's
+email-config routes), its credentials are used instead of the platform
+default, so tenant-facing emails (starting with meeting invites) can come
+from the business's own domain. An org with custom SMTP bypasses Resend
+entirely - the whole point of custom SMTP is sending as *their* domain,
+which Resend (sending from the platform's verified domain) can't do.
 """
 
+import base64
 import smtplib
+from dataclasses import dataclass
+from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from typing import NamedTuple
+from uuid import UUID
+
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.utils.logger import get_logger
@@ -23,28 +38,111 @@ _DEV_MODE = (
 )
 
 
-def _send(to: str, subject: str, html: str, plain: str) -> None:
-    if _DEV_MODE:
+class EmailAttachment(NamedTuple):
+    filename: str
+    content: bytes
+    mime_type: str
+
+
+@dataclass
+class _EmailConfig:
+    use_resend: bool
+    resend_api_key: str
+    smtp_host: str
+    smtp_port: int
+    smtp_username: str
+    smtp_password: str
+    smtp_use_ssl: bool
+    smtp_use_tls: bool
+    smtp_from_email: str
+    smtp_from_name: str
+    smtp_timeout_seconds: int
+    dev_mode: bool
+
+
+def _platform_default_config() -> _EmailConfig:
+    return _EmailConfig(
+        use_resend=_USE_RESEND,
+        resend_api_key=settings.resend_api_key,
+        smtp_host=settings.smtp_host,
+        smtp_port=settings.smtp_port,
+        smtp_username=settings.smtp_username,
+        smtp_password=settings.smtp_password,
+        smtp_use_ssl=settings.smtp_use_ssl,
+        smtp_use_tls=settings.smtp_use_tls,
+        smtp_from_email=settings.smtp_from_email,
+        smtp_from_name=settings.smtp_from_name,
+        smtp_timeout_seconds=settings.smtp_timeout_seconds,
+        dev_mode=_DEV_MODE,
+    )
+
+
+def _resolve_email_config(db: Session | None, organization_id: UUID | None) -> _EmailConfig:
+    """Use an org's own SMTP sender when fully configured, else the platform default."""
+    if db is not None and organization_id is not None:
+        from app.repositories.organization import OrganizationRepository
+
+        org = OrganizationRepository(db).get_by_id(organization_id)
+        if org and org.smtp_host and org.smtp_username and org.smtp_password_encrypted and org.smtp_from_email:
+            from app.core.crypto import decrypt_secret
+
+            port = org.smtp_port or 587
+            return _EmailConfig(
+                use_resend=False,
+                resend_api_key="",
+                smtp_host=org.smtp_host,
+                smtp_port=port,
+                smtp_username=org.smtp_username,
+                smtp_password=decrypt_secret(org.smtp_password_encrypted),
+                smtp_use_ssl=(port == 465),
+                smtp_use_tls=(port != 465),
+                smtp_from_email=org.smtp_from_email,
+                smtp_from_name=org.smtp_from_name or org.name,
+                smtp_timeout_seconds=settings.smtp_timeout_seconds,
+                dev_mode=False,
+            )
+    return _platform_default_config()
+
+
+def _send(
+    to: str,
+    subject: str,
+    html: str,
+    plain: str,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
+    attachments: list[EmailAttachment] | None = None,
+) -> None:
+    cfg = _resolve_email_config(db, organization_id)
+    if cfg.dev_mode:
         logger.info("DEV EMAIL — To: %s | Subject: %s\n%s", to, subject, plain)
+        if attachments:
+            logger.info("DEV EMAIL attachments: %s", [a.filename for a in attachments])
         return
 
-    if _USE_RESEND:
-        _send_via_resend(to, subject, html, plain)
+    if cfg.use_resend:
+        _send_via_resend(to, subject, html, plain, cfg, attachments)
     else:
-        _send_via_smtp(to, subject, html, plain)
+        _send_via_smtp(to, subject, html, plain, cfg, attachments)
 
 
-def _send_via_resend(to: str, subject: str, html: str, plain: str) -> None:
+def _send_via_resend(
+    to: str, subject: str, html: str, plain: str, cfg: _EmailConfig, attachments: list[EmailAttachment] | None
+) -> None:
     import resend as resend_sdk
 
-    resend_sdk.api_key = settings.resend_api_key
+    resend_sdk.api_key = cfg.resend_api_key
     params: resend_sdk.Emails.SendParams = {
-        "from": f"{settings.smtp_from_name} <{settings.smtp_from_email}>",
+        "from": f"{cfg.smtp_from_name} <{cfg.smtp_from_email}>",
         "to": [to],
         "subject": subject,
         "html": html,
         "text": plain,
     }
+    if attachments:
+        params["attachments"] = [
+            {"filename": a.filename, "content": base64.b64encode(a.content).decode()} for a in attachments
+        ]
     try:
         result = resend_sdk.Emails.send(params)
         logger.info("Email sent via Resend — id: %s to: %s", result.get("id"), to)
@@ -53,26 +151,40 @@ def _send_via_resend(to: str, subject: str, html: str, plain: str) -> None:
         raise
 
 
-def _send_via_smtp(to: str, subject: str, html: str, plain: str) -> None:
-    msg = MIMEMultipart("alternative")
+def _send_via_smtp(
+    to: str, subject: str, html: str, plain: str, cfg: _EmailConfig, attachments: list[EmailAttachment] | None
+) -> None:
+    body = MIMEMultipart("alternative")
+    body.attach(MIMEText(plain, "plain"))
+    body.attach(MIMEText(html, "html"))
+
+    if attachments:
+        msg = MIMEMultipart("mixed")
+        msg.attach(body)
+        for a in attachments:
+            maintype, _, subtype = a.mime_type.partition("/")
+            part = MIMEApplication(a.content, _subtype=subtype or "octet-stream")
+            part.add_header("Content-Disposition", "attachment", filename=a.filename)
+            msg.attach(part)
+    else:
+        msg = body
+
     msg["Subject"] = subject
-    msg["From"] = f"{settings.smtp_from_name} <{settings.smtp_from_email}>"
+    msg["From"] = f"{cfg.smtp_from_name} <{cfg.smtp_from_email}>"
     msg["To"] = to
-    msg.attach(MIMEText(plain, "plain"))
-    msg.attach(MIMEText(html, "html"))
 
     try:
-        if settings.smtp_use_ssl:
-            with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout_seconds) as smtp:
-                if settings.smtp_username:
-                    smtp.login(settings.smtp_username, settings.smtp_password)
+        if cfg.smtp_use_ssl:
+            with smtplib.SMTP_SSL(cfg.smtp_host, cfg.smtp_port, timeout=cfg.smtp_timeout_seconds) as smtp:
+                if cfg.smtp_username:
+                    smtp.login(cfg.smtp_username, cfg.smtp_password)
                 smtp.send_message(msg)
         else:
-            with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=settings.smtp_timeout_seconds) as smtp:
-                if settings.smtp_use_tls:
+            with smtplib.SMTP(cfg.smtp_host, cfg.smtp_port, timeout=cfg.smtp_timeout_seconds) as smtp:
+                if cfg.smtp_use_tls:
                     smtp.starttls()
-                if settings.smtp_username:
-                    smtp.login(settings.smtp_username, settings.smtp_password)
+                if cfg.smtp_username:
+                    smtp.login(cfg.smtp_username, cfg.smtp_password)
                 smtp.send_message(msg)
     except Exception:
         logger.exception("SMTP failed to deliver email to %s", to)
@@ -263,3 +375,116 @@ def send_trial_reminder_email(to_email: str, org_name: str, days_remaining: int)
 </html>
 """
     _send(to_email, subject, html, plain)
+
+
+def _meeting_email(
+    to_email: str,
+    subject: str,
+    heading: str,
+    body_lines_plain: str,
+    body_html: str,
+    accept_url: str | None,
+    decline_url: str | None,
+    ics_bytes: bytes,
+    ics_method: str,
+    db: Session | None,
+    organization_id: UUID | None,
+) -> None:
+    plain = f"{heading}\n\n{body_lines_plain}\n"
+    if accept_url and decline_url:
+        plain += f"\nAccept: {accept_url}\nDecline: {decline_url}\n"
+    plain += "\n— BiznizFlowPilot"
+
+    rsvp_buttons_html = ""
+    if accept_url and decline_url:
+        rsvp_buttons_html = f"""
+    <div style="margin-top:16px">
+      <a href="{accept_url}"
+         style="display:inline-block;background:#059669;color:#fff;font-weight:600;font-size:14px;
+                padding:10px 20px;border-radius:6px;text-decoration:none;margin-right:12px">
+        Accept
+      </a>
+      <a href="{decline_url}"
+         style="display:inline-block;background:#374151;color:#fff;font-weight:600;font-size:14px;
+                padding:10px 20px;border-radius:6px;text-decoration:none">
+        Decline
+      </a>
+    </div>"""
+
+    html = f"""
+<!DOCTYPE html>
+<html>
+<body style="font-family:sans-serif;background:#0a0a0a;color:#e5e5e5;padding:32px">
+  <div style="max-width:480px;margin:0 auto;background:#141414;border:1px solid #222;border-radius:12px;padding:32px">
+    <h2 style="color:#fff;margin:0 0 8px">{heading}</h2>
+    <p style="color:#888;font-size:14px;margin:0 0 8px;white-space:pre-line">{body_html}</p>
+    {rsvp_buttons_html}
+    <p style="color:#555;font-size:12px;margin:16px 0 0">
+      A calendar invite is attached - add it to Google Calendar, Outlook, or Apple Calendar.
+    </p>
+  </div>
+</body>
+</html>
+"""
+    attachment = EmailAttachment(
+        filename="invite.ics", content=ics_bytes, mime_type=f"text/calendar; method={ics_method}"
+    )
+    _send(to_email, subject, html, plain, db=db, organization_id=organization_id, attachments=[attachment])
+
+
+def send_meeting_invite_email(
+    to_email: str,
+    meeting_title: str,
+    start_time_str: str,
+    organizer_name: str,
+    accept_url: str,
+    decline_url: str,
+    ics_bytes: bytes,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
+) -> None:
+    subject = f"Meeting invite: {meeting_title}"
+    body_plain = f"{organizer_name} has invited you to a meeting.\n\nWhen: {start_time_str}"
+    body_html = f"{organizer_name} has invited you to a meeting.<br>When: {start_time_str}"
+    _meeting_email(
+        to_email, subject, f"You're invited: {meeting_title}", body_plain, body_html,
+        accept_url, decline_url, ics_bytes, "REQUEST", db, organization_id,
+    )
+
+
+def send_meeting_update_email(
+    to_email: str,
+    meeting_title: str,
+    start_time_str: str,
+    organizer_name: str,
+    accept_url: str,
+    decline_url: str,
+    ics_bytes: bytes,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
+) -> None:
+    subject = f"Meeting updated: {meeting_title}"
+    body_plain = f"{organizer_name} has updated this meeting.\n\nNew time: {start_time_str}"
+    body_html = f"{organizer_name} has updated this meeting.<br>New time: {start_time_str}"
+    _meeting_email(
+        to_email, subject, f"Meeting updated: {meeting_title}", body_plain, body_html,
+        accept_url, decline_url, ics_bytes, "REQUEST", db, organization_id,
+    )
+
+
+def send_meeting_cancelled_email(
+    to_email: str,
+    meeting_title: str,
+    start_time_str: str,
+    organizer_name: str,
+    ics_bytes: bytes,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
+) -> None:
+    subject = f"Meeting cancelled: {meeting_title}"
+    body_plain = f"{organizer_name} has cancelled this meeting.\n\nWas scheduled: {start_time_str}"
+    body_html = f"{organizer_name} has cancelled this meeting.<br>Was scheduled: {start_time_str}"
+    _meeting_email(
+        to_email, subject, f"Meeting cancelled: {meeting_title}", body_plain, body_html,
+        None, None, ics_bytes, "CANCEL", db, organization_id,
+    )

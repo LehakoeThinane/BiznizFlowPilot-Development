@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { FinanceSubNav } from "@/components/FinanceSubNav";
 
 interface PayslipOut {
   id: string;
@@ -67,6 +68,7 @@ export default function PayrollPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <FinanceSubNav />
       <PageHeader title="Payroll" subtitle="Monthly payroll periods" />
 
       <div className="flex gap-6">

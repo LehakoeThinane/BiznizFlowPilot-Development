@@ -5,16 +5,14 @@ import { usePathname } from "next/navigation";
 
 const TABS = [
   { label: "Leads", href: "/leads" },
-  { label: "Tasks", href: "/tasks" },
-  { label: "Invoices", href: "/invoices" },
   { label: "Sales Orders", href: "/sales-orders" },
-  { label: "Purchase Orders", href: "/purchase-orders" },
-  { label: "Requisitions", href: "/purchase-requisitions" },
 ];
 
 /** Sub-navigation shown on every page inside the "Sales & CRM" sidebar
- * section, so switching between Leads/Tasks/Invoices/Orders doesn't require
- * going back to the Home page's tile grid first. */
+ * section, so switching between Leads/Sales Orders doesn't require going
+ * back to the Home page's tile grid first. Tasks, Invoices, and the
+ * purchasing pages moved to their own hubs (Inventory & Supply / Finance /
+ * Purchasing) and are no longer members of this sub-nav. */
 export function SalesCrmSubNav() {
   const pathname = usePathname();
 

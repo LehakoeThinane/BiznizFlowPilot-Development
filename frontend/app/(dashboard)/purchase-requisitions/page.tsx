@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
-import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
+import { PurchasingSubNav } from "@/components/PurchasingSubNav";
 import type {
   PurchaseRequisition,
   PurchaseRequisitionListResponse,
@@ -228,7 +228,7 @@ export default function PurchaseRequisitionsPage() {
 
   return (
     <div className="space-y-6">
-      <SalesCrmSubNav />
+      <PurchasingSubNav />
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

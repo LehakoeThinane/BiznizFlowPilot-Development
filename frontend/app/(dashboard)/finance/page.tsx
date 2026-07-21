@@ -5,6 +5,7 @@ import { apiRequest, downloadFile } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Pagination } from "@/components/Pagination";
+import { FinanceSubNav } from "@/components/FinanceSubNav";
 
 const PAGE_SIZE = 20;
 
@@ -238,6 +239,7 @@ export default function FinancePage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <FinanceSubNav />
       {/* ── Header ── */}
       <div className="flex items-center justify-between">
         <PageHeader title="Finance" subtitle={summary?.period_label ?? ""} />

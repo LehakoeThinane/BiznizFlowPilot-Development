@@ -35,6 +35,7 @@ from app.models.folder import Folder
 from app.models.pending_checkout import PendingCheckout
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
+from app.models.user_email import UserEmailAccount
 from app.models.platform_admin import PlatformAdmin
 from app.models.platform_audit_log import PlatformAuditLog
 
@@ -92,6 +93,7 @@ __all__ = [
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",
+    "UserEmailAccount",
     "PlatformAdmin",
     "PlatformAuditLog",
 ]
