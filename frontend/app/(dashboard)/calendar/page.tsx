@@ -103,10 +103,13 @@ interface ScheduleForm {
   end: string;
   call_type: MeetingCallType;
   participant_user_ids: string[];
+  external_emails: string[];
 }
 const EMPTY_SCHEDULE: ScheduleForm = {
-  title: "", description: "", start: "", end: "", call_type: "video", participant_user_ids: [],
+  title: "", description: "", start: "", end: "", call_type: "video", participant_user_ids: [], external_emails: [],
 };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const INPUT = "erp-input w-full px-3 py-2 text-sm";
 const SELECT = `${INPUT} appearance-none [&>option]:bg-[#0f1c33] [&>option]:text-white`;
@@ -128,6 +131,7 @@ export default function CalendarPage() {
   const [scheduleForm, setScheduleForm] = useState<ScheduleForm>(EMPTY_SCHEDULE);
   const [scheduling, setScheduling] = useState(false);
   const [scheduleError, setScheduleError] = useState("");
+  const [externalEmailInput, setExternalEmailInput] = useState("");
 
   const [activeCall, setActiveCall] = useState<{ meetingId: string; callType: MeetingCallType; isOrganizer: boolean } | null>(null);
   const [incomingCalls, setIncomingCalls] = useState<Meeting[]>([]);
@@ -193,10 +197,27 @@ export default function CalendarPage() {
     }));
   }
 
+  function addExternalEmail() {
+    const email = externalEmailInput.trim().toLowerCase();
+    if (!email || !EMAIL_RE.test(email)) return;
+    if (orgUsers.some((u) => u.email.toLowerCase() === email)) return;
+    setScheduleForm((f) => (
+      f.external_emails.includes(email) ? f : { ...f, external_emails: [...f.external_emails, email] }
+    ));
+    setExternalEmailInput("");
+  }
+
+  function removeExternalEmail(email: string) {
+    setScheduleForm((f) => ({ ...f, external_emails: f.external_emails.filter((e) => e !== email) }));
+  }
+
   async function handleSchedule(e: React.FormEvent) {
     e.preventDefault();
-    if (!scheduleForm.title.trim() || !scheduleForm.start || !scheduleForm.end || scheduleForm.participant_user_ids.length === 0) {
-      setScheduleError("Title, start/end time, and at least one attendee are required.");
+    if (
+      !scheduleForm.title.trim() || !scheduleForm.start || !scheduleForm.end ||
+      (scheduleForm.participant_user_ids.length === 0 && scheduleForm.external_emails.length === 0)
+    ) {
+      setScheduleError("Title, start/end time, and at least one attendee or external email are required.");
       return;
     }
     setScheduling(true);
@@ -212,10 +233,12 @@ export default function CalendarPage() {
           end_time: new Date(scheduleForm.end).toISOString(),
           call_type: scheduleForm.call_type,
           participant_user_ids: scheduleForm.participant_user_ids,
+          external_emails: scheduleForm.external_emails,
         },
       });
       setShowScheduleModal(false);
       setScheduleForm(EMPTY_SCHEDULE);
+      setExternalEmailInput("");
       void load();
     } catch (err: unknown) {
       setScheduleError(err instanceof Error ? err.message : "Failed to schedule meeting.");
@@ -590,6 +613,51 @@ export default function CalendarPage() {
                       ))
                     )}
                   </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-400">
+                    Invite by email <span className="font-normal text-slate-500">(no account needed)</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={externalEmailInput}
+                      onChange={(e) => setExternalEmailInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addExternalEmail(); } }}
+                      placeholder="someone@theircompany.com"
+                      className={INPUT}
+                    />
+                    <button
+                      type="button"
+                      onClick={addExternalEmail}
+                      className="shrink-0 rounded-lg border border-outline-variant/60 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  {scheduleForm.external_emails.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {scheduleForm.external_emails.map((email) => (
+                        <span
+                          key={email}
+                          className="flex items-center gap-1 rounded-full bg-violet-600/20 px-2.5 py-1 text-xs text-violet-200"
+                        >
+                          {email}
+                          <button
+                            type="button"
+                            onClick={() => removeExternalEmail(email)}
+                            className="text-violet-300 hover:text-white"
+                            aria-label={`Remove ${email}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    They&apos;ll get an email invite with a calendar file and an accept/decline link.
+                  </p>
                 </div>
                 {scheduleError && (
                   <p className="rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-400">{scheduleError}</p>

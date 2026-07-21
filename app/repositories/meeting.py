@@ -5,7 +5,9 @@ from uuid import UUID
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from app.models.meeting import Meeting, MeetingParticipant
+from datetime import datetime
+
+from app.models.meeting import Meeting, MeetingExternalParticipant, MeetingParticipant
 from app.repositories.base import BaseRepository
 
 
@@ -83,3 +85,35 @@ class MeetingRepository(BaseRepository[Meeting]):
         )
         self.db.add(participant)
         return participant
+
+    # ── External (no-account) participants ──────────────────────────────
+
+    def add_external_participant(
+        self, meeting_id: UUID, email: str, token_hash: str, expires_at: datetime
+    ) -> MeetingExternalParticipant:
+        participant = MeetingExternalParticipant(
+            meeting_id=meeting_id, email=email, token_hash=token_hash, expires_at=expires_at,
+        )
+        self.db.add(participant)
+        return participant
+
+    def get_external_participant(self, meeting_id: UUID, email: str) -> MeetingExternalParticipant | None:
+        return (
+            self.db.query(MeetingExternalParticipant)
+            .filter(MeetingExternalParticipant.meeting_id == meeting_id, MeetingExternalParticipant.email == email)
+            .first()
+        )
+
+    def get_external_participant_by_token_hash(self, token_hash: str) -> MeetingExternalParticipant | None:
+        return (
+            self.db.query(MeetingExternalParticipant)
+            .filter(MeetingExternalParticipant.token_hash == token_hash)
+            .first()
+        )
+
+    def list_external_participants(self, meeting_id: UUID) -> list[MeetingExternalParticipant]:
+        return (
+            self.db.query(MeetingExternalParticipant)
+            .filter(MeetingExternalParticipant.meeting_id == meeting_id)
+            .all()
+        )

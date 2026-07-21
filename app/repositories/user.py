@@ -61,6 +61,24 @@ class UserRepository(BaseRepository[User]):
         """
         return self.db.query(User).filter(User.google_sub == google_sub).first()
 
+    def list_active_by_ids(self, business_id, user_ids) -> list[User]:
+        """List active users within business whose id is in the given set.
+
+        🧨 CRITICAL: Filters by business_id
+
+        Args:
+            business_id: Tenant ID
+            user_ids: Collection of User IDs to look up
+
+        Returns:
+            List of matching active users (id/email/etc. available as attributes)
+        """
+        return self.db.query(User).filter(
+            User.business_id == business_id,  # 🧨 MULTI-TENANCY
+            User.id.in_(user_ids),
+            User.is_active.is_(True),
+        ).all()
+
     def list_by_role(self, business_id, role: str) -> list[User]:
         """List users with specific role in business.
         

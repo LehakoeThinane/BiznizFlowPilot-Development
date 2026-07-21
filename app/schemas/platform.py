@@ -110,3 +110,34 @@ class OrganizationAdminListResponse(BaseModel):
 
     total: int
     items: list[OrganizationAdminResponse]
+
+
+# ── Per-organization custom SMTP sender (meeting invites, etc.) ──────────────
+
+class OrganizationEmailConfigUpdate(BaseModel):
+    """Set/replace an organization's custom SMTP sender.
+
+    smtp_password is write-only and optional: omit or pass null to leave the
+    already-stored (encrypted) password unchanged - only send it when
+    actually replacing it.
+    """
+
+    smtp_host: str = Field(..., min_length=1, max_length=255)
+    smtp_port: int = Field(..., ge=1, le=65535)
+    smtp_username: str = Field(..., min_length=1, max_length=255)
+    smtp_password: str | None = Field(default=None, min_length=1)
+    smtp_from_email: EmailStr
+    smtp_from_name: str = Field(..., min_length=1, max_length=255)
+
+
+class OrganizationEmailConfigResponse(BaseModel):
+    """Never echoes the real password - only whether one is stored."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    smtp_host: str | None
+    smtp_port: int | None
+    smtp_username: str | None
+    smtp_password_set: bool
+    smtp_from_email: str | None
+    smtp_from_name: str | None

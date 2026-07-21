@@ -179,6 +179,24 @@ export interface OrganizationAdminUpdate {
   seats_included?: number;
 }
 
+export interface OrganizationEmailConfig {
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password_set: boolean;
+  smtp_from_email: string | null;
+  smtp_from_name: string | null;
+}
+
+export interface OrganizationEmailConfigUpdate {
+  smtp_host: string;
+  smtp_port: number;
+  smtp_username: string;
+  smtp_password?: string | null;
+  smtp_from_email: string;
+  smtp_from_name: string;
+}
+
 export interface DashboardSalesKPIs {
   revenue_total: string;
   revenue_this_month: string;
@@ -765,6 +783,12 @@ export interface MeetingParticipant {
   joined_at: string | null;
 }
 
+export interface MeetingExternalParticipant {
+  email: string;
+  response_status: MeetingResponseStatus;
+  responded_at: string | null;
+}
+
 export interface Meeting {
   id: string;
   business_id: string;
@@ -778,6 +802,17 @@ export interface Meeting {
   status: MeetingStatus;
   created_at: string;
   participants: MeetingParticipant[];
+  external_participants: MeetingExternalParticipant[];
+}
+
+export interface MeetingRsvpDetail {
+  title: string;
+  description: string | null;
+  start_time: string;
+  end_time: string;
+  call_type: MeetingCallType;
+  organizer_name: string;
+  response_status: MeetingResponseStatus;
 }
 
 export interface MeetingListResponse {
@@ -880,4 +915,41 @@ export interface DirectMessage {
 
 export interface MessageListResponse {
   items: DirectMessage[];
+}
+
+// ─── Email (personal inbox) ──────────────────────────────────────────────
+
+export interface UserEmailAccount {
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_username: string | null;
+  imap_password_set: boolean;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_username: string | null;
+  smtp_password_set: boolean;
+  smtp_from_email: string | null;
+  smtp_from_name: string | null;
+}
+
+export interface EmailMessageSummary {
+  uid: string;
+  from_address: string;
+  subject: string;
+  date: string | null;
+  is_read: boolean;
+}
+
+export interface EmailMessageDetail {
+  uid: string;
+  from_address: string;
+  to_address: string;
+  subject: string;
+  date: string | null;
+  body_html: string | null;
+  body_text: string | null;
+}
+
+export interface EmailListResponse {
+  items: EmailMessageSummary[];
 }

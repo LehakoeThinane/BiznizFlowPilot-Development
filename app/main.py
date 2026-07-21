@@ -28,6 +28,7 @@ from app.api import (
     inventory,
     invoice,
     leads,
+    meeting_rsvp,
     meetings,
     messaging,
     metrics,
@@ -43,6 +44,7 @@ from app.api import (
     signup,
     suppliers,
     tasks,
+    user_email,
     users,
     workflow_definitions,
     workflows,
@@ -150,6 +152,9 @@ app.include_router(signup.router, prefix=settings.api_v1_prefix)
 app.include_router(billing.router)
 app.include_router(document_share.public_router)
 
+# Meeting RSVP (no auth required — see app/api/meeting_rsvp.py docstring)
+app.include_router(meeting_rsvp.public_router)
+
 # CRM routes (auth required)
 # require_active_trial: a no-op for every tier except an expired trial,
 # which loses access to everything (no paid tier to fall back to) rather
@@ -172,6 +177,9 @@ app.include_router(meetings.router, dependencies=[Depends(require_active_trial)]
 
 # Direct messaging (auth required)
 app.include_router(messaging.router, dependencies=[Depends(require_active_trial)])
+
+# Per-user email inbox (auth required, self-service)
+app.include_router(user_email.router, dependencies=[Depends(require_active_trial)])
 
 # Organization / subsidiary management (auth required, IT Admin for mutations)
 # Deliberately NOT gated by require_active_trial - the frontend needs this

@@ -194,6 +194,81 @@ class TestMeetingLifecycle:
         assert r.status_code == 404
 
 
+class TestExternalEmailInvites:
+    def test_create_with_only_external_emails_no_internal_participants(
+        self, client, owner_user: CurrentUser, monkeypatch
+    ):
+        sent = []
+        monkeypatch.setattr(
+            "app.services.meeting.send_meeting_invite_email",
+            lambda **kwargs: sent.append(kwargs["to_email"]),
+        )
+        r = client.post(
+            "/api/v1/meetings",
+            json=_meeting_body(owner_user.user_id, participant_user_ids=[], external_emails=["guest@external.com"]),
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+        body = r.json()
+        assert body["participants"] == [
+            p for p in body["participants"] if p["user_id"] == str(owner_user.user_id)
+        ]
+        assert len(body["external_participants"]) == 1
+        assert body["external_participants"][0]["email"] == "guest@external.com"
+        assert body["external_participants"][0]["response_status"] == "pending"
+        assert sent == ["guest@external.com"]
+
+    def test_create_requires_participant_or_external_email(self, client, owner_user: CurrentUser):
+        r = client.post(
+            "/api/v1/meetings",
+            json=_meeting_body(owner_user.user_id, participant_user_ids=[], external_emails=[]),
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 422
+
+    def test_external_email_matching_internal_user_is_not_double_invited(
+        self, client, owner_user: CurrentUser, manager_user: CurrentUser, monkeypatch
+    ):
+        sent = []
+        monkeypatch.setattr(
+            "app.services.meeting.send_meeting_invite_email",
+            lambda **kwargs: sent.append(kwargs["to_email"]),
+        )
+        r = client.post(
+            "/api/v1/meetings",
+            json=_meeting_body(
+                manager_user.user_id, external_emails=[manager_user.email],
+            ),
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+        assert r.json()["external_participants"] == []
+        assert sent == []
+
+    def test_cancelling_meeting_sends_cancellation_email_to_external_participants(
+        self, client, owner_user: CurrentUser, monkeypatch
+    ):
+        monkeypatch.setattr("app.services.meeting.send_meeting_invite_email", lambda **kwargs: None)
+        cancelled = []
+        monkeypatch.setattr(
+            "app.services.meeting.send_meeting_cancelled_email",
+            lambda **kwargs: cancelled.append(kwargs["to_email"]),
+        )
+        created = client.post(
+            "/api/v1/meetings",
+            json=_meeting_body(owner_user.user_id, participant_user_ids=[], external_emails=["guest@external.com"]),
+            headers=_auth_headers(owner_user),
+        ).json()
+
+        r = client.patch(
+            f"/api/v1/meetings/{created['id']}",
+            json={"status": "cancelled"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 200
+        assert cancelled == ["guest@external.com"]
+
+
 class TestMeetingConcurrency:
     """Test optimistic-concurrency protection on meeting updates.
 

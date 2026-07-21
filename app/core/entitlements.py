@@ -33,6 +33,7 @@ FEATURE_TIERS: dict[str, frozenset[str]] = {
     "purchase_orders": frozenset({"professional", "enterprise"}),
     "meetings": frozenset({"professional", "enterprise"}),
     "messaging": frozenset({"professional", "enterprise"}),
+    "email": frozenset({"professional", "enterprise"}),
     "ai_chat": frozenset({"professional", "enterprise"}),
     "workflow_automation": frozenset({"professional", "enterprise"}),
 }

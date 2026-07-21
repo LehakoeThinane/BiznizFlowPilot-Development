@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -77,6 +78,10 @@ export default function PlatformOrganizationDetailPage() {
       <h1 className="mb-1 text-lg font-semibold text-white">{org.name}</h1>
       <p className="mb-6 text-sm text-[#777]">
         {org.subsidiary_count} subsidiar{org.subsidiary_count === 1 ? "y" : "ies"} · {org.user_count} users
+        {" · "}
+        <Link href={`/platform/organizations/${params.id}/email-config`} className="text-violet-400 hover:underline">
+          Custom email sender →
+        </Link>
       </p>
 
       <div className="space-y-4 rounded-xl border border-[#22222e] bg-[#12121a] p-5">

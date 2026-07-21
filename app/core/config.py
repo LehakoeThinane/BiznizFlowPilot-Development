@@ -88,6 +88,34 @@ class Settings(BaseSettings):
             )
         return self
 
+    @model_validator(mode="after")
+    def _guard_email_credentials_key(self) -> "Settings":
+        """Fail closed in production instead of silently using an ephemeral key.
+
+        app/core/crypto.py falls back to a freshly-generated in-memory key
+        when this is unset, so a fresh dev/staging checkout works with no
+        extra setup - but every value encrypted under that fallback becomes
+        permanently unreadable the moment the process restarts. That's fine
+        for local development, but would silently corrupt every tenant's
+        stored SMTP password in production. Refuse to boot instead.
+        """
+        if not self.email_credentials_encryption_key:
+            if self.environment == "production":
+                raise ValueError(
+                    "EMAIL_CREDENTIALS_ENCRYPTION_KEY must be set explicitly in "
+                    "production - it encrypts tenant SMTP passwords at rest, and "
+                    "without a stable key every stored password becomes "
+                    "unreadable on the next restart."
+                )
+            warnings.warn(
+                "EMAIL_CREDENTIALS_ENCRYPTION_KEY is not set; a random key will "
+                "be generated in memory for this process only. Values encrypted "
+                "this run become unreadable after restart. Set "
+                "EMAIL_CREDENTIALS_ENCRYPTION_KEY before deploying to production.",
+                stacklevel=2,
+            )
+        return self
+
     # API
     api_base_url: str = "http://localhost:8000"
     api_v1_prefix: str = "/api/v1"
@@ -137,6 +165,14 @@ class Settings(BaseSettings):
     smtp_from_email: str = "no-reply@biznizflowpilot.local"
     smtp_from_name: str = "BiznizFlowPilot"
     smtp_timeout_seconds: int = 10
+
+    # Encrypts per-organization SMTP passwords at rest (app/core/crypto.py) -
+    # a Fernet key: EXACTLY 32 raw bytes, base64-urlsafe-encoded. NOT the
+    # same format as secret_key/platform_secret_key (arbitrary-length HMAC
+    # signing keys) - generate with Fernet.generate_key(), not
+    # secrets.token_urlsafe(). See the _guard_email_credentials_key
+    # validator below for why this fails closed in production.
+    email_credentials_encryption_key: str = ""
 
     # Pagination
     default_page_size: int = 20

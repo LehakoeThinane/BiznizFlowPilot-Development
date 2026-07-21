@@ -45,6 +45,13 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["owner", "manager", "staff"],
   },
   {
+    label: "Email",
+    icon: "mail",
+    href: "/email",
+    matches: ["/email"],
+    roles: ["owner", "manager", "staff"],
+  },
+  {
     label: "Messages",
     icon: "chat",
     href: "/messages",
