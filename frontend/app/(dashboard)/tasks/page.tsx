@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 
 import { ApiError, apiRequest } from "@/lib/api";
 import { getCurrentUser, getStoredToken, logout } from "@/lib/auth";
-import { SalesCrmSubNav } from "@/components/SalesCrmSubNav";
 import { ActivityTimeline } from "@/components/ActivityTimeline";
 import type {
   BusinessUser,
@@ -712,7 +711,6 @@ export default function TasksPage() {
 
   return (
     <section className="space-y-5">
-      <SalesCrmSubNav />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-white">Tasks</h1>

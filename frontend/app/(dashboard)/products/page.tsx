@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, apiRequest } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
+import { InventorySubNav } from "@/components/InventorySubNav";
 import type { Product, ProductListResponse, ProductType } from "@/types/api";
 
 type SortField = "name" | "sku" | "category" | "price" | "created";
@@ -242,6 +243,7 @@ export default function ProductsPage() {
 
   return (
     <section className="space-y-5">
+      <InventorySubNav />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-white">Products</h1>

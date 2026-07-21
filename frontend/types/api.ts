@@ -33,6 +33,8 @@ export interface CurrentUser {
   role: UserRole;
   full_name: string;
   avatar_url?: string | null;
+  plan_tier?: string | null;
+  trial_ends_at?: string | null;
 }
 
 // ─── Organization / Subsidiary / Invitations ─────────────────────────────────

@@ -36,16 +36,30 @@ class UserRepository(BaseRepository[User]):
 
     def get_by_email_all(self, email: str) -> Optional[User]:
         """Get user by email across all tenants.
-        
+
         ⚠️ Used only for login (before checking business_id)
-        
+
         Args:
             email: User email
-            
+
         Returns:
             User or None
         """
         return self.db.query(User).filter(User.email == email).first()
+
+    def get_by_google_sub(self, google_sub: str) -> Optional[User]:
+        """Get user by Google account subject ID, across all tenants.
+
+        Used to recognize a returning trial-signup user logging back in
+        via Google, before any business_id is known.
+
+        Args:
+            google_sub: Google account subject ID
+
+        Returns:
+            User or None
+        """
+        return self.db.query(User).filter(User.google_sub == google_sub).first()
 
     def list_by_role(self, business_id, role: str) -> list[User]:
         """List users with specific role in business.

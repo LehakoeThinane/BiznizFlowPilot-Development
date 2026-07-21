@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiError, apiRequest } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
+import { InventorySubNav } from "@/components/InventorySubNav";
 import type { Supplier, SupplierListResponse } from "@/types/api";
 
 type SortField = "name" | "code" | "email" | "rating" | "created";
@@ -233,6 +234,7 @@ export default function SuppliersPage() {
 
   return (
     <section className="space-y-5">
+      <InventorySubNav />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-white">Suppliers</h1>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { ApiError, apiRequest } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
+import { InventorySubNav } from "@/components/InventorySubNav";
 import type { InventoryLocation, Product, ProductListResponse, StockLevel } from "@/types/api";
 
 interface LocationEditor {
@@ -188,6 +189,7 @@ export default function InventoryPage() {
 
   return (
     <section className="space-y-8">
+      <InventorySubNav />
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-white">Inventory</h1>

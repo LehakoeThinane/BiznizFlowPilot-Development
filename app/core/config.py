@@ -154,6 +154,12 @@ class Settings(BaseSettings):
     # than erroring, same convention as sentry_dsn above.
     google_places_api_key: str = ""
 
+    # Google Sign-In for the public trial-signup flow. Only the OAuth client
+    # ID is needed (verifies the ID token's audience) - no client secret,
+    # since this uses Google's client-side ID-token flow, not an
+    # authorization-code exchange.
+    google_client_id: str = ""
+
     # Document storage - Cloudflare R2 (S3-compatible). Empty means the
     # feature 404s / no-ops rather than erroring, same convention as above.
     r2_endpoint_url: str = ""

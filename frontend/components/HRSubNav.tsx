@@ -4,16 +4,19 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { label: "Leads", href: "/leads" },
-  { label: "Sales Orders", href: "/sales-orders" },
+  { label: "Headcount & Demographics", href: "/employees" },
+  { label: "Leave", href: "/leave" },
+  { label: "Recruitment", href: "/recruitment" },
+  { label: "Performance & Productivity", href: "/performance" },
+  { label: "Compensation & Benefits", href: "/compensation" },
+  { label: "Engagement & Development", href: "/engagement" },
 ];
 
-/** Sub-navigation shown on every page inside the "Sales & CRM" sidebar
- * section, so switching between Leads/Sales Orders doesn't require going
- * back to the Home page's tile grid first. Tasks, Invoices, and the
- * purchasing pages moved to their own hubs (Inventory & Supply / Finance /
- * Purchasing) and are no longer members of this sub-nav. */
-export function SalesCrmSubNav() {
+/** Sub-navigation shown on every page inside the "HR" hub, so switching
+ * between its sections doesn't require going back to the Home page's tile
+ * grid first. Recruitment/Performance/Compensation/Engagement are
+ * placeholder pages today - see each page for status. */
+export function HRSubNav() {
   const pathname = usePathname();
 
   return (

@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { PageHeader } from "@/components/PageHeader";
 import { Pagination } from "@/components/Pagination";
 import { OrgChart } from "@/components/OrgChart";
+import { HRSubNav } from "@/components/HRSubNav";
 import type { OrgChartNode } from "@/types/api";
 
 const PAGE_SIZE = 20;
@@ -98,6 +99,10 @@ export default function EmployeesPage() {
   const [loading, setLoading]       = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
 
+  // ── Headcount & Demographics state ─────────────────────────────────────────
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
+  const [demographicsLoading, setDemographicsLoading] = useState(true);
+
   // ── Org chart state ────────────────────────────────────────────────────────
   const [orgChartNodes, setOrgChartNodes] = useState<OrgChartNode[]>([]);
   const [orgChartLoading, setOrgChartLoading] = useState(false);
@@ -137,6 +142,47 @@ export default function EmployeesPage() {
   }, [token]);
 
   useEffect(() => { loadEmployees(); loadDepartments(); }, [loadEmployees, loadDepartments]);
+
+  useEffect(() => {
+    setDemographicsLoading(true);
+    apiRequest<EmployeeListResponse>("/api/v1/hr/employees?skip=0&limit=1000", { authToken: token })
+      .then((d) => setAllEmployees(d.items ?? []))
+      .catch(console.error)
+      .finally(() => setDemographicsLoading(false));
+  }, [token]);
+
+  const [nowMs] = useState(() => Date.now());
+
+  const demographics = useMemo(() => {
+    const activeEmployees = allEmployees.filter((e) => e.is_active);
+    const inactiveCount = allEmployees.length - activeEmployees.length;
+
+    const byType = new Map<string, number>();
+    for (const e of allEmployees) byType.set(e.employment_type, (byType.get(e.employment_type) ?? 0) + 1);
+    const typeBreakdown = EMPLOYMENT_TYPES
+      .map((t) => ({ type: t, count: byType.get(t) ?? 0 }))
+      .filter((t) => t.count > 0);
+
+    const deptBreakdown = [...departments]
+      .sort((a, b) => b.employee_count - a.employee_count)
+      .slice(0, 6);
+
+    const tenureDays = activeEmployees
+      .filter((e) => e.start_date)
+      .map((e) => (nowMs - new Date(e.start_date as string).getTime()) / 86_400_000);
+    const avgTenureYears = tenureDays.length > 0
+      ? tenureDays.reduce((s, d) => s + d, 0) / tenureDays.length / 365
+      : null;
+
+    return {
+      total: allEmployees.length,
+      active: activeEmployees.length,
+      inactive: inactiveCount,
+      typeBreakdown,
+      deptBreakdown,
+      avgTenureYears,
+    };
+  }, [allEmployees, departments, nowMs]);
 
   useEffect(() => {
     if (tab !== "org-chart" || orgChartLoaded) return;
@@ -228,6 +274,7 @@ export default function EmployeesPage() {
 
   return (
     <div className="flex flex-col gap-6 p-6">
+      <HRSubNav />
       {/* ── Header ────────────────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <PageHeader title="Employees & Departments" subtitle={`${total} employees · ${departments.length} departments`} />
@@ -248,6 +295,71 @@ export default function EmployeesPage() {
           >
             + Add Department
           </button>
+        )}
+      </div>
+
+      {/* ── Headcount & Demographics ─────────────────────────────────────────── */}
+      <div className="erp-panel p-5">
+        <p className="mb-4 text-sm font-semibold text-slate-300">Headcount & Demographics</p>
+        {demographicsLoading ? (
+          <div className="text-sm text-slate-400">Loading…</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <div className="grid grid-cols-3 gap-3 lg:col-span-1 lg:grid-cols-1">
+              <div className="rounded-lg bg-white/4 p-3">
+                <p className="text-[11px] font-medium text-slate-400">Total Headcount</p>
+                <p className="mt-1 text-xl font-bold text-white">{demographics.total}</p>
+              </div>
+              <div className="rounded-lg bg-white/4 p-3">
+                <p className="text-[11px] font-medium text-slate-400">Active / Inactive</p>
+                <p className="mt-1 text-xl font-bold text-white">
+                  <span className="text-emerald-400">{demographics.active}</span>
+                  <span className="text-slate-500"> / </span>
+                  <span className="text-slate-400">{demographics.inactive}</span>
+                </p>
+              </div>
+              <div className="rounded-lg bg-white/4 p-3">
+                <p className="text-[11px] font-medium text-slate-400">Avg. Tenure</p>
+                <p className="mt-1 text-xl font-bold text-white">
+                  {demographics.avgTenureYears === null ? "—" : `${demographics.avgTenureYears.toFixed(1)} yrs`}
+                </p>
+              </div>
+            </div>
+
+            <div className="lg:col-span-1">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Department</p>
+              {demographics.deptBreakdown.length === 0 ? (
+                <p className="text-xs text-slate-500">No departments yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {demographics.deptBreakdown.map((d) => (
+                    <div key={d.id} className="flex items-center justify-between gap-3">
+                      <span className="truncate text-xs text-slate-300">{d.name}</span>
+                      <span className="shrink-0 text-xs font-medium text-slate-400">{d.employee_count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="lg:col-span-1">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">By Employment Type</p>
+              {demographics.typeBreakdown.length === 0 ? (
+                <p className="text-xs text-slate-500">No employees yet.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {demographics.typeBreakdown.map((t) => (
+                    <div key={t.type} className="flex items-center justify-between gap-3">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badge(t.type)}`}>
+                        {t.type.replace("_", " ")}
+                      </span>
+                      <span className="shrink-0 text-xs font-medium text-slate-400">{t.count}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         )}
       </div>
 

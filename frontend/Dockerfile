@@ -11,6 +11,8 @@ COPY . .
 # this needs to be a build ARG, not just a runtime environment variable.
 ARG NEXT_PUBLIC_SENTRY_DSN=""
 ENV NEXT_PUBLIC_SENTRY_DSN=${NEXT_PUBLIC_SENTRY_DSN}
+ARG NEXT_PUBLIC_GOOGLE_CLIENT_ID=""
+ENV NEXT_PUBLIC_GOOGLE_CLIENT_ID=${NEXT_PUBLIC_GOOGLE_CLIENT_ID}
 # next.config.ts's rewrites() destination is resolved and frozen into the
 # standalone build's routes manifest at build time, not re-read at container
 # startup - a runtime-only `environment:` value in docker-compose is silently

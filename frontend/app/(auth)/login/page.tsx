@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 
 import { apiRequest } from "@/lib/api";
 import { getCurrentUser, getStoredToken, login } from "@/lib/auth";
@@ -132,7 +133,10 @@ export default function LoginPage() {
         {/* ── Login ── */}
         {mode === "login" && (
           <>
-            <p className="mb-6 text-xs text-muted">New here? Use the invite link sent to your work email.</p>
+            <p className="mb-6 text-xs text-muted">
+              Invited by your company? Use the invite link sent to your work email. Otherwise,{" "}
+              <Link href="/signup" className="text-brand hover:underline">start a free trial</Link>.
+            </p>
             <form className="space-y-4" onSubmit={handleLogin}>
               <div>
                 <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="email">Email</label>
