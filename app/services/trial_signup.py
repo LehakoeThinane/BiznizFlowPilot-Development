@@ -12,7 +12,6 @@ remains the only path real paying-customer accounts go through.
 
 import secrets
 from typing import Optional
-from uuid import UUID
 
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
