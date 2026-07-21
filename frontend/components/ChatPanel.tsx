@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { apiRequest } from "@/lib/api";
-import { STICKERS } from "@/lib/stickers";
 import type {
   ChatConversationDetail,
   ChatMessage,
@@ -404,18 +404,16 @@ export function ChatPanel() {
                   🙂
                 </button>
                 {showEmoji && (
-                  <div className="absolute bottom-full left-0 z-10 mb-2 grid max-h-48 w-56 grid-cols-6 gap-1 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
-                    {STICKERS.map((s) => (
-                      <button
-                        key={s.key}
-                        type="button"
-                        title={s.label}
-                        onClick={() => insertEmoji(s.emoji)}
-                        className="flex aspect-square items-center justify-center rounded-lg text-xl hover:bg-slate-100 transition-colors"
-                      >
-                        {s.emoji}
-                      </button>
-                    ))}
+                  <div className="absolute bottom-full left-0 z-10 mb-2 overflow-hidden rounded-xl border border-slate-200 shadow-xl">
+                    <EmojiPicker
+                      onEmojiClick={(emojiData) => insertEmoji(emojiData.emoji)}
+                      emojiStyle={EmojiStyle.NATIVE}
+                      theme={Theme.LIGHT}
+                      width={300}
+                      height={360}
+                      previewConfig={{ showPreview: false }}
+                      lazyLoadEmojis
+                    />
                   </div>
                 )}
               </div>

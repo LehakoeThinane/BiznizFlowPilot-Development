@@ -1,6 +1,6 @@
 "use client";
 
-import { STICKERS } from "@/lib/stickers";
+import { STICKER_ART } from "@/components/stickers/StickerArt";
 
 export function StickerPickerModal({ onSelect, onClose }: { onSelect: (stickerKey: string) => void; onClose: () => void }) {
   return (
@@ -10,8 +10,8 @@ export function StickerPickerModal({ onSelect, onClose }: { onSelect: (stickerKe
           <h2 className="text-base font-semibold text-white">Send a sticker</h2>
           <button type="button" aria-label="Close" onClick={onClose} className="text-slate-400 hover:text-white">×</button>
         </div>
-        <div className="grid grid-cols-6 gap-1 p-4">
-          {STICKERS.map((s) => (
+        <div className="grid grid-cols-4 gap-2 p-4">
+          {STICKER_ART.map((s) => (
             <button
               key={s.key}
               type="button"
@@ -20,9 +20,9 @@ export function StickerPickerModal({ onSelect, onClose }: { onSelect: (stickerKe
                 onSelect(s.key);
                 onClose();
               }}
-              className="flex aspect-square items-center justify-center rounded-lg text-3xl transition-colors hover:bg-white/10"
+              className="flex aspect-square items-center justify-center rounded-lg p-1.5 transition-colors hover:bg-white/10"
             >
-              {s.emoji}
+              <s.Icon className="h-full w-full" />
             </button>
           ))}
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { useUser } from "@/contexts/UserContext";
@@ -57,8 +58,11 @@ export default function MessagesPage() {
 
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [activeModal, setActiveModal] = useState<ModalAction | null>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
   const documentInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const emojiRef = useRef<HTMLDivElement>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageTimeRef = useRef<string | null>(null);
@@ -207,6 +211,29 @@ export default function MessagesPage() {
       e.preventDefault();
       handleSend();
     }
+  }
+
+  useEffect(() => {
+    if (!showEmoji) return;
+    function handleClick(e: MouseEvent) {
+      if (emojiRef.current && !emojiRef.current.contains(e.target as Node)) setShowEmoji(false);
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [showEmoji]);
+
+  function insertEmoji(emoji: string) {
+    const el = textareaRef.current;
+    const start = el?.selectionStart ?? input.length;
+    const end = el?.selectionEnd ?? input.length;
+    const newVal = input.slice(0, start) + emoji + input.slice(end);
+    setInput(newVal);
+    setShowEmoji(false);
+    setTimeout(() => {
+      el?.focus();
+      const pos = start + emoji.length;
+      el?.setSelectionRange(pos, pos);
+    }, 0);
   }
 
   function appendMessage(msg: DirectMessage) {
@@ -423,7 +450,31 @@ export default function MessagesPage() {
                   <input ref={documentInputRef} type="file" className="hidden" onChange={handleFileInputChange} />
                   <input ref={mediaInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={handleFileInputChange} />
                 </div>
+                <div className="relative" ref={emojiRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowEmoji((v) => !v)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
+                    aria-label="Emoji"
+                  >
+                    <span className="material-symbols-outlined">mood</span>
+                  </button>
+                  {showEmoji && (
+                    <div className="absolute bottom-full left-0 z-10 mb-2 overflow-hidden rounded-xl border border-outline-variant shadow-2xl">
+                      <EmojiPicker
+                        onEmojiClick={(emojiData) => insertEmoji(emojiData.emoji)}
+                        emojiStyle={EmojiStyle.NATIVE}
+                        theme={Theme.DARK}
+                        width={320}
+                        height={380}
+                        previewConfig={{ showPreview: false }}
+                        lazyLoadEmojis
+                      />
+                    </div>
+                  )}
+                </div>
                 <textarea
+                  ref={textareaRef}
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={handleKeyDown}
