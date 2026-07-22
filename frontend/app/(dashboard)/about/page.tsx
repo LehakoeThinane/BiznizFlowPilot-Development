@@ -1,10 +1,6 @@
 function MarkLogo() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M10 8C10 5.79086 11.7909 4 14 4H22C27.5228 4 32 8.47715 32 14C32 16.9248 30.7441 19.5562 28.7412 21.3912C30.7441 23.2262 32 25.8576 32 28.8421C32 34.3649 27.5228 38.8421 22 38.8421H14C11.7909 38.8421 10 37.0512 10 34.8421V8Z" fill="#1E40AF" />
-      <path d="M22 4C27.5228 4 32 8.47715 32 14C32 16.9248 30.7441 19.5562 28.7412 21.3912L20 14H14V4H22Z" fill="#10B981" />
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/logo-icon.png" alt="" width={20} height={20} />;
 }
 
 const STACK_LAYERS = [

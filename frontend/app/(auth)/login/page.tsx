@@ -10,8 +10,18 @@ type Mode = "login" | "reset-request" | "reset-confirm";
 
 const INPUT = "erp-input w-full px-3 py-2 text-sm";
 
+// Reads ?reset_token=... from the URL. Guarded for SSR since this component
+// is server-rendered before window exists there.
+function getResetTokenFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get("reset_token");
+}
+
 export default function LoginPage() {
-  const [mode, setMode] = useState<Mode>("login");
+  // If the user arrived via a password-reset email link (?reset_token=...),
+  // start straight on the confirm step with the token pre-filled, instead of
+  // flashing the login form first and switching a moment later.
+  const [mode, setMode] = useState<Mode>(() => (getResetTokenFromUrl() ? "reset-confirm" : "login"));
 
   // Login
   const [email, setEmail] = useState("");
@@ -25,7 +35,7 @@ export default function LoginPage() {
   const [resetLoading, setResetLoading] = useState(false);
 
   // Reset step 2
-  const [confirmToken, setConfirmToken] = useState("");
+  const [confirmToken, setConfirmToken] = useState(() => getResetTokenFromUrl() ?? "");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [confirmError, setConfirmError] = useState<string | null>(null);
@@ -33,15 +43,9 @@ export default function LoginPage() {
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   useEffect(() => {
-    // If the user arrived via a password-reset email link (?reset_token=...),
-    // switch straight to the confirm step and pre-fill the token.
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get("reset_token");
-    if (urlToken) {
-      setConfirmToken(urlToken);
-      setMode("reset-confirm");
-      return;
-    }
+    // A reset-token link always lands on the confirm step above - no need to
+    // check for an existing session in that case.
+    if (getResetTokenFromUrl()) return;
 
     // Only auto-redirect if bfp_session cookie is present — i.e. the user has
     // an active session. After logout(), bfp_session is synchronously cleared,
@@ -116,8 +120,9 @@ export default function LoginPage() {
   }
 
   const Logo = (
-    <div className="mb-6 flex items-center gap-3">
-      <div className="glow-badge flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-lg font-bold text-on-primary">B</div>
+    <div className="mb-6 flex flex-col items-center gap-3 text-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-icon.png" alt="" width={40} height={40} className="glow-badge rounded-xl" />
       <div>
         <h1 className="text-xl font-semibold text-foreground">BiznizFlowPilot</h1>
         <p className="text-xs text-muted">Sign in to the operational dashboard.</p>
@@ -171,7 +176,7 @@ export default function LoginPage() {
         {mode === "reset-request" && (
           <>
             <p className="mb-1 text-sm font-semibold text-white">Reset your password</p>
-            <p className="mb-5 text-xs text-muted">Enter your email and we'll send a reset link to your inbox.</p>
+            <p className="mb-5 text-xs text-muted">Enter your email and we&apos;ll send a reset link to your inbox.</p>
             <form className="space-y-4" onSubmit={handleResetRequest}>
               <div>
                 <label className="mb-1 block text-sm font-medium text-on-surface-variant" htmlFor="reset-email">Email</label>

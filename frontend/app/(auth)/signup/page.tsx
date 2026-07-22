@@ -85,8 +85,9 @@ export default function SignupPage() {
   }
 
   const Logo = (
-    <div className="mb-6 flex items-center gap-3">
-      <div className="glow-badge flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-lg font-bold text-on-primary">B</div>
+    <div className="mb-6 flex flex-col items-center gap-3 text-center">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src="/logo-icon.png" alt="" width={40} height={40} className="glow-badge rounded-xl" />
       <div>
         <h1 className="text-xl font-semibold text-foreground">BiznizFlowPilot</h1>
         <p className="text-xs text-muted">Start your free 14-day trial - no credit card required.</p>

@@ -25,12 +25,8 @@ interface SearchResults {
 }
 
 function BizLogo() {
-  return (
-    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M10 8C10 5.79086 11.7909 4 14 4H22C27.5228 4 32 8.47715 32 14C32 16.9248 30.7441 19.5562 28.7412 21.3912C30.7441 23.2262 32 25.8576 32 28.8421C32 34.3649 27.5228 38.8421 22 38.8421H14C11.7909 38.8421 10 37.0512 10 34.8421V8Z" fill="#1E40AF"/>
-      <path d="M22 4C27.5228 4 32 8.47715 32 14C32 16.9248 30.7441 19.5562 28.7412 21.3912L20 14H14V4H22Z" fill="#10B981"/>
-    </svg>
-  );
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src="/logo-icon.png" alt="BiznizFlowPilot" width={36} height={36} />;
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -60,10 +56,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  // Global search
+  // Global search - queries under 2 chars are simply not rendered (see
+  // searchActive below), so the effect only needs to run the fetch.
+  const searchActive = debouncedSearch.trim().length >= 2;
+
   useEffect(() => {
     const q = debouncedSearch.trim();
-    if (q.length < 2) { setSearchResults(null); setShowSearchDrop(false); return; }
+    if (q.length < 2) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- flips loading right before the fetch below; no async gap to move it into
     setSearchLoading(true);
     apiRequest<{ results: SearchResults }>(`/api/v1/search?q=${encodeURIComponent(q)}`)
       .then((d) => { setSearchResults(d.results); setShowSearchDrop(true); })
@@ -175,7 +175,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* ── Main content ─────────────────────────────────────────────── */}
           <div className="flex flex-1 flex-col overflow-hidden">
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-outline-variant/80 bg-[#0d1628]/90 px-4 backdrop-blur md:px-6">
+            <header className="flex h-18 shrink-0 items-center justify-between border-b border-outline-variant bg-[#0d1628]/90 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.25)] backdrop-blur md:px-6">
 
               {/* Left: hamburger (mobile) + search */}
               <div className="flex items-center gap-3">
@@ -190,7 +190,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* Search bar */}
                 <div ref={searchRef} className="relative">
-                  <div className="flex w-64 items-center gap-2 rounded-xl border border-outline-variant bg-[#0a1528]/80 px-3 py-1.5 sm:w-96">
+                  <div className="flex w-64 items-center gap-2 rounded-xl border border-outline-variant bg-[#0a1528]/80 px-3 py-2 sm:w-96">
                     <span className="material-symbols-outlined ms-16 text-on-surface-variant">
                       {searchLoading ? "hourglass_empty" : "search"}
                     </span>
@@ -215,7 +215,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </div>
 
                   {/* Search results dropdown */}
-                  {showSearchDrop && searchResults && totalHits > 0 && (
+                  {showSearchDrop && searchActive && searchResults && totalHits > 0 && (
                     <div className="absolute left-0 top-full z-50 mt-1 w-96 overflow-hidden rounded-xl border border-outline-variant bg-[#0f1c33] shadow-2xl">
                       {(Object.entries(searchResults) as [keyof SearchResults, SearchHit[]][])
                         .filter(([, hits]) => hits.length > 0)
@@ -243,9 +243,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     </div>
                   )}
 
-                  {showSearchDrop && debouncedSearch.trim().length >= 2 && totalHits === 0 && !searchLoading && (
+                  {showSearchDrop && searchActive && totalHits === 0 && !searchLoading && (
                     <div className="absolute left-0 top-full z-50 mt-1 w-96 rounded-xl border border-outline-variant bg-[#0f1c33] px-4 py-3 shadow-2xl">
-                      <p className="text-sm text-on-surface-variant">No results for "{debouncedSearch}"</p>
+                      <p className="text-sm text-on-surface-variant">No results for &quot;{debouncedSearch}&quot;</p>
                     </div>
                   )}
                 </div>
