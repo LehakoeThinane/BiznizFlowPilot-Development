@@ -45,16 +45,17 @@ class TestPasswordSignup:
         assert org.plan_tier == "trial"
         assert org.trial_ends_at is not None
 
-        # Seed data landed, scoped to this new business only.
-        assert test_db.query(Department).filter(Department.business_id == user.business_id).count() == 1
-        assert test_db.query(Employee).filter(Employee.business_id == user.business_id).count() == 3
-        assert test_db.query(Lead).filter(Lead.business_id == user.business_id).count() == 4
-        assert test_db.query(Product).filter(Product.business_id == user.business_id).count() == 4
-        assert test_db.query(PayrollPeriod).filter(PayrollPeriod.business_id == user.business_id).count() == 1
-        assert test_db.query(Payslip).filter(Payslip.business_id == user.business_id).count() == 3
-        assert test_db.query(LeaveRequest).filter(LeaveRequest.business_id == user.business_id).count() == 2
-        assert test_db.query(Meeting).filter(Meeting.business_id == user.business_id).count() == 1
-        assert test_db.query(Document).filter(Document.business_id == user.business_id).count() == 1
+        # Seed data landed, scoped to this new business only - sized to look
+        # like an established ~75-person company, not a 3-person demo.
+        assert test_db.query(Department).filter(Department.business_id == user.business_id).count() == 9
+        assert test_db.query(Employee).filter(Employee.business_id == user.business_id).count() == 75
+        assert test_db.query(Lead).filter(Lead.business_id == user.business_id).count() == 30
+        assert test_db.query(Product).filter(Product.business_id == user.business_id).count() == 26
+        assert test_db.query(PayrollPeriod).filter(PayrollPeriod.business_id == user.business_id).count() == 3
+        assert test_db.query(Payslip).filter(Payslip.business_id == user.business_id).count() == 144
+        assert test_db.query(LeaveRequest).filter(LeaveRequest.business_id == user.business_id).count() == 25
+        assert test_db.query(Meeting).filter(Meeting.business_id == user.business_id).count() == 8
+        assert test_db.query(Document).filter(Document.business_id == user.business_id).count() == 18
 
         # A second "colleague" user exists purely for Messages/Meetings realism.
         colleague = (
@@ -67,7 +68,7 @@ class TestPasswordSignup:
 
         conversation = test_db.query(Conversation).filter(Conversation.business_id == user.business_id).first()
         assert conversation is not None
-        assert test_db.query(Message).filter(Message.conversation_id == conversation.id).count() == 3
+        assert test_db.query(Message).filter(Message.conversation_id == conversation.id).count() == 6
 
     def test_duplicate_email_rejected(self, client, test_db: Session):
         r1 = client.post("/api/v1/signup/trial", json=_password_signup_body())
@@ -97,8 +98,8 @@ class TestPasswordSignup:
 
         leads_a = test_db.query(Lead).filter(Lead.business_id == user_a.business_id).count()
         leads_b = test_db.query(Lead).filter(Lead.business_id == user_b.business_id).count()
-        assert leads_a == 4
-        assert leads_b == 4
+        assert leads_a == 30
+        assert leads_b == 30
 
 
 class TestGoogleSignup:
