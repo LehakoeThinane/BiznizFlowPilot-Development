@@ -28,7 +28,10 @@ class TestStartCheckout:
         ):
             response = client.post(
                 "/api/v1/billing/checkout",
-                json={"org_name": "Acme Corp", "owner_email": "owner@acme.com", "plan_tier": "starter"},
+                json={
+                    "org_name": "Acme Corp", "owner_email": "owner@acme.com",
+                    "business_email": "owner@acme.com", "plan_tier": "starter",
+                },
             )
 
         assert response.status_code == 200
@@ -41,7 +44,10 @@ class TestStartCheckout:
         ):
             response = client.post(
                 "/api/v1/billing/checkout",
-                json={"org_name": "Acme Corp", "owner_email": "owner@acme.com", "plan_tier": "starter"},
+                json={
+                    "org_name": "Acme Corp", "owner_email": "owner@acme.com",
+                    "business_email": "owner@acme.com", "plan_tier": "starter",
+                },
             )
 
         assert response.status_code == 400
@@ -61,6 +67,7 @@ class TestPayfastItn:
             org_name="Webhook Co",
             subsidiary_name="Webhook Co",
             owner_email="owner@webhookco.com",
+            business_email="owner@webhookco.com",
             plan_tier="starter",
         )
         test_db.add(pending)

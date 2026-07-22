@@ -16,11 +16,14 @@ class PendingCheckoutRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    def create(self, org_name: str, subsidiary_name: str, owner_email: str, plan_tier: str) -> PendingCheckout:
+    def create(
+        self, org_name: str, subsidiary_name: str, owner_email: str, business_email: str, plan_tier: str
+    ) -> PendingCheckout:
         pending = PendingCheckout(
             org_name=org_name,
             subsidiary_name=subsidiary_name,
             owner_email=owner_email,
+            business_email=business_email,
             plan_tier=plan_tier,
         )
         self.db.add(pending)

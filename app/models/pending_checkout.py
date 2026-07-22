@@ -25,7 +25,11 @@ class PendingCheckout(BaseModel):
 
     org_name = Column(String(255), nullable=False)
     subsidiary_name = Column(String(255), nullable=True)
-    owner_email = Column(String(255), nullable=False)
+    owner_email = Column(String(255), nullable=False, doc="Billing/payment contact - may be a personal address.")
+    business_email = Column(
+        String(255), nullable=False,
+        doc="Custom-domain address used for the owner's platform registration invite and domain authorization.",
+    )
     plan_tier = Column(String(50), nullable=False)
     status = Column(String(20), nullable=False, default="pending", server_default="pending")
 
