@@ -211,6 +211,8 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-6"
     groq_api_key: str = ""
     groq_model: str = "llama-3.3-70b-versatile"
+    perplexity_api_key: str = ""
+    perplexity_model: str = "sonar"
     ai_max_tokens: int = 1024
     ai_conversation_history_limit: int = 20
 

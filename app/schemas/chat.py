@@ -8,13 +8,30 @@ from datetime import datetime
 from pydantic import BaseModel
 
 
+class ChatAction(BaseModel):
+    id: str
+    action_type: str
+    arguments: dict
+    description: str
+    status: str  # pending | confirmed | cancelled | executed | failed
+    result: dict | None = None
+    error: str | None = None
+    created_at: str
+    resolved_at: str | None = None
+
+
+class ActionResponse(BaseModel):
+    message_id: uuid.UUID
+    action: ChatAction
+
+
 class ChatMessageOut(BaseModel):
     id: uuid.UUID
     conversation_id: uuid.UUID
     role: str
     content: str
     mentions_data: list
-    actions_data: list
+    actions_data: list[ChatAction]
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -46,6 +63,7 @@ class SendMessageResponse(BaseModel):
     resolved_mentions: list[dict]
     user_message_id: uuid.UUID
     assistant_message_id: uuid.UUID
+    actions: list[ChatAction] = []
 
 
 class MentionSearchResult(BaseModel):
