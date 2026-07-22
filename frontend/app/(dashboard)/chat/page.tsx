@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { ActionCard } from "@/components/chat/ActionCard";
 import type {
+  ChatAction,
   ChatConversation,
   ChatConversationDetail,
   ChatMessage,
@@ -26,7 +28,13 @@ function MentionBadge({ mention }: { mention: ResolvedMention }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  onActionUpdate,
+}: {
+  msg: ChatMessage;
+  onActionUpdate: (messageId: string, updated: ChatAction) => void;
+}) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} gap-1 max-w-2xl ${isUser ? "ml-auto" : "mr-auto"}`}>
@@ -46,6 +54,18 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       >
         {msg.content}
       </div>
+      {!isUser && msg.actions_data?.length > 0 && (
+        <div className="w-full">
+          {msg.actions_data.map((action) => (
+            <ActionCard
+              key={action.id}
+              messageId={msg.id}
+              action={action}
+              onUpdate={(updated) => onActionUpdate(msg.id, updated)}
+            />
+          ))}
+        </div>
+      )}
       <span className="text-xs text-[#555]">
         {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
       </span>
@@ -103,6 +123,16 @@ export default function ChatPage() {
   function newConversation() {
     setActiveConvId(null);
     setMessages([]);
+  }
+
+  function updateMessageAction(messageId: string, updated: ChatAction) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id !== messageId
+          ? m
+          : { ...m, actions_data: m.actions_data.map((a) => (a.id === updated.id ? updated : a)) },
+      ),
+    );
   }
 
   // ── @mention handling ─────────────────────────────────────────────────────
@@ -224,7 +254,7 @@ export default function ChatPage() {
         role: "assistant",
         content: resp.reply,
         mentions_data: [],
-        actions_data: [],
+        actions_data: resp.actions,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [
@@ -348,7 +378,7 @@ export default function ChatPage() {
             </div>
           )}
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} />
+            <MessageBubble key={msg.id} msg={msg} onActionUpdate={updateMessageAction} />
           ))}
           {isSending && (
             <div className="flex items-start mr-auto max-w-2xl">

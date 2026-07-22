@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
@@ -93,3 +94,55 @@ class ChatRepository:
             .all()
         )
         return list(reversed(rows))
+
+    def get_message_for_user(
+        self,
+        message_id: uuid.UUID,
+        business_id: uuid.UUID,
+        user_id: uuid.UUID,
+    ) -> ChatMessage | None:
+        """Scoped so a message from someone else's conversation is never
+        found, not even to 404 with a distinguishing error - existence of
+        another user's conversation is never leaked."""
+        return (
+            self.db.query(ChatMessage)
+            .join(ChatConversation, ChatMessage.conversation_id == ChatConversation.id)
+            .filter(
+                ChatMessage.id == message_id,
+                ChatConversation.business_id == business_id,
+                ChatConversation.user_id == user_id,
+            )
+            .first()
+        )
+
+    def set_action_status(
+        self,
+        message: ChatMessage,
+        action_id: str,
+        expected_status: str,
+        new_status: str,
+        result: dict | None = None,
+        error: str | None = None,
+    ) -> dict | None:
+        """Race-safe status transition: only succeeds if the action's current
+        status equals expected_status (guards against double-click/double-tab
+        confirm races). Returns the updated action dict, or None if the
+        action id isn't found or the current status doesn't match."""
+        actions = list(message.actions_data or [])
+        for i, action in enumerate(actions):
+            if action["id"] != action_id:
+                continue
+            if action["status"] != expected_status:
+                return None
+            updated = {
+                **action,
+                "status": new_status,
+                "result": result,
+                "error": error,
+                "resolved_at": datetime.now(timezone.utc).isoformat(),
+            }
+            actions[i] = updated
+            message.actions_data = actions  # reassign whole list - SQLAlchemy detects the change
+            self.db.flush()
+            return updated
+        return None

@@ -13,6 +13,7 @@ from app.dependencies import get_current_user
 from app.repositories.chat import ChatRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.chat import (
+    ActionResponse,
     ChatConversationDetail,
     ChatConversationOut,
     MentionSearchResult,
@@ -44,6 +45,40 @@ def send_message(
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@router.post("/messages/{message_id}/actions/{action_id}/confirm", response_model=ActionResponse)
+def confirm_action(
+    message_id: UUID,
+    action_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    service = ChatService(db)
+    try:
+        action = service.confirm_action(message_id, current_user.business_id, current_user.user_id, current_user, action_id)
+        return ActionResponse(message_id=message_id, action=action)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.post("/messages/{message_id}/actions/{action_id}/cancel", response_model=ActionResponse)
+def cancel_action(
+    message_id: UUID,
+    action_id: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    service = ChatService(db)
+    try:
+        action = service.cancel_action(message_id, current_user.business_id, current_user.user_id, action_id)
+        return ActionResponse(message_id=message_id, action=action)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
 
 
 @router.get("/conversations", response_model=list[ChatConversationOut])

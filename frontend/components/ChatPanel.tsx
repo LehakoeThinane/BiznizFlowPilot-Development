@@ -3,7 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { apiRequest } from "@/lib/api";
+import { ActionCard } from "@/components/chat/ActionCard";
 import type {
+  ChatAction,
   ChatConversationDetail,
   ChatMessage,
   MentionSearchResult,
@@ -35,7 +37,13 @@ function MentionBadge({ mention }: { mention: ResolvedMention }) {
   );
 }
 
-function MessageBubble({ msg }: { msg: ChatMessage }) {
+function MessageBubble({
+  msg,
+  onActionUpdate,
+}: {
+  msg: ChatMessage;
+  onActionUpdate: (messageId: string, updated: ChatAction) => void;
+}) {
   const isUser = msg.role === "user";
   return (
     <div className={`flex flex-col ${isUser ? "items-end" : "items-start"} gap-1`}>
@@ -55,6 +63,18 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       >
         {msg.content}
       </div>
+      {!isUser && msg.actions_data?.length > 0 && (
+        <div className="w-full max-w-[85%]">
+          {msg.actions_data.map((action) => (
+            <ActionCard
+              key={action.id}
+              messageId={msg.id}
+              action={action}
+              onUpdate={(updated) => onActionUpdate(msg.id, updated)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -234,7 +254,7 @@ export function ChatPanel() {
         role: "assistant",
         content: resp.reply,
         mentions_data: [],
-        actions_data: [],
+        actions_data: resp.actions,
         created_at: new Date().toISOString(),
       };
       setMessages((prev) => [...prev.filter((m) => m.id !== optimistic.id), userMsg, assistantMsg]);
@@ -270,6 +290,16 @@ export function ChatPanel() {
   function newChat() {
     setConversationId(null);
     setMessages([]);
+  }
+
+  function updateMessageAction(messageId: string, updated: ChatAction) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id !== messageId
+          ? m
+          : { ...m, actions_data: m.actions_data.map((a) => (a.id === updated.id ? updated : a)) },
+      ),
+    );
   }
 
   // ── Render ──────────────────────────────────────────────────────────────
@@ -329,7 +359,7 @@ export function ChatPanel() {
               </div>
             )}
             {messages.map((msg) => (
-              <MessageBubble key={msg.id} msg={msg} />
+              <MessageBubble key={msg.id} msg={msg} onActionUpdate={updateMessageAction} />
             ))}
             {isSending && (
               <div className="flex items-start gap-2">

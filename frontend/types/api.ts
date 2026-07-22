@@ -606,13 +606,25 @@ export interface PurchaseRequisitionListResponse {
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 
+export interface ChatAction {
+  id: string;
+  action_type: "create_task" | "update_lead_status" | "add_note";
+  arguments: Record<string, unknown>;
+  description: string;
+  status: "pending" | "confirmed" | "cancelled" | "executed" | "failed";
+  result: Record<string, unknown> | null;
+  error: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
 export interface ChatMessage {
   id: string;
   conversation_id: string;
   role: "user" | "assistant";
   content: string;
   mentions_data: ResolvedMention[];
-  actions_data: unknown[];
+  actions_data: ChatAction[];
   created_at: string;
 }
 
@@ -643,6 +655,7 @@ export interface SendMessageResponse {
   resolved_mentions: ResolvedMention[];
   user_message_id: string;
   assistant_message_id: string;
+  actions: ChatAction[];
 }
 
 export interface MentionSearchResult {
