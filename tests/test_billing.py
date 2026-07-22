@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.integrations.payfast import build_signature
 from app.models.organization import Organization
+from app.models.organization_domain import OrganizationDomain
 from app.models.pending_checkout import PendingCheckout
 from app.schemas.billing import CheckoutRequest
 from app.services.billing import BillingError, create_checkout_session, verify_and_process_itn
@@ -68,18 +69,24 @@ class TestCreateCheckoutSession:
         monkeypatch.setattr(settings, "payfast_merchant_id", "")
         with pytest.raises(BillingError, match="not configured"):
             create_checkout_session(
-                test_db, CheckoutRequest(org_name="Acme", owner_email="a@acme.com", plan_tier="starter")
+                test_db,
+                CheckoutRequest(org_name="Acme", owner_email="a@acme.com", business_email="a@acme.com", plan_tier="starter"),
             )
 
     def test_unknown_plan_tier_raises_billing_error(self, test_db: Session):
         with pytest.raises(BillingError, match="Unknown plan tier"):
             create_checkout_session(
-                test_db, CheckoutRequest(org_name="Acme", owner_email="a@acme.com", plan_tier="enterprise")
+                test_db,
+                CheckoutRequest(org_name="Acme", owner_email="a@acme.com", business_email="a@acme.com", plan_tier="enterprise"),
             )
 
     def test_creates_pending_checkout_and_signed_url(self, test_db: Session):
         url = create_checkout_session(
-            test_db, CheckoutRequest(org_name="Acme Corp", owner_email="owner@acmecorp.com", plan_tier="starter")
+            test_db,
+            CheckoutRequest(
+                org_name="Acme Corp", owner_email="owner@acmecorp.com",
+                business_email="owner@acmecorp.com", plan_tier="starter",
+            ),
         )
 
         assert url.startswith("https://sandbox.payfast.co.za/eng/process?")
@@ -89,9 +96,55 @@ class TestCreateCheckoutSession:
         pending = test_db.query(PendingCheckout).filter(PendingCheckout.org_name == "Acme Corp").first()
         assert pending is not None
         assert pending.owner_email == "owner@acmecorp.com"
+        assert pending.business_email == "owner@acmecorp.com"
         assert pending.plan_tier == "starter"
         assert pending.status == "pending"
         assert f"m_payment_id={pending.id}" in url
+
+    def test_personal_business_email_is_rejected(self, test_db: Session):
+        with pytest.raises(BillingError, match="business email address"):
+            create_checkout_session(
+                test_db,
+                CheckoutRequest(
+                    org_name="Acme", owner_email="owner@acmecorp.com",
+                    business_email="owner@gmail.com", plan_tier="starter",
+                ),
+            )
+        assert test_db.query(PendingCheckout).filter(PendingCheckout.org_name == "Acme").first() is None
+
+    def test_personal_owner_billing_email_is_allowed(self, test_db: Session):
+        """owner_email (billing/payment contact) is unrestricted - only
+        business_email (platform registration) is checked against the
+        blocklist."""
+        url = create_checkout_session(
+            test_db,
+            CheckoutRequest(
+                org_name="Acme", owner_email="owner@gmail.com",
+                business_email="owner@acmecorp.com", plan_tier="starter",
+            ),
+        )
+        assert "signature=" in url
+
+    @pytest.mark.parametrize("domain", ["yahoo.com", "outlook.com", "webmail.co.za", "mweb.co.za"])
+    def test_other_blocked_domains_are_rejected(self, test_db: Session, domain):
+        with pytest.raises(BillingError, match="business email address"):
+            create_checkout_session(
+                test_db,
+                CheckoutRequest(
+                    org_name="Acme", owner_email="owner@acmecorp.com",
+                    business_email=f"owner@{domain}", plan_tier="starter",
+                ),
+            )
+
+    def test_blocklist_check_is_case_insensitive(self, test_db: Session):
+        with pytest.raises(BillingError, match="business email address"):
+            create_checkout_session(
+                test_db,
+                CheckoutRequest(
+                    org_name="Acme", owner_email="owner@acmecorp.com",
+                    business_email="Founder@GMAIL.COM", plan_tier="starter",
+                ),
+            )
 
 
 class TestVerifyAndProcessItn:
@@ -99,7 +152,8 @@ class TestVerifyAndProcessItn:
         pending = PendingCheckout(
             org_name="Acme Corp",
             subsidiary_name="Acme Corp",
-            owner_email="owner@acmecorp.com",
+            owner_email="billing-contact@gmail.com",
+            business_email="owner@acmecorp.com",
             plan_tier="starter",
             **overrides,
         )
@@ -134,8 +188,13 @@ class TestVerifyAndProcessItn:
         assert org.name == "Acme Corp"
         assert org.subscription_status == "active"
         assert org.plan_tier == "starter"
+        assert org.billing_email == "billing-contact@gmail.com"  # owner_email - billing contact, may be personal
         mock_send.assert_called_once()
-        assert mock_send.call_args.kwargs["to_email"] == "owner@acmecorp.com"
+        assert mock_send.call_args.kwargs["to_email"] == "owner@acmecorp.com"  # business_email - actual registration target
+
+        domain = test_db.query(OrganizationDomain).filter(OrganizationDomain.organization_id == org.id).first()
+        assert domain is not None
+        assert domain.domain == "acmecorp.com"  # derived from business_email, not owner_email's gmail.com
 
         test_db.refresh(pending)
         assert pending.status == "completed"

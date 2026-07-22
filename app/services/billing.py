@@ -36,13 +36,36 @@ class BillingError(Exception):
     """Raised for a billing operation the caller should surface as an HTTP error."""
 
 
+# business_email (the platform-registration address, distinct from
+# owner_email's billing/payment role) must be a custom business domain -
+# personal/free webmail providers are rejected. Free trial signup
+# (app/services/trial_signup.py) deliberately accepts any domain including
+# these; this blocklist applies only to paid checkout's business_email.
+_BLOCKED_EMAIL_DOMAINS = {
+    # Global consumer webmail
+    "gmail.com", "googlemail.com",
+    "yahoo.com", "yahoo.co.uk", "ymail.com", "rocketmail.com",
+    "outlook.com", "hotmail.com", "live.com", "msn.com",
+    "icloud.com", "me.com", "mac.com",
+    "aol.com", "protonmail.com", "proton.me",
+    "gmx.com", "gmx.net", "mail.com",
+    "yandex.com", "zoho.com",
+    # South African / regional consumer webmail
+    "yahoo.co.za", "webmail.co.za", "mweb.co.za", "telkomsa.net",
+    "vodamail.co.za", "lantic.net",
+}
+
+
+def _is_free_email_domain(email: str) -> bool:
+    return email.rsplit("@", 1)[-1].strip().lower() in _BLOCKED_EMAIL_DOMAINS
+
+
 def create_checkout_session(db: Session, data: CheckoutRequest) -> str:
     """Create a PendingCheckout row and return a signed PayFast redirect URL.
 
-    primary_domain is derived from owner_email rather than collected
-    separately, so the owner's own eventual invite is guaranteed to match the
-    domain restriction it's checked against (see
-    InvitationService.create_invitation / domain_is_authorized).
+    business_email (not owner_email) is what the owner's eventual invite
+    goes to and what primary_domain is derived from at ITN time - see
+    verify_and_process_itn.
     """
     if not (settings.payfast_merchant_id and settings.payfast_merchant_key):
         raise BillingError("Billing is not configured")
@@ -51,10 +74,17 @@ def create_checkout_session(db: Session, data: CheckoutRequest) -> str:
     if not amount:
         raise BillingError(f"Unknown plan tier: {data.plan_tier!r}")
 
+    if _is_free_email_domain(data.business_email):
+        raise BillingError(
+            "Please use your business email address to register - "
+            "personal email providers like Gmail, Yahoo, or Outlook aren't accepted."
+        )
+
     pending = PendingCheckoutRepository(db).create(
         org_name=data.org_name,
         subsidiary_name=data.subsidiary_name or data.org_name,
         owner_email=data.owner_email,
+        business_email=data.business_email,
         plan_tier=data.plan_tier,
     )
 
@@ -118,7 +148,7 @@ def verify_and_process_itn(db: Session, raw_body: bytes, fields: dict[str, str],
         return
 
     org_service = OrganizationService(db)
-    primary_domain = pending.owner_email.rsplit("@", 1)[-1].lower()
+    primary_domain = pending.business_email.rsplit("@", 1)[-1].lower()
     shell = org_service.create_organization_shell(
         org_name=pending.org_name,
         billing_email=pending.owner_email,
@@ -134,7 +164,7 @@ def verify_and_process_itn(db: Session, raw_body: bytes, fields: dict[str, str],
     invitation, raw_token = InvitationService(db).create_invitation(
         business_id=shell.business.id,
         organization_id=shell.organization.id,
-        email=pending.owner_email,
+        email=pending.business_email,
         role="owner",
         invited_by=None,
         inviter_role="system",
@@ -143,7 +173,7 @@ def verify_and_process_itn(db: Session, raw_body: bytes, fields: dict[str, str],
 
     try:
         send_invite_email(
-            to_email=pending.owner_email,
+            to_email=pending.business_email,
             organization_name=shell.organization.name,
             business_name=shell.business.name,
             invited_by_name="BiznizFlowPilot",
