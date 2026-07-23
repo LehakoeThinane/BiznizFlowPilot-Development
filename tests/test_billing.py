@@ -31,7 +31,10 @@ def _configured_payfast(monkeypatch):
     monkeypatch.setattr(settings, "payfast_merchant_key", "46f0cd694581a")
     monkeypatch.setattr(settings, "payfast_passphrase", "jt7NOE43FZPn")
     monkeypatch.setattr(settings, "payfast_sandbox", True)
-    monkeypatch.setattr(settings, "payfast_plan_prices", {"starter": "8750.00", "professional": "35000.00"})
+    monkeypatch.setattr(
+        settings, "payfast_plan_prices",
+        {"starter": "8000.00", "growth": "15000.00", "professional": "35000.00"},
+    )
 
 
 class TestBuildSignature:
@@ -90,7 +93,7 @@ class TestCreateCheckoutSession:
         )
 
         assert url.startswith("https://sandbox.payfast.co.za/eng/process?")
-        assert "amount=8750.00" in url
+        assert "amount=8000.00" in url
         assert "signature=" in url
 
         pending = test_db.query(PendingCheckout).filter(PendingCheckout.org_name == "Acme Corp").first()
@@ -100,6 +103,20 @@ class TestCreateCheckoutSession:
         assert pending.plan_tier == "starter"
         assert pending.status == "pending"
         assert f"m_payment_id={pending.id}" in url
+
+    def test_growth_tier_checkout_uses_growth_price(self, test_db: Session):
+        url = create_checkout_session(
+            test_db,
+            CheckoutRequest(
+                org_name="Mid Co", owner_email="owner@midco.com",
+                business_email="owner@midco.com", plan_tier="growth",
+            ),
+        )
+        assert "amount=15000.00" in url
+
+        pending = test_db.query(PendingCheckout).filter(PendingCheckout.org_name == "Mid Co").first()
+        assert pending is not None
+        assert pending.plan_tier == "growth"
 
     def test_personal_business_email_is_rejected(self, test_db: Session):
         with pytest.raises(BillingError, match="business email address"):
@@ -165,7 +182,7 @@ class TestVerifyAndProcessItn:
     def _signed_fields(self, pending_id, **overrides) -> dict[str, str]:
         fields = {
             "m_payment_id": str(pending_id),
-            "amount_gross": "8750.00",
+            "amount_gross": "8000.00",
             "token": "tok_abc123",
         }
         fields.update(overrides)

@@ -36,7 +36,7 @@ class Organization(BaseModel):
         String(50),
         nullable=False,
         server_default="legacy",
-        doc="Subscription plan tier: trial | starter | professional | enterprise | legacy",
+        doc="Subscription plan tier: trial | starter | growth | professional | enterprise | legacy",
     )
 
     billing_mode = Column(

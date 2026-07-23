@@ -124,6 +124,47 @@ class TestStarterTierGating:
         assert second.status_code == 403
 
 
+class TestGrowthTierGating:
+    """Growth sits between Starter and Professional: gets finance/chat/
+    workflows/orders/messaging like Professional, but not HR, and is capped
+    at fewer seats/locations."""
+
+    def test_hr_forbidden(self, client, test_db: Session):
+        user = _make_org_owner(test_db, "growth")
+        r = client.get("/api/v1/hr/departments", headers=_auth_headers(user))
+        assert r.status_code == 403
+
+    def test_finance_allowed(self, client, test_db: Session):
+        user = _make_org_owner(test_db, "growth")
+        r = client.get("/api/v1/finance/summary", headers=_auth_headers(user))
+        assert r.status_code == 200
+
+    def test_ai_chat_allowed(self, client, test_db: Session):
+        user = _make_org_owner(test_db, "growth")
+        r = client.post(
+            "/api/v1/chat/message", json={"message": "hi"}, headers=_auth_headers(user)
+        )
+        assert r.status_code != 403
+
+    def test_third_location_allowed_fourth_forbidden(self, client, test_db: Session):
+        user = _make_org_owner(test_db, "growth")
+        headers = _auth_headers(user)
+        for name in ["Warehouse A", "Warehouse B", "Warehouse C"]:
+            r = client.post(
+                "/api/v1/inventory/locations",
+                json={"name": name, "location_type": "warehouse"},
+                headers=headers,
+            )
+            assert r.status_code == 200
+
+        fourth = client.post(
+            "/api/v1/inventory/locations",
+            json={"name": "Warehouse D", "location_type": "warehouse"},
+            headers=headers,
+        )
+        assert fourth.status_code == 403
+
+
 class TestProfessionalTierGating:
     """Professional gets finance/chat/workflows/orders, but not HR."""
 

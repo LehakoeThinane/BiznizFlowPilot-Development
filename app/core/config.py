@@ -151,7 +151,9 @@ class Settings(BaseSettings):
     # (kept in sync by hand - the two repos have no shared source of truth).
     # "enterprise" is deliberately absent: Custom pricing isn't self-serve
     # checkout, so an unknown-tier lookup here is what blocks it server-side.
-    payfast_plan_prices: dict[str, str] = {"starter": "8750.00", "professional": "35000.00"}
+    payfast_plan_prices: dict[str, str] = {
+        "starter": "8000.00", "growth": "15000.00", "professional": "35000.00",
+    }
 
     # Email delivery — set RESEND_API_KEY to use Resend; otherwise falls back to SMTP
     resend_api_key: str = ""

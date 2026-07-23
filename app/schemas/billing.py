@@ -21,7 +21,7 @@ class CheckoutRequest(BaseModel):
     subsidiary_name: str | None = None
     owner_email: EmailStr
     business_email: EmailStr
-    plan_tier: str = Field(..., pattern=r"^(starter|professional|enterprise)$")
+    plan_tier: str = Field(..., pattern=r"^(starter|growth|professional|enterprise)$")
 
 
 class CheckoutResponse(BaseModel):

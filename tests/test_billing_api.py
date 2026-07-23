@@ -77,7 +77,7 @@ class TestPayfastItn:
 
     def test_valid_itn_provisions_organization(self, client, test_db: Session):
         pending = self._pending(test_db)
-        fields = {"m_payment_id": str(pending.id), "amount_gross": "8750.00", "token": "tok_1"}
+        fields = {"m_payment_id": str(pending.id), "amount_gross": "8000.00", "token": "tok_1"}
         fields["signature"] = build_signature(fields, settings.payfast_passphrase)
 
         with (
