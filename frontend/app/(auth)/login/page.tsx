@@ -2,13 +2,15 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
+import { GoogleLogin, GoogleOAuthProvider } from "@react-oauth/google";
 
 import { apiRequest } from "@/lib/api";
-import { getCurrentUser, getStoredToken, login } from "@/lib/auth";
+import { getCurrentUser, getStoredToken, login, signupTrialWithGoogle } from "@/lib/auth";
 
 type Mode = "login" | "reset-request" | "reset-confirm";
 
 const INPUT = "erp-input w-full px-3 py-2 text-sm";
+const GOOGLE_CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 
 // Reads ?reset_token=... from the URL. Guarded for SSR since this component
 // is server-rendered before window exists there.
@@ -28,6 +30,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [googleBusy, setGoogleBusy] = useState(false);
 
   // Reset step 1
   const [resetEmail, setResetEmail] = useState("");
@@ -73,6 +76,24 @@ export default function LoginPage() {
       );
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleGoogleSuccess(credential: string) {
+    setError(null);
+    setGoogleBusy(true);
+    try {
+      // Same endpoint the signup page uses - it already recognizes a
+      // returning Google account and logs it in without creating anything
+      // new. organization_name is only ever used for a genuinely new
+      // account (i.e. someone clicking this on /login before ever signing
+      // up), which is why it's a placeholder here rather than a form field.
+      await signupTrialWithGoogle({ organization_name: "New Trial Account", credential });
+      window.location.replace("/home");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign-in failed");
+    } finally {
+      setGoogleBusy(false);
     }
   }
 
@@ -169,6 +190,30 @@ export default function LoginPage() {
                 {isSubmitting ? "Signing in..." : "Sign in"}
               </button>
             </form>
+
+            {GOOGLE_CLIENT_ID && (
+              <>
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-border" />
+                  <span className="text-xs text-muted">or</span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+
+                <div className="flex justify-center">
+                  <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+                    <GoogleLogin
+                      onSuccess={(response) => {
+                        if (response.credential) void handleGoogleSuccess(response.credential);
+                      }}
+                      onError={() => setError("Google sign-in failed")}
+                      text="continue_with"
+                      width="336"
+                    />
+                  </GoogleOAuthProvider>
+                </div>
+                {googleBusy && <p className="mt-2 text-center text-xs text-muted">Signing in...</p>}
+              </>
+            )}
           </>
         )}
 
