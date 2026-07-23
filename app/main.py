@@ -6,7 +6,7 @@ import sentry_sdk
 from fastapi import Body, Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import Limiter
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 from sqlalchemy import text
@@ -53,7 +53,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.entitlements import require_active_trial
 from app.core.enums import EventType
-from app.core.exception_handlers import unhandled_exception_handler
+from app.core.exception_handlers import rate_limit_exceeded_handler, unhandled_exception_handler
 from app.core.security import hash_password, verify_password
 from app.dependencies import get_current_user
 from app.models.user import User
@@ -97,7 +97,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 # ============================================================================

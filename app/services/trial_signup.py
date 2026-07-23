@@ -15,6 +15,7 @@ from typing import Optional
 
 from google.auth.transport import requests as google_requests
 from google.oauth2 import id_token as google_id_token
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -128,8 +129,30 @@ class TrialSignupService:
         last_name = payload.get("family_name") or ""
         placeholder_password = hash_password(secrets.token_urlsafe(32))
 
-        return self._finish_signup(
-            organization_name=organization_name, email=email,
-            first_name=first_name, last_name=last_name,
-            hashed_password=placeholder_password, auth_provider="google", google_sub=google_sub,
-        )
+        try:
+            return self._finish_signup(
+                organization_name=organization_name, email=email,
+                first_name=first_name, last_name=last_name,
+                hashed_password=placeholder_password, auth_provider="google", google_sub=google_sub,
+            )
+        except IntegrityError:
+            # Two near-simultaneous requests for the same Google account (e.g.
+            # a double-click) can both pass the get_by_google_sub check above
+            # before either commits - the loser hits this unique-constraint
+            # violation instead of a clean "already exists" result. Recover by
+            # rolling back and logging in as the account the winner just created.
+            self.db.rollback()
+            existing = self.user_repo.get_by_google_sub(google_sub)
+            if not existing:
+                raise
+
+            from app.services.auth import AuthService  # local import avoids a circular import
+
+            return AuthService._create_tokens(
+                user_id=existing.id,
+                business_id=existing.business_id,
+                email=existing.email,
+                role=existing.role,
+                full_name=existing.full_name,
+                phash=existing.hashed_password[-8:],
+            )

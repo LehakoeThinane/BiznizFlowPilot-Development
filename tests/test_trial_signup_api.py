@@ -14,6 +14,7 @@ from app.models.messaging import Conversation, Message
 from app.models.organization import Organization
 from app.models.product import Product
 from app.models.user import User
+from app.repositories.user import UserRepository
 
 
 def _password_signup_body(email: str = "founder@example.com", org: str = "Founder Co") -> dict:
@@ -181,3 +182,50 @@ class TestGoogleSignup:
                 json={"organization_name": "Google Co", "credential": "fake-id-token"},
             )
         assert r2.status_code == 409
+
+    def test_concurrent_google_signup_recovers_instead_of_crashing(self, client, test_db: Session):
+        """Two near-simultaneous requests for the same Google account (e.g. a
+        double-click) can both pass the "does this account already exist?"
+        check before either commits - the loser used to crash with a raw
+        IntegrityError on the google_sub unique constraint instead of just
+        logging the user into the account the winner had already created."""
+        with patch("app.services.trial_signup.google_id_token.verify_oauth2_token") as mock_verify:
+            mock_verify.return_value = self._mock_payload(sub="race-sub-1", email="race@example.com")
+            r1 = client.post(
+                "/api/v1/signup/trial/google",
+                json={"organization_name": "Race Co", "credential": "fake-id-token"},
+            )
+        assert r1.status_code == 200
+        first_business_id = test_db.query(User).filter(User.google_sub == "race-sub-1").first().business_id
+
+        # Force the pre-insert existence check to miss on its first call only
+        # (simulating the race), then fall through to the real lookup on the
+        # recovery path inside the except block.
+        real_get_by_google_sub = UserRepository.get_by_google_sub
+        calls = {"n": 0}
+
+        def flaky_get_by_google_sub(self, google_sub):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return None
+            return real_get_by_google_sub(self, google_sub)
+
+        with (
+            patch("app.services.trial_signup.google_id_token.verify_oauth2_token") as mock_verify,
+            patch.object(UserRepository, "get_by_google_sub", flaky_get_by_google_sub),
+            # In a real race the concurrent (not-yet-committed) row is also
+            # invisible to this email check, not just the google_sub one.
+            patch.object(UserRepository, "get_by_email_all", return_value=None),
+        ):
+            mock_verify.return_value = self._mock_payload(sub="race-sub-1", email="race@example.com")
+            r2 = client.post(
+                "/api/v1/signup/trial/google",
+                json={"organization_name": "Race Co Again", "credential": "fake-id-token"},
+            )
+
+        assert r2.status_code == 200
+        assert r2.json()["access_token"]
+
+        users = test_db.query(User).filter(User.google_sub == "race-sub-1").all()
+        assert len(users) == 1
+        assert users[0].business_id == first_business_id
