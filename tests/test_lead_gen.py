@@ -96,6 +96,57 @@ class TestLeadGenGooglePlaces:
         assert notif is not None
 
 
+class TestLeadGenQualificationScoring:
+    def test_strong_result_is_auto_qualified(self, test_db: Session, owner_user: CurrentUser):
+        strong = PlaceResult(
+            place_id="place_strong", name="Acme Plumbing", address="1 Main St",
+            phone="0110000000", website="https://acme-plumbing.co.za",
+            types=["plumber"], rating=4.7, user_rating_count=85,
+        )
+
+        with patch("app.services.lead_gen.search_text", return_value=[strong]):
+            result = LeadGenService(test_db).find_via_google_places(
+                owner_user.business_id, owner_user, query="plumbers in Johannesburg"
+            )
+
+        assert len(result.leads) == 1
+        assert result.leads[0].status == "qualified"
+        assert result.qualified_count == 1
+        assert "score" in result.leads[0].notes.lower()
+
+    def test_weak_result_stays_new_not_qualified(self, test_db: Session, owner_user: CurrentUser):
+        weak = PlaceResult(
+            place_id="place_weak", name="Random Co", address="1 Main St",
+            phone="0110000000", website=None,
+        )
+
+        with patch("app.services.lead_gen.search_text", return_value=[weak]):
+            result = LeadGenService(test_db).find_via_google_places(
+                owner_user.business_id, owner_user, query="plumbers in Johannesburg"
+            )
+
+        assert len(result.leads) == 1
+        assert result.leads[0].status == "new"
+        assert result.qualified_count == 0
+
+    def test_closed_business_is_excluded_entirely(self, test_db: Session, owner_user: CurrentUser):
+        closed = PlaceResult(
+            place_id="place_closed", name="Defunct Plumbing", address="1 Main St",
+            phone="0110000000", website="https://defunct.co.za",
+            business_status="CLOSED_PERMANENTLY", rating=4.9, user_rating_count=200, types=["plumber"],
+        )
+
+        with patch("app.services.lead_gen.search_text", return_value=[closed]):
+            result = LeadGenService(test_db).find_via_google_places(
+                owner_user.business_id, owner_user, query="plumbers"
+            )
+
+        assert len(result.leads) == 0
+        assert result.skipped_closed == 1
+        customer = test_db.query(Customer).filter(Customer.external_ref == "google_places:place_closed").first()
+        assert customer is None
+
+
 class TestLeadGenEmailEnrichment:
     def test_scraped_email_lands_on_customer(self, test_db: Session, owner_user: CurrentUser):
         service = LeadGenService(test_db)

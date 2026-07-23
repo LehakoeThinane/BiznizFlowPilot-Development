@@ -21,12 +21,15 @@ from app.schemas.auth import CurrentUser
 from app.schemas.lead import LeadCreate
 from app.services.event import EventService
 from app.services.lead import LeadService
+from app.services.lead_scoring import MAX_SCORE, is_closed, score_place
 
 
 @dataclass
 class LeadGenResult:
     leads: list[Lead]
     skipped_duplicates: int
+    skipped_closed: int = 0
+    qualified_count: int = 0
 
 
 class LeadGenService:
@@ -49,12 +52,21 @@ class LeadGenService:
             raise ValueError(str(e)) from e
 
         created: list[Lead] = []
-        skipped = 0
+        skipped_duplicates = 0
+        skipped_closed = 0
+        qualified_count = 0
 
         for place in places:
             external_ref = f"google_places:{place.place_id}"
             if self.customer_repo.get_by_external_ref(business_id, external_ref):
-                skipped += 1
+                skipped_duplicates += 1
+                continue
+
+            # A business Google itself reports as closed is not a lead,
+            # regardless of how it would otherwise score - excluded entirely
+            # rather than imported with a low score.
+            if is_closed(place):
+                skipped_closed += 1
                 continue
 
             email = find_email(place.website) if place.website else None
@@ -70,17 +82,30 @@ class LeadGenService:
                 external_ref=external_ref,
             )
 
+            result = score_place(place, query)
+            if result.qualified:
+                qualified_count += 1
+            notes = f'Auto-found via Google Places search: "{query}"'
+            if result.reasons:
+                notes += f" - {'; '.join(result.reasons)} (score {result.score}/{MAX_SCORE})."
+            else:
+                notes += f" - no qualifying signals found (score 0/{MAX_SCORE})."
             lead = self._lead_service.create(
                 business_id,
                 current_user,
                 LeadCreate(
                     customer_id=customer.id,
-                    status="new",
+                    status="qualified" if result.qualified else "new",
                     source="google_places",
                     assigned_to=assign_to,
-                    notes=f'Auto-found via Google Places search: "{query}"',
+                    notes=notes,
                 ),
             )
             created.append(lead)
 
-        return LeadGenResult(leads=created, skipped_duplicates=skipped)
+        return LeadGenResult(
+            leads=created,
+            skipped_duplicates=skipped_duplicates,
+            skipped_closed=skipped_closed,
+            qualified_count=qualified_count,
+        )

@@ -20,5 +20,7 @@ class LeadGenSearchResponse(BaseModel):
     """Result of a lead-gen search - leads already created and notified."""
 
     created_count: int
+    qualified_count: int
     skipped_duplicates: int
+    skipped_closed: int
     leads: list[LeadResponse]

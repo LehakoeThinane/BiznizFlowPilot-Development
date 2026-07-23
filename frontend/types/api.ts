@@ -330,7 +330,9 @@ export interface LeadListResponse {
 
 export interface LeadGenSearchResponse {
   created_count: number;
+  qualified_count: number;
   skipped_duplicates: number;
+  skipped_closed: number;
   leads: Lead[];
 }
 

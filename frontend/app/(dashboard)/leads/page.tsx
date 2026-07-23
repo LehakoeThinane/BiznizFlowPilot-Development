@@ -504,11 +504,19 @@ export default function LeadsPage() {
         body: { query: findQuery.trim(), max_results: 10 },
       });
 
+      const extras: string[] = [];
+      if (result.skipped_duplicates > 0) extras.push(`${result.skipped_duplicates} already in your pipeline`);
+      if (result.skipped_closed > 0) extras.push(`${result.skipped_closed} excluded (business closed)`);
+      const extraText = extras.length > 0 ? ` (${extras.join(", ")})` : "";
+
       setFindResultMessage(
         result.created_count > 0
           ? `Found ${result.created_count} new lead${result.created_count === 1 ? "" : "s"}` +
-            (result.skipped_duplicates > 0 ? ` (${result.skipped_duplicates} already in your pipeline).` : ".")
-          : `No new leads - ${result.skipped_duplicates} result(s) were already in your pipeline.`
+            (result.qualified_count > 0
+              ? ` - ${result.qualified_count} auto-qualified based on website, industry match, and reviews`
+              : "") +
+            `${extraText}.`
+          : `No new leads${extraText}.`
       );
       await loadLeads();
     } catch (requestError) {

@@ -101,7 +101,9 @@ def find_leads(
         )
         return LeadGenSearchResponse(
             created_count=len(result.leads),
+            qualified_count=result.qualified_count,
             skipped_duplicates=result.skipped_duplicates,
+            skipped_closed=result.skipped_closed,
             leads=[LeadResponse.model_validate(lead) for lead in result.leads],
         )
     except PermissionError as e:

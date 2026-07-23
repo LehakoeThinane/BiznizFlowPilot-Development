@@ -6,12 +6,15 @@ needs, since Places (New) bills per field group requested.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import httpx
 
 _SEARCH_URL = "https://places.googleapis.com/v1/places:searchText"
-_FIELD_MASK = "places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,places.websiteUri"
+_FIELD_MASK = (
+    "places.id,places.displayName,places.formattedAddress,places.nationalPhoneNumber,"
+    "places.websiteUri,places.rating,places.userRatingCount,places.businessStatus,places.types"
+)
 
 
 @dataclass
@@ -21,6 +24,12 @@ class PlaceResult:
     address: str | None
     phone: str | None
     website: str | None
+    # Added for lead scoring (see app/services/lead_scoring.py) - all optional
+    # since older/incomplete Places responses may omit them.
+    rating: float | None = None
+    user_rating_count: int | None = None
+    business_status: str | None = None
+    types: list[str] = field(default_factory=list)
 
 
 class GooglePlacesError(Exception):
@@ -57,6 +66,10 @@ def search_text(api_key: str, query: str, max_results: int = 10) -> list[PlaceRe
             address=place.get("formattedAddress"),
             phone=place.get("nationalPhoneNumber"),
             website=place.get("websiteUri"),
+            rating=place.get("rating"),
+            user_rating_count=place.get("userRatingCount"),
+            business_status=place.get("businessStatus"),
+            types=place.get("types", []),
         )
         for place in places
     ]
