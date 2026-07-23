@@ -29,7 +29,7 @@ def request_help(
     body: OnboardingHelpRequest,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> None:
+):
     """Request onboarding assistance - available to every plan tier, not
     gated by FEATURE_TIERS, since this is about setup help rather than a
     paid feature."""
