@@ -192,6 +192,11 @@ class Settings(BaseSettings):
     # than erroring, same convention as sentry_dsn above.
     google_places_api_key: str = ""
 
+    # Staff inbox for marketing-lead and onboarding-help notifications -
+    # empty means those emails are logged only, not sent, same convention
+    # as sentry_dsn/google_places_api_key above.
+    staff_notification_email: str = ""
+
     # Google Sign-In for the public trial-signup flow. Only the OAuth client
     # ID is needed (verifies the ID token's audience) - no client secret,
     # since this uses Google's client-side ID-token flow, not an

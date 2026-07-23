@@ -126,9 +126,6 @@
     "user = db.query(User).filter(User.id == current_user.user_id).first()",
     "user = db.query(User).filter(User.id == current_user.user_id).first()"
   ],
-  "app/services/billing.py": [
-    "db.query(Organization)"
-  ],
   "app/services/chat.py": [
     "business = self.db.query(Business).filter(Business.id == business_id).first()",
     "user = self.db.query(User).filter(User.id == user_id).first()"
@@ -162,9 +159,6 @@
     "business = self.db.query(Business).filter(Business.id == invitation.business_id).first()",
     "self.db.query(Organization)"
   ],
-  "app/services/meeting.py": [
-    "self.db.query(User.id)"
-  ],
   "app/services/messaging.py": [
     "self.db.query(User)"
   ],
@@ -176,6 +170,14 @@
     "self.db.query(WorkflowAction)",
     "self.db.query(WorkflowDefinition)",
     "self.db.query(WorkflowDefinition)"
+  ],
+  "app/services/onboarding.py": [
+    "self.db.query(Expense).filter(Expense.business_id == business_id).first() is not None",
+    "self.db.query(WorkflowDefinition)",
+    "self.db.query(ChatMessage)",
+    "self.db.query(Employee).filter(Employee.business_id == business_id).first() is not None",
+    "self.db.query(Business).filter(Business.organization_id == org.id).count() > 1",
+    "business = self.db.query(Business).filter(Business.id == current_user.business_id).first()"
   ],
   "app/services/recovery.py": [
     "self.db.query(Event)",

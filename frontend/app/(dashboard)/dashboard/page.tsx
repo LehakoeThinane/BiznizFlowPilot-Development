@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/api";
 import { AppTileIcon } from "@/components/AppTileIcon";
+import { OnboardingChecklist } from "@/components/onboarding/OnboardingChecklist";
 import type { DashboardMetricsResponse, UserRole } from "@/types/api";
 
 const REFRESH_INTERVAL = 30;
@@ -288,6 +289,9 @@ export default function DashboardPage() {
           </button>
         </div>
       )}
+
+      {/* ── Getting Started ────────────────────────────────────────────── */}
+      <OnboardingChecklist />
 
       {/* ── Quick Actions ───────────────────────────────────────────────── */}
       <div className="space-y-3">

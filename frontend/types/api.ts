@@ -240,6 +240,15 @@ export interface DashboardMetricsResponse {
   refreshedAt: string;
 }
 
+export interface OnboardingStepResponse {
+  key: string;
+  done: boolean;
+}
+
+export interface OnboardingChecklistResponse {
+  steps: OnboardingStepResponse[];
+}
+
 export interface WorkflowAction {
   id: string;
   workflow_id: string | null;

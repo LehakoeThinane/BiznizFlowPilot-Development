@@ -488,3 +488,47 @@ def send_meeting_cancelled_email(
         to_email, subject, f"Meeting cancelled: {meeting_title}", body_plain, body_html,
         None, None, ics_bytes, "CANCEL", db, organization_id,
     )
+
+
+def _notify_staff(subject: str, html: str, plain: str) -> None:
+    """Shared sender for internal staff notifications (marketing leads,
+    onboarding help requests). No-ops (log only) if staff_notification_email
+    isn't configured, same "empty means disabled" convention as
+    sentry_dsn/google_places_api_key in app/core/config.py. Never passes
+    organization_id - these notifications go to MM Nexus staff, not a
+    tenant's own custom SMTP sender."""
+    if not settings.staff_notification_email:
+        logger.info("email.staff_notification.skipped_not_configured", extra={"subject": subject})
+        return
+    _send(settings.staff_notification_email, subject, html, plain)
+
+
+def send_marketing_guide_lead_email(
+    first_name: str, last_name: str, email: str, company: str, guide_slug: str
+) -> None:
+    subject = f"New guide download lead: {first_name} {last_name} ({company})"
+    plain = (
+        f"A marketing-site visitor downloaded the '{guide_slug}' guide.\n\n"
+        f"Name: {first_name} {last_name}\nEmail: {email}\nCompany: {company}\nGuide: {guide_slug}"
+    )
+    html = (
+        f"<p>A marketing-site visitor downloaded the <strong>{guide_slug}</strong> guide.</p>"
+        f"<p>Name: {first_name} {last_name}<br>Email: {email}<br>Company: {company}</p>"
+    )
+    _notify_staff(subject, html, plain)
+
+
+def send_onboarding_help_request_email(
+    user_name: str, user_email: str, business_name: str, note: str | None
+) -> None:
+    subject = f"Onboarding help requested: {business_name}"
+    note_line = note or "(no note added)"
+    plain = (
+        f"{user_name} ({user_email}) at {business_name} requested help getting set up.\n\n"
+        f"Note: {note_line}"
+    )
+    html = (
+        f"<p>{user_name} ({user_email}) at <strong>{business_name}</strong> requested help getting set up.</p>"
+        f"<p>Note: {note_line}</p>"
+    )
+    _notify_staff(subject, html, plain)

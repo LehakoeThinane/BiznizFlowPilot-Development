@@ -28,11 +28,13 @@ from app.api import (
     inventory,
     invoice,
     leads,
+    marketing_leads,
     meeting_rsvp,
     meetings,
     messaging,
     metrics,
     notification,
+    onboarding,
     organizations,
     platform_admin,
     platform_auth,
@@ -152,6 +154,9 @@ app.include_router(signup.router, prefix=settings.api_v1_prefix)
 app.include_router(billing.router)
 app.include_router(document_share.public_router)
 
+# Marketing-site gated guide downloads (no auth required — see app/api/marketing_leads.py docstring)
+app.include_router(marketing_leads.router)
+
 # Meeting RSVP (no auth required — see app/api/meeting_rsvp.py docstring)
 app.include_router(meeting_rsvp.public_router)
 
@@ -191,6 +196,7 @@ app.include_router(workflows.router, dependencies=[Depends(require_active_trial)
 app.include_router(workflow_definitions.router, dependencies=[Depends(require_active_trial)])
 app.include_router(metrics.router, dependencies=[Depends(require_active_trial)])
 app.include_router(dashboard.router, dependencies=[Depends(require_active_trial)])
+app.include_router(onboarding.router, dependencies=[Depends(require_active_trial)])
 
 # ERP routes (auth required)
 app.include_router(products.router, dependencies=[Depends(require_active_trial)])

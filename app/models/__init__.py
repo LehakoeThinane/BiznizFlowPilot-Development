@@ -33,6 +33,7 @@ from app.models.document_access_request import DocumentAccessRequest
 from app.models.document_version import DocumentVersion
 from app.models.folder import Folder
 from app.models.pending_checkout import PendingCheckout
+from app.models.marketing_guide_lead import MarketingGuideLead
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
 from app.models.user_email import UserEmailAccount
@@ -90,6 +91,7 @@ __all__ = [
     "DocumentVersion",
     "Folder",
     "PendingCheckout",
+    "MarketingGuideLead",
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",
