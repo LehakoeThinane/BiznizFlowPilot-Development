@@ -129,6 +129,16 @@ _DEPARTMENTS_SPEC: list[tuple[str, str, list[str]]] = [
 # history (is_active=False + end_date) instead of everyone still employed.
 _INACTIVE_PERSON_INDEXES = {18, 42, 61}
 
+# A few more department managers who (like Naledi/Operations) also get a
+# real, non-loginable User account - purely so Messages has more than one
+# person to talk to. Every other employee is HR-only headcount with no
+# user_id, since Task/Message participants must reference a real User row.
+_MESSAGING_COLLEAGUES: dict[str, tuple[str, str]] = {
+    "Sales & CRM": ("Karabo", "Sithole"),
+    "Finance": ("Lerato", "Mokoena"),
+    "Warehouse & Logistics": ("Sizwe", "Ngcobo"),
+}
+
 _CUSTOMERS_DATA = [
     ("Karabo Traders", "accounts@karabotraders.example", "Karabo Traders (Pty) Ltd"),
     ("Sunrise Retail Group", "procurement@sunriseretail.example", "Sunrise Retail Group"),
@@ -273,6 +283,7 @@ def seed_sample_data(db: Session, business_id: UUID, owner_user_id: UUID) -> Non
     db.flush()
 
     all_employees: list[Employee] = [owner_employee]
+    extra_colleagues: dict[str, User] = {}
     person_index = 0
 
     for dept_name, manager_position, staff_positions in _DEPARTMENTS_SPEC:
@@ -289,6 +300,27 @@ def seed_sample_data(db: Session, business_id: UUID, owner_user_id: UUID) -> Non
                 employment_type="full_time", salary_type="monthly", gross_salary="32000.00",
                 start_date=today - timedelta(days=400), is_active=True,
             )
+        elif dept_name in _MESSAGING_COLLEAGUES:
+            first, last = _MESSAGING_COLLEAGUES[dept_name]
+            colleague_user = User(
+                business_id=business_id, email=f"{first.lower()}.{last.lower()}@example-demo.invalid",
+                first_name=first, last_name=last,
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
+                role="manager", auth_provider="password", is_active=True,
+            )
+            db.add(colleague_user)
+            db.flush()
+            extra_colleagues[dept_name] = colleague_user
+
+            manager_employee = emp_repo.create(
+                business_id=business_id, commit=False, department_id=department.id, user_id=colleague_user.id,
+                manager_id=owner_employee.id, first_name=first, last_name=last, position=manager_position,
+                email=colleague_user.email, phone=f"+27 8{2 + person_index % 7} 555 {1000 + person_index:04d}",
+                employment_type="full_time", salary_type="monthly",
+                gross_salary=_money(34000 + person_index * 900),
+                start_date=today - timedelta(days=300 + person_index * 11), is_active=True,
+            )
+            person_index += 1
         else:
             first, last = _name(person_index)
             manager_employee = emp_repo.create(
@@ -741,6 +773,64 @@ def seed_sample_data(db: Session, business_id: UUID, owner_user_id: UUID) -> Non
     db.flush()
     poll_repo.add_vote(poll.id, option_a.id, owner_user_id)
     poll_repo.add_vote(poll.id, option_b.id, colleague.id)
+
+    # One more 1:1 conversation per extra colleague, each on topics relevant
+    # to their department, plus a small-group thread with all of them - so
+    # Messages looks like an active company, not a single back-and-forth.
+    sales_mgr = extra_colleagues.get("Sales & CRM")
+    finance_mgr = extra_colleagues.get("Finance")
+    warehouse_mgr = extra_colleagues.get("Warehouse & Logistics")
+
+    if sales_mgr:
+        convo = conversation_repo.create(business_id=business_id, commit=False)
+        db.flush()
+        conversation_repo.add_participant(convo.id, owner_user_id)
+        conversation_repo.add_participant(convo.id, sales_mgr.id)
+        conversation_repo.add_message(convo.id, sales_mgr.id, "Morning! Just wrapped up the call with Harbor View Hotels - they're keen to move forward.")
+        conversation_repo.add_message(convo.id, owner_user_id, "That's great news. What's the expected close date?")
+        conversation_repo.add_message(convo.id, sales_mgr.id, "Aiming for end of month - I'll draft the sales order once they confirm the PO.")
+        conversation_repo.add_message(convo.id, sales_mgr.id, "Also heads up, Zenith Security Group has gone quiet - might need a follow-up call this week.")
+        conversation_repo.add_message(convo.id, owner_user_id, "Good catch, I'll add that to my task list.")
+
+    if finance_mgr:
+        convo = conversation_repo.create(business_id=business_id, commit=False)
+        db.flush()
+        conversation_repo.add_participant(convo.id, owner_user_id)
+        conversation_repo.add_participant(convo.id, finance_mgr.id)
+        conversation_repo.add_message(convo.id, finance_mgr.id, "Hi - just finalized this month's payroll run, everything's balanced.")
+        conversation_repo.add_message(convo.id, owner_user_id, "Perfect, thanks for turning that around so quickly.")
+        conversation_repo.add_message(convo.id, finance_mgr.id, "No problem. A few invoices are creeping toward overdue too - sending reminders today.")
+        conversation_repo.add_message(convo.id, finance_mgr.id, "On the plus side, expenses are tracking under budget for the quarter so far.")
+        conversation_repo.add_message(convo.id, owner_user_id, "Great to hear - keep me posted.")
+
+    if warehouse_mgr:
+        convo = conversation_repo.create(business_id=business_id, commit=False)
+        db.flush()
+        conversation_repo.add_participant(convo.id, owner_user_id)
+        conversation_repo.add_participant(convo.id, warehouse_mgr.id)
+        conversation_repo.add_message(convo.id, warehouse_mgr.id, "Stock count at the Durban depot is done - a couple of SKUs are below reorder point.")
+        conversation_repo.add_message(convo.id, owner_user_id, "Which ones should we prioritize on the next purchase order?")
+        conversation_repo.add_message(convo.id, warehouse_mgr.id, "Steel brackets and safety goggles mainly - I've already logged a requisition for review.")
+        conversation_repo.add_message(convo.id, warehouse_mgr.id, "Also, the new pallet jack arrived - already making a difference on the floor.")
+        conversation_repo.add_message(convo.id, owner_user_id, "Nice, glad that's paying off.")
+
+    group_members = [colleague] + [c for c in (sales_mgr, finance_mgr, warehouse_mgr) if c]
+    if len(group_members) > 1:
+        group = conversation_repo.create(business_id=business_id, commit=False)
+        db.flush()
+        conversation_repo.add_participant(group.id, owner_user_id)
+        for member in group_members:
+            conversation_repo.add_participant(group.id, member.id)
+        conversation_repo.add_message(group.id, colleague.id, "Quick one for the group - can everyone send me their department's priorities for next week by Friday?")
+        if sales_mgr:
+            conversation_repo.add_message(group.id, sales_mgr.id, "Sales priorities coming your way - mostly closing the Harbor View deal.")
+        if finance_mgr:
+            conversation_repo.add_message(group.id, finance_mgr.id, "Finance will have the Q3 numbers ready for review.")
+        if warehouse_mgr:
+            conversation_repo.add_message(group.id, warehouse_mgr.id, "Warehouse is focused on the stock take and the new supplier onboarding.")
+        conversation_repo.add_message(group.id, owner_user_id, "Thanks all - appreciate the updates, let's regroup Monday.")
+
+    db.flush()
 
     # ── Meetings ──────────────────────────────────────────────────────────
     meeting_repo = MeetingRepository(db)

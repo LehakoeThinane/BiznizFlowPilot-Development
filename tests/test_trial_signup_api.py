@@ -58,18 +58,19 @@ class TestPasswordSignup:
         assert test_db.query(Meeting).filter(Meeting.business_id == user.business_id).count() == 8
         assert test_db.query(Document).filter(Document.business_id == user.business_id).count() == 18
 
-        # A second "colleague" user exists purely for Messages/Meetings realism.
-        colleague = (
-            test_db.query(User)
-            .filter(User.business_id == user.business_id, User.id != user.id)
-            .first()
-        )
-        assert colleague is not None
-        assert colleague.role == "manager"
+        # A handful of "colleague" users exist purely for Messages/Meetings
+        # realism (Operations, Sales, Finance, Warehouse managers) - none of
+        # them are actually loggable-in, same trick as a Google-only account.
+        colleagues = test_db.query(User).filter(User.business_id == user.business_id, User.id != user.id).all()
+        assert len(colleagues) == 4
+        assert all(c.role == "manager" for c in colleagues)
 
-        conversation = test_db.query(Conversation).filter(Conversation.business_id == user.business_id).first()
-        assert conversation is not None
-        assert test_db.query(Message).filter(Message.conversation_id == conversation.id).count() == 6
+        conversations = test_db.query(Conversation).filter(Conversation.business_id == user.business_id).all()
+        assert len(conversations) == 5  # 3x 1:1 + Naledi's 1:1 + one small-group thread
+        total_messages = sum(
+            test_db.query(Message).filter(Message.conversation_id == c.id).count() for c in conversations
+        )
+        assert total_messages == 26
 
     def test_duplicate_email_rejected(self, client, test_db: Session):
         r1 = client.post("/api/v1/signup/trial", json=_password_signup_body())
