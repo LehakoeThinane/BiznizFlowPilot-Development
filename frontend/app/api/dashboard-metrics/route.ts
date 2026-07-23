@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+// BACKEND_URL (no NEXT_PUBLIC_ prefix) is the plain server-side runtime env
+// var every other server-to-backend call in this container uses - matches
+// next.config.ts's rewrites() destination and docker-compose.prod.yml's
+// "http://backend:8000" internal hop. NEXT_PUBLIC_API_BASE_URL is a client-
+// bundle variable for browser-side fetches and is never set in this app, so
+// using it here always fell through to the 127.0.0.1 default - which inside
+// the frontend container has nothing listening, since the backend is a
+// separate container.
+const BACKEND_BASE_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 
 export async function GET(request: NextRequest) {
   const authorization = request.headers.get("authorization");

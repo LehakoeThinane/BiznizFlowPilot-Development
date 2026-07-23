@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const BACKEND_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:8000";
+// BACKEND_URL (no NEXT_PUBLIC_ prefix) is the plain server-side runtime env
+// var every other server-to-backend call in this container uses - matches
+// docker-compose.prod.yml's "http://backend:8000" internal hop.
+const BACKEND_BASE_URL = process.env.BACKEND_URL ?? "http://127.0.0.1:8000";
 
 type RunStatusFilter = "all" | "pending" | "running" | "completed" | "failed";
 
