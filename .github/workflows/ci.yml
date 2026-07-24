@@ -46,7 +46,13 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Install ruff
-        run: pip install ruff
+        # Pinned: an unpinned install picks up whatever ruff released that
+        # day, and ruff 0.16.0 expanded its default rule set (pulling in
+        # B/BLE/import-sort rules that weren't active before) - that broke
+        # CI against the entire pre-existing codebase, unrelated to any
+        # actual code change. Pin to the version the codebase is actually
+        # clean against; bump deliberately, not implicitly.
+        run: pip install ruff==0.15.22
 
       - name: Lint (ruff)
         run: ruff check app/
