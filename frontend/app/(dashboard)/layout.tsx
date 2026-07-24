@@ -145,8 +145,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </nav>
             </div>
 
-            {/* Bottom: support / settings / sign out */}
+            {/* Bottom: custom systems / support / settings / sign out */}
             <div className="border-t border-white/8 pb-4 pt-2">
+              <a
+                href="https://mmnexus.co.za/contact"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 px-4 py-3 text-sm text-surface-variant transition-colors hover:bg-white/5"
+              >
+                <span className="material-symbols-outlined text-primary-fixed-dim">architecture</span>
+                <span>Need something custom?</span>
+              </a>
               <a
                 href="mailto:support@biznizflowpilot.com"
                 className="flex items-center gap-3 px-4 py-3 text-sm text-surface-variant transition-colors hover:bg-white/5"

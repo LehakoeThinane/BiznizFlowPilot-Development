@@ -62,7 +62,7 @@ export const ONBOARDING_GUIDES: Record<string, OnboardingGuide> = {
     title: "Try the AI copilot",
     content: (
       <>
-        <p>Open Chat and ask the copilot to do something concrete - "create a task for me" or "update this lead's status."</p>
+        <p>Open Chat and ask the copilot to do something concrete - &ldquo;create a task for me&rdquo; or &ldquo;update this lead&apos;s status.&rdquo;</p>
         <p>It always asks for confirmation before changing anything, so nothing happens without your sign-off.</p>
       </>
     ),

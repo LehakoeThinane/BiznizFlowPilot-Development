@@ -9,19 +9,32 @@ import { AppTileIcon } from "@/components/AppTileIcon";
 import type { OnboardingChecklistResponse, OnboardingStepResponse } from "@/types/api";
 
 const COLLAPSE_KEY = "onboarding-checklist-collapsed";
+const GRADUATION_DISMISS_KEY = "onboarding-graduation-dismissed";
+const MM_NEXUS_CONTACT_URL = "https://mmnexus.co.za/contact";
 
 /** Tier-aware "getting started" checklist for the dashboard. Steps and their
  * done-state come from the backend (filtered to what the org's plan tier
  * actually unlocks - see app/services/onboarding.py); this component only
- * owns display and the collapse/help interactions. Renders nothing once
- * every visible step is done, or if the checklist can't be loaded at all. */
+ * owns display and the collapse/help interactions. Once every visible step
+ * is done, swaps to a dismissible "graduation" card pointing at MM Nexus's
+ * custom-systems work - the org has proven out BiznizFlowPilot itself, so
+ * this is the moment to surface "need something built on top of this?"
+ * rather than just disappearing. Renders nothing if the checklist can't be
+ * loaded at all. */
 export function OnboardingChecklist() {
   const [steps, setSteps] = useState<OnboardingStepResponse[] | null>(null);
   const [collapsed, setCollapsed] = useState(false);
   const [helpState, setHelpState] = useState<"idle" | "sending" | "sent">("idle");
+  const [graduationDismissed, setGraduationDismissed] = useState(false);
 
   useEffect(() => {
+    // sessionStorage is browser-only - reading it during the initial render
+    // (e.g. via a useState lazy initializer) would mismatch the server-
+    // rendered markup. Deferring to an effect keeps first paint identical
+    // on server and client, then syncs the real value right after mount.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCollapsed(sessionStorage.getItem(COLLAPSE_KEY) === "true");
+    setGraduationDismissed(sessionStorage.getItem(GRADUATION_DISMISS_KEY) === "true");
   }, []);
 
   useEffect(() => {
@@ -48,7 +61,42 @@ export function OnboardingChecklist() {
 
   if (!steps || steps.length === 0) return null;
   const doneCount = steps.filter((s) => s.done).length;
-  if (doneCount === steps.length) return null;
+
+  if (doneCount === steps.length) {
+    if (graduationDismissed) return null;
+    return (
+      <div className="erp-panel flex items-center justify-between gap-3 px-5 py-4">
+        <div>
+          <p className="text-sm font-medium text-white">You&apos;ve mastered the basics.</p>
+          <p className="mt-0.5 text-xs text-muted">
+            BiznizFlowPilot covers 80% of your operations out of the box - MM Nexus builds the other 20%
+            that&apos;s unique to your business.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <a
+            href={MM_NEXUS_CONTACT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="whitespace-nowrap rounded-lg bg-tertiary-fixed-dim px-3 py-1.5 text-xs font-semibold text-black hover:opacity-90"
+          >
+            Talk to MM Nexus
+          </a>
+          <button
+            type="button"
+            onClick={() => {
+              setGraduationDismissed(true);
+              sessionStorage.setItem(GRADUATION_DISMISS_KEY, "true");
+            }}
+            aria-label="Dismiss"
+            className="text-muted hover:text-white"
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="erp-panel">
