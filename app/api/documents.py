@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, Form
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.integrations.object_storage import ObjectStorageError
 from app.models.document import Document
@@ -14,7 +15,9 @@ from app.schemas.auth import CurrentUser
 from app.schemas.document import (
     DocumentAccessRequestListResponse,
     DocumentAccessRequestResponse,
+    DocumentComposeRequest,
     DocumentDownloadResponse,
+    DocumentDraftUpdate,
     DocumentListResponse,
     DocumentResponse,
     DocumentRestrictUpdate,
@@ -23,6 +26,7 @@ from app.schemas.document import (
 from app.services.document import DocumentService
 from app.services.document_access import DocumentAccessService
 from app.services.document_checkout import DocumentCheckoutService
+from app.services.document_editor import DocumentEditorService
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -72,6 +76,67 @@ async def upload_document(
     except Exception:
         db.rollback()
         raise
+
+
+@router.post("/compose", response_model=DocumentResponse, status_code=201, dependencies=[Depends(require_feature("document_authoring"))])
+def compose_document(
+    body: DocumentComposeRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Create a new, empty in-app rich-text document and check it out to its
+    creator - Growth tier and above only."""
+    try:
+        service = DocumentEditorService(db)
+        doc = service.compose(current_user.business_id, current_user, body.entity_type, body.entity_id, body.title)
+        db.commit()
+        return _to_response(doc, current_user, DocumentAccessService(db))
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception:
+        db.rollback()
+        raise
+
+
+@router.patch("/{document_id}/draft", status_code=204, dependencies=[Depends(require_feature("document_authoring"))])
+def save_document_draft(
+    document_id: UUID,
+    body: DocumentDraftUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Autosave target - overwrites the in-progress draft buffer, never a
+    real version. Only the current checkout holder may call this."""
+    try:
+        DocumentEditorService(db).save_draft(current_user.business_id, current_user, document_id, body.content_html)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.post("/{document_id}/finish", response_model=DocumentResponse, dependencies=[Depends(require_feature("document_authoring"))])
+def finish_document_editing(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """End an editing session - folds the autosaved draft into a real
+    version and releases the checkout."""
+    try:
+        doc = DocumentEditorService(db).finish(current_user.business_id, current_user, document_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _to_response(doc, current_user, DocumentAccessService(db))
 
 
 @router.get("", response_model=DocumentListResponse)

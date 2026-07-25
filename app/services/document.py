@@ -30,6 +30,7 @@ ALLOWED_EXTENSIONS = {
     ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
     ".jpg", ".jpeg", ".png", ".gif", ".webp", ".svg",
     ".csv", ".txt", ".zip",
+    ".html",  # in-app document editor - see app/services/document_editor.py
 }
 
 

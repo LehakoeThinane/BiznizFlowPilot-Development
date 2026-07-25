@@ -254,3 +254,42 @@ a:focus-visible,
   .text-label-semibold { font-size: 14px; font-weight: 600; line-height: 1.4; }
   .text-label-caps     { font-size: 11px; font-weight: 600; line-height: 1.4; letter-spacing: 0.08em; text-transform: uppercase; }
 }
+
+/* ── Document editor (Tiptap) ──────────────────────────────────────────── */
+/* No @tailwindcss/typography plugin here - hand-rolled, scoped to the
+   editor's contentEditable output only (Tiptap always renders a
+   .ProseMirror div regardless of the wrapper class name). */
+.prose-doc .ProseMirror {
+  color: #ddd;
+  line-height: 1.7;
+  font-size: 15px;
+}
+.prose-doc .ProseMirror p { margin: 0.75em 0; }
+.prose-doc .ProseMirror h1,
+.prose-doc .ProseMirror h2,
+.prose-doc .ProseMirror h3 {
+  margin: 1.25em 0 0.5em;
+  font-weight: 700;
+  color: #fff;
+}
+.prose-doc .ProseMirror h1 { font-size: 1.6em; }
+.prose-doc .ProseMirror h2 { font-size: 1.35em; }
+.prose-doc .ProseMirror h3 { font-size: 1.15em; }
+.prose-doc .ProseMirror ul,
+.prose-doc .ProseMirror ol {
+  margin: 0.75em 0;
+  padding-left: 1.5em;
+}
+.prose-doc .ProseMirror li { margin: 0.25em 0; }
+.prose-doc .ProseMirror blockquote {
+  margin: 1em 0;
+  padding-left: 1em;
+  border-left: 3px solid #444;
+  color: #aaa;
+}
+.prose-doc .ProseMirror code {
+  background: #1f1f1f;
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.9em;
+}

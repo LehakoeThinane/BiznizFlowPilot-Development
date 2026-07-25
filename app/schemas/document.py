@@ -46,6 +46,20 @@ class DocumentRestrictUpdate(BaseModel):
     restricted: bool
 
 
+class DocumentComposeRequest(BaseModel):
+    """Create a new, empty in-app document attached to an entity."""
+
+    entity_type: str
+    entity_id: UUID
+    title: str = "Untitled Document"
+
+
+class DocumentDraftUpdate(BaseModel):
+    """Autosave payload - the editor's current (unsaved-as-a-version) content."""
+
+    content_html: str
+
+
 class DocumentAccessRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

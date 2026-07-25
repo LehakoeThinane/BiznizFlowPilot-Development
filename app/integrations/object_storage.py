@@ -50,6 +50,36 @@ def upload(business_id: UUID, entity_type: str, entity_id: UUID, filename: str, 
     return storage_key
 
 
+def upload_at_key(key: str, content: bytes, content_type: str) -> None:
+    """Upload content at an exact, caller-chosen key, overwriting whatever was
+    there before - unlike upload(), which always mints a fresh uuid4() key.
+
+    Used for the document editor's autosave draft buffer: the key is
+    deterministic (derived from the document id alone), so repeated autosave
+    calls overwrite the same object in place instead of accumulating
+    orphaned ones.
+    """
+    try:
+        _client().put_object(
+            Bucket=settings.r2_bucket_name,
+            Key=key,
+            Body=content,
+            ContentType=content_type or "application/octet-stream",
+        )
+    except Exception as e:
+        raise ObjectStorageError(f"Upload failed: {e}") from e
+
+
+def get(storage_key: str) -> bytes:
+    """Fetch an object's raw content directly (not a presigned URL) - used
+    server-side, e.g. reading back a draft buffer to fold into a real
+    version."""
+    try:
+        return _client().get_object(Bucket=settings.r2_bucket_name, Key=storage_key)["Body"].read()
+    except Exception as e:
+        raise ObjectStorageError(f"Download failed: {e}") from e
+
+
 def presigned_download_url(storage_key: str, filename: str, expires_in: int = 300) -> str:
     """A short-lived, signed URL for downloading a private object directly from R2."""
     safe_filename = _UNSAFE_HEADER_CHARS.sub("", filename)

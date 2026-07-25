@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { apiRequest, ApiError } from "@/lib/api";
 import { getStoredToken, logout } from "@/lib/auth";
+import { useUser } from "@/contexts/UserContext";
 import { AppTileIcon } from "@/components/AppTileIcon";
 import { Pagination } from "@/components/Pagination";
 import type {
@@ -14,6 +16,8 @@ import type {
   DocumentListResponse,
   FolderListResponse,
 } from "@/types/api";
+
+const DOCUMENT_AUTHORING_TIERS = new Set(["growth", "professional", "enterprise"]);
 
 const PAGE_SIZE = 25;
 
@@ -147,6 +151,7 @@ function DocumentRow({
   onDownload: (doc: BusinessDocument) => void;
   onDelete: (doc: BusinessDocument, inFolder: boolean) => void;
 }) {
+  const isEditable = doc.content_type === "text/html";
   return (
     <tr className="border-t border-white/5 hover:bg-white/[0.02]">
       <td className="px-4 py-3">
@@ -161,6 +166,14 @@ function DocumentRow({
             {doc.restricted ? "🔒 " : ""}{doc.filename}
           </button>
           {doc.version > 1 && <span className="text-xs text-muted">v{doc.version}</span>}
+          {isEditable && doc.has_access && (
+            <Link
+              href={`/documents/${doc.id}/edit`}
+              className="text-xs text-[#8ab4f8] hover:underline"
+            >
+              Edit
+            </Link>
+          )}
         </div>
       </td>
       {!inFolder && (
@@ -187,6 +200,11 @@ function DocumentRow({
 }
 
 export default function DocumentLibraryPage() {
+  const router = useRouter();
+  const { user } = useUser();
+  const canAuthorDocuments = !!user?.plan_tier && DOCUMENT_AUTHORING_TIERS.has(user.plan_tier);
+  const [isComposing, setIsComposing] = useState(false);
+
   // Flat "All Documents" view
   const [documents, setDocuments] = useState<BusinessDocument[]>([]);
   const [total, setTotal] = useState(0);
@@ -329,6 +347,24 @@ export default function DocumentLibraryPage() {
     }
   }
 
+  async function handleComposeDocument() {
+    if (!currentFolder) return;
+    setIsComposing(true);
+    setError(null);
+    try {
+      const doc = await apiRequest<BusinessDocument>("/api/v1/documents/compose", {
+        method: "POST",
+        authToken: token,
+        body: { entity_type: "folder", entity_id: currentFolder.id, title: "Untitled Document" },
+      });
+      router.push(`/documents/${doc.id}/edit`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to create document");
+    } finally {
+      setIsComposing(false);
+    }
+  }
+
   async function handleDownload(doc: BusinessDocument) {
     setBusyDocId(doc.id);
     setError(null);
@@ -384,6 +420,16 @@ export default function DocumentLibraryPage() {
               ))}
             </div>
             <div className="flex items-center gap-2">
+              {canAuthorDocuments && (
+                <button
+                  type="button"
+                  onClick={() => void handleComposeDocument()}
+                  disabled={isComposing}
+                  className="erp-button-primary px-3 py-2 text-sm font-semibold disabled:opacity-40"
+                >
+                  {isComposing ? "Creating…" : "+ New Document"}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => folderFileInputRef.current?.click()}
