@@ -76,14 +76,14 @@ class OrganizationProvisionRequest(BaseModel):
     owner_email: EmailStr
     subsidiary_name: str | None = None
     primary_domain: str | None = None
-    plan_tier: str = Field(default="trial", pattern=r"^(trial|starter|professional|enterprise|legacy)$")
+    plan_tier: str = Field(default="trial", pattern=r"^(trial|starter|growth|professional|enterprise|legacy)$")
 
 
 class OrganizationAdminUpdate(BaseModel):
     """Platform-side organization update (billing/plan fields tenant users can't touch)."""
 
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    plan_tier: str | None = Field(default=None, pattern=r"^(trial|starter|professional|enterprise|legacy)$")
+    plan_tier: str | None = Field(default=None, pattern=r"^(trial|starter|growth|professional|enterprise|legacy)$")
     subscription_status: str | None = Field(
         default=None, pattern=r"^(trial|active|past_due|suspended|cancelled)$"
     )

@@ -95,6 +95,7 @@ export default function PlatformOrganizationsPage() {
             >
               <option value="trial">Trial</option>
               <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
               <option value="professional">Professional</option>
               <option value="enterprise">Enterprise</option>
             </select>
@@ -110,7 +111,7 @@ export default function PlatformOrganizationsPage() {
               placeholder="owner@client-company.com"
             />
             <p className="mt-1 text-xs text-[#777]">
-              We'll send this person an invite to set up their own password and activate the organization.
+              We&apos;ll send this person an invite to set up their own password and activate the organization.
             </p>
           </div>
 

@@ -1,5 +1,14 @@
 export type UserRole = "owner" | "manager" | "staff" | "it_admin" | string;
 
+export type PresenceStatus = "online" | "away" | "busy" | "in_meeting" | "custom" | "offline";
+
+export interface Presence {
+  status: PresenceStatus;
+  status_text: string | null;
+  last_seen_at: string | null;
+  is_online: boolean;
+}
+
 export interface LoginRequest {
   email: string;
   password: string;
@@ -35,6 +44,10 @@ export interface CurrentUser {
   avatar_url?: string | null;
   plan_tier?: string | null;
   trial_ends_at?: string | null;
+  status?: PresenceStatus | null;
+  status_text?: string | null;
+  last_seen_at?: string | null;
+  is_online?: boolean;
 }
 
 // ─── Organization / Subsidiary / Invitations ─────────────────────────────────
@@ -103,6 +116,8 @@ export interface BusinessUser {
   last_name: string;
   role: UserRole;
   is_active: boolean;
+  avatar_url: string | null;
+  presence: Presence;
 }
 
 export interface BusinessUserListResponse {
@@ -860,6 +875,8 @@ export interface OtherUser {
   id: string;
   full_name: string;
   email: string;
+  avatar_url: string | null;
+  presence: Presence;
 }
 
 export interface LastMessagePreview {

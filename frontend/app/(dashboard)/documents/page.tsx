@@ -17,6 +17,13 @@ import type {
   FolderListResponse,
 } from "@/types/api";
 
+// Mirrors app/core/entitlements.py: FULL_ACCESS_TIERS bypasses every gate
+// (an active trial and legacy accounts get everything), and
+// document_authoring's own FEATURE_TIERS entry is growth/professional/
+// enterprise. Missing the FULL_ACCESS_TIERS half of this (as an earlier
+// version of this file did) hides the button from trial accounts even
+// though the backend already lets them through.
+const FULL_ACCESS_TIERS = new Set(["legacy", "trial", "enterprise"]);
 const DOCUMENT_AUTHORING_TIERS = new Set(["growth", "professional", "enterprise"]);
 
 const PAGE_SIZE = 25;
@@ -202,7 +209,8 @@ function DocumentRow({
 export default function DocumentLibraryPage() {
   const router = useRouter();
   const { user } = useUser();
-  const canAuthorDocuments = !!user?.plan_tier && DOCUMENT_AUTHORING_TIERS.has(user.plan_tier);
+  const canAuthorDocuments =
+    !!user?.plan_tier && (FULL_ACCESS_TIERS.has(user.plan_tier) || DOCUMENT_AUTHORING_TIERS.has(user.plan_tier));
   const [isComposing, setIsComposing] = useState(false);
 
   // Flat "All Documents" view

@@ -50,7 +50,7 @@ def signup_trial(
 
 
 @router.post("/trial/google", response_model=TokenResponse)
-@limiter.limit("5/hour")
+@limiter.limit("20/minute")
 def signup_trial_google(
     request: Request,
     body: TrialSignupGoogleRequest,
@@ -58,7 +58,20 @@ def signup_trial_google(
     db: Session = Depends(get_db),
 ) -> TokenResponse:
     """Start a free trial via Google Sign-In, or log back in if this Google
-    account already has a trial business from an earlier signup."""
+    account already has a business from an earlier signup - including a real,
+    fully onboarded customer, not just other trials (see create_via_google's
+    existing-user lookup, which isn't restricted to trial-tier accounts).
+
+    🧨 Deliberately much more generous than /trial's 5/hour: this same route
+    also backs the LOGIN page's "Continue with Google" button (any returning
+    user, any plan tier - see frontend's signupTrialWithGoogle call from
+    login/page.tsx), not just new trial creation. A per-IP quota tight enough
+    to bound spam trial-account creation was locking out every real user
+    behind a shared office/carrier IP once anyone nearby had signed in a
+    handful of times. The anti-abuse backstop for trial creation is really
+    the Google-verified ID token itself (can't be minted cheaply at volume),
+    not this quota.
+    """
     service = TrialSignupService(db)
     try:
         tokens = service.create_via_google(

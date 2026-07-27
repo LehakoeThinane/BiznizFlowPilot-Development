@@ -7,12 +7,14 @@ import { AuthGuard } from "@/components/AuthGuard";
 import { ChatPanel } from "@/components/ChatPanel";
 import { NotificationBell } from "@/components/NotificationBell";
 import { RoleMenu } from "@/components/RoleMenu";
+import { StatusMenu } from "@/components/StatusMenu";
 import { TrialBanner } from "@/components/TrialBanner";
 import { UserContext } from "@/contexts/UserContext";
 import { useDebounce } from "@/hooks/useDebounce";
 import { logout } from "@/lib/auth";
 import { apiRequest } from "@/lib/api";
-import type { CurrentUser } from "@/types/api";
+import { presenceDotClass, presenceLabel } from "@/lib/presence";
+import type { CurrentUser, Presence } from "@/types/api";
 
 // ── Search types ────────────────────────────────────────────────────────────
 
@@ -41,6 +43,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const profileRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebounce(search, 280);
+
+  // Presence heartbeat - fires as long as any dashboard route is open in a
+  // tab, not just while on the Messages page, so colleagues see "online"
+  // reflect actual app usage anywhere.
+  useEffect(() => {
+    if (!user) return;
+    const beat = () => apiRequest("/api/v1/users/me/heartbeat", { method: "POST" }).catch(() => {});
+    beat();
+    const interval = setInterval(beat, 60_000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   // Close profile dropdown on outside click
   useEffect(() => {
@@ -83,6 +96,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     .map((w) => w[0] ?? "")
     .join("")
     .toUpperCase();
+
+  const ownPresence: Presence | null = user
+    ? {
+        status: user.status ?? "online",
+        status_text: user.status_text ?? null,
+        last_seen_at: user.last_seen_at ?? null,
+        is_online: user.is_online ?? true,
+      }
+    : null;
+
+  function handlePresenceUpdated(presence: Presence) {
+    setUser((prev) =>
+      prev
+        ? { ...prev, status: presence.status, status_text: presence.status_text, last_seen_at: presence.last_seen_at, is_online: presence.is_online }
+        : prev,
+    );
+  }
 
   const totalHits = searchResults
     ? Object.values(searchResults).reduce((s, arr) => s + arr.length, 0)
@@ -273,13 +303,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     <span className="hidden text-sm font-semibold text-primary-fixed-dim sm:block">
                       {firstName}
                     </span>
-                    {user?.avatar_url ? (
-                      <img src={user.avatar_url} alt="avatar" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-                    ) : (
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container text-xs font-bold text-on-primary-container">
-                        {initials || "?"}
-                      </div>
-                    )}
+                    <div className="relative shrink-0">
+                      {user?.avatar_url ? (
+                        <img src={user.avatar_url} alt="avatar" className="h-8 w-8 rounded-full object-cover" />
+                      ) : (
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-xs font-bold text-on-primary-container">
+                          {initials || "?"}
+                        </div>
+                      )}
+                      {ownPresence && (
+                        <span
+                          title={presenceLabel(ownPresence)}
+                          className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-[#0d1628] ${presenceDotClass(ownPresence)}`}
+                        />
+                      )}
+                    </div>
                   </button>
 
                   {showProfile && (
@@ -291,6 +329,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           {user?.role ?? ""}
                         </span>
                       </div>
+                      <StatusMenu user={user} onUpdated={handlePresenceUpdated} />
                       <div className="py-1">
                         <Link
                           href="/settings"

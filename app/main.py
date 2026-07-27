@@ -58,8 +58,8 @@ from app.core.enums import EventType
 from app.core.exception_handlers import rate_limit_exceeded_handler, unhandled_exception_handler
 from app.core.security import hash_password, verify_password
 from app.dependencies import get_current_user
-from app.models.user import User
 from app.schemas.auth import CurrentUser
+from app.schemas.user import PresenceOut, StatusUpdateRequest
 from app.services.event import EventService
 from app.utils.logger import get_logger
 
@@ -234,8 +234,15 @@ def _serialize_current_user(current_user: CurrentUser, db: Session) -> dict:
     Includes plan_tier/trial_ends_at so the frontend can show a trial-status
     banner - resolved via organization_id exactly like app/core/entitlements.py
     does, not stored on the JWT itself.
+
+    Presence fields are flattened (status/status_text/last_seen_at/is_online)
+    rather than nested, matching this endpoint's existing flat dict shape -
+    UserResponse/OtherUser nest a `presence` object instead (see
+    app/schemas/user.py's PresenceOut), this route just isn't a Pydantic model.
     """
     from app.repositories.organization import OrganizationRepository
+    from app.repositories.user import UserRepository
+    from app.services.presence import compute_presence
 
     plan_tier = None
     trial_ends_at = None
@@ -244,6 +251,9 @@ def _serialize_current_user(current_user: CurrentUser, db: Session) -> dict:
         if org:
             plan_tier = org.plan_tier
             trial_ends_at = org.trial_ends_at
+
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
+    presence = compute_presence(user) if user else None
 
     return {
         "user_id": current_user.user_id,
@@ -254,6 +264,10 @@ def _serialize_current_user(current_user: CurrentUser, db: Session) -> dict:
         "avatar_url": current_user.avatar_url,
         "plan_tier": plan_tier,
         "trial_ends_at": trial_ends_at,
+        "status": presence.status if presence else None,
+        "status_text": presence.status_text if presence else None,
+        "last_seen_at": presence.last_seen_at if presence else None,
+        "is_online": presence.is_online if presence else False,
     }
 
 
@@ -286,7 +300,10 @@ def update_profile(
 ) -> dict:
     """Update the current user's display name and/or avatar."""
     from uuid import UUID as _UUID
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+
+    from app.repositories.user import UserRepository
+
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     updated_fields = []
@@ -332,9 +349,12 @@ def change_password(
 ) -> dict:
     """Change the current user's password."""
     from uuid import UUID as _UUID
+
+    from app.repositories.user import UserRepository
+
     if len(new_password) < 8:
         raise HTTPException(status_code=422, detail="New password must be at least 8 characters")
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not verify_password(current_password, user.hashed_password):
@@ -353,6 +373,57 @@ def change_password(
 
     db.commit()
     return {"message": "Password changed successfully"}
+
+
+@app.patch(f"{settings.api_v1_prefix}/users/me/status")
+def update_status(
+    payload: StatusUpdateRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> PresenceOut:
+    """Set (or clear, via a preset) the current user's presence status.
+
+    Also bumps last_seen_at - choosing a status is itself proof of activity,
+    so there's no reason to make the user wait for the next heartbeat tick
+    to show as online right after picking one.
+    """
+    from datetime import datetime, timezone
+
+    from app.repositories.user import UserRepository
+    from app.services.presence import compute_presence
+
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.status = payload.status
+    user.status_text = payload.status_text
+    user.last_seen_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(user)
+    return compute_presence(user)
+
+
+@app.post(f"{settings.api_v1_prefix}/users/me/heartbeat")
+def heartbeat(
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Keep-alive ping, fired every 60s while the app is open.
+
+    No EventService entry, unlike update_profile/change_password - those are
+    rare and user-initiated; this fires constantly for every active user and
+    would flood the business activity feed if logged the same way.
+    """
+    from datetime import datetime, timezone
+
+    from app.repositories.user import UserRepository
+
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.last_seen_at = datetime.now(timezone.utc)
+    db.commit()
+    return {"ok": True}
 
 
 if __name__ == "__main__":
