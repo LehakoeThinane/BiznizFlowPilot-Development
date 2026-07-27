@@ -58,7 +58,6 @@ from app.core.enums import EventType
 from app.core.exception_handlers import rate_limit_exceeded_handler, unhandled_exception_handler
 from app.core.security import hash_password, verify_password
 from app.dependencies import get_current_user
-from app.models.user import User
 from app.schemas.auth import CurrentUser
 from app.schemas.user import PresenceOut, StatusUpdateRequest
 from app.services.event import EventService
@@ -242,6 +241,7 @@ def _serialize_current_user(current_user: CurrentUser, db: Session) -> dict:
     app/schemas/user.py's PresenceOut), this route just isn't a Pydantic model.
     """
     from app.repositories.organization import OrganizationRepository
+    from app.repositories.user import UserRepository
     from app.services.presence import compute_presence
 
     plan_tier = None
@@ -252,7 +252,7 @@ def _serialize_current_user(current_user: CurrentUser, db: Session) -> dict:
             plan_tier = org.plan_tier
             trial_ends_at = org.trial_ends_at
 
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     presence = compute_presence(user) if user else None
 
     return {
@@ -300,7 +300,10 @@ def update_profile(
 ) -> dict:
     """Update the current user's display name and/or avatar."""
     from uuid import UUID as _UUID
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+
+    from app.repositories.user import UserRepository
+
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     updated_fields = []
@@ -346,9 +349,12 @@ def change_password(
 ) -> dict:
     """Change the current user's password."""
     from uuid import UUID as _UUID
+
+    from app.repositories.user import UserRepository
+
     if len(new_password) < 8:
         raise HTTPException(status_code=422, detail="New password must be at least 8 characters")
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not verify_password(current_password, user.hashed_password):
@@ -383,9 +389,10 @@ def update_status(
     """
     from datetime import datetime, timezone
 
+    from app.repositories.user import UserRepository
     from app.services.presence import compute_presence
 
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.status = payload.status
@@ -409,7 +416,9 @@ def heartbeat(
     """
     from datetime import datetime, timezone
 
-    user = db.query(User).filter(User.id == current_user.user_id).first()
+    from app.repositories.user import UserRepository
+
+    user = UserRepository(db).get(current_user.business_id, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     user.last_seen_at = datetime.now(timezone.utc)
