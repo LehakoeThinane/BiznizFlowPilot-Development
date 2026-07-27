@@ -15,6 +15,10 @@ class User(BaseModel):
             "role IN ('owner', 'manager', 'staff', 'it_admin')",
             name="ck_users_role_valid",
         ),
+        CheckConstraint(
+            "status IN ('online', 'away', 'busy', 'in_meeting', 'custom')",
+            name="ck_users_status_valid",
+        ),
     )
 
     business_id = Column(
@@ -104,6 +108,33 @@ class User(BaseModel):
         unique=True,
         index=True,
         doc="Google account subject ID, set for accounts created/linked via Google Sign-In",
+    )
+
+    status = Column(
+        String(20),
+        nullable=False,
+        default="online",
+        server_default="online",
+        doc="Manually-selected presence preset: online/away/busy/in_meeting/custom. "
+            "Never 'offline' - that's a derived/computed value based on last_seen_at "
+            "staleness, not something a user picks (see app/services/presence.py).",
+    )
+
+    status_text = Column(
+        String(100),
+        nullable=True,
+        doc="Free-text custom status message, e.g. 'Out of office, may not respond'. "
+            "Only meaningful when status == 'custom'.",
+    )
+
+    last_seen_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
+        doc="Heartbeat timestamp, bumped by POST /users/me/heartbeat and "
+            "PATCH /users/me/status. Staleness beyond PRESENCE_STALE_AFTER_SECONDS "
+            "(app/services/presence.py) makes the user appear offline regardless "
+            "of the stored status value.",
     )
 
     # Relationships

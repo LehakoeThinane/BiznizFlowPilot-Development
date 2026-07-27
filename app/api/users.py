@@ -11,6 +11,7 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import CurrentUser
 from app.schemas.user import UserListResponse, UserResponse
+from app.services.presence import compute_presence
 
 router = APIRouter(
     prefix="/api/v1/users",
@@ -45,5 +46,22 @@ def list_users(
 
     return UserListResponse(
         total=total,
-        items=[UserResponse.model_validate(user) for user in items],
+        items=[_to_user_response(user) for user in items],
+    )
+
+
+def _to_user_response(user: User) -> UserResponse:
+    """UserResponse.presence is derived (see compute_presence), not a plain
+    column, so it can't come through model_validate's from_attributes lookup
+    on its own - fetch it separately and merge it in."""
+    return UserResponse(
+        id=user.id,
+        business_id=user.business_id,
+        email=user.email,
+        first_name=user.first_name,
+        last_name=user.last_name,
+        role=user.role,
+        is_active=user.is_active,
+        avatar_url=user.avatar_url,
+        presence=compute_presence(user),
     )

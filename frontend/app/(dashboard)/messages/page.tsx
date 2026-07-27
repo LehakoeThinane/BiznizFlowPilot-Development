@@ -5,7 +5,8 @@ import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { useUser } from "@/contexts/UserContext";
-import type { Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, Poll } from "@/types/api";
+import type { BusinessUser, Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, Poll } from "@/types/api";
+import { Avatar } from "@/components/Avatar";
 import { AttachmentMenu, type AttachmentAction } from "@/components/messages/AttachmentMenu";
 import { AudioAttachModal } from "@/components/messages/AudioAttachModal";
 import { CameraCaptureModal } from "@/components/messages/CameraCaptureModal";
@@ -17,12 +18,7 @@ import { StickerPickerModal } from "@/components/messages/StickerPickerModal";
 
 type ModalAction = Exclude<AttachmentAction, "document" | "media">;
 
-interface OrgUser { id: string; email: string; first_name: string; last_name: string }
-interface OrgUserListResp { items: OrgUser[]; total: number }
-
-function initials(name: string) {
-  return name.split(" ").map((p) => p[0]).join("").toUpperCase().slice(0, 2);
-}
+interface OrgUserListResp { items: BusinessUser[]; total: number }
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
@@ -53,7 +49,7 @@ export default function MessagesPage() {
   const [sending, setSending] = useState(false);
 
   const [showNewMessage, setShowNewMessage] = useState(false);
-  const [orgUsers, setOrgUsers] = useState<OrgUser[]>([]);
+  const [orgUsers, setOrgUsers] = useState<BusinessUser[]>([]);
   const [startingWith, setStartingWith] = useState<string | null>(null);
 
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
@@ -367,9 +363,7 @@ export default function MessagesPage() {
                   selectedId === c.id ? "bg-white/8" : ""
                 }`}
               >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                  {initials(c.other_user.full_name)}
-                </div>
+                <Avatar name={c.other_user.full_name} avatarUrl={c.other_user.avatar_url} presence={c.other_user.presence} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{c.other_user.full_name}</p>
                   <p className="truncate text-xs text-slate-500">
@@ -400,12 +394,19 @@ export default function MessagesPage() {
         ) : (
           <>
             <div className="flex items-center gap-3 border-b border-outline-variant px-5 py-3.5">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                {initials(selected.other_user.full_name)}
-              </div>
+              <Avatar
+                name={selected.other_user.full_name}
+                avatarUrl={selected.other_user.avatar_url}
+                presence={selected.other_user.presence}
+                size="sm"
+              />
               <div>
                 <p className="text-sm font-semibold text-white">{selected.other_user.full_name}</p>
-                <p className="text-xs text-slate-500">{selected.other_user.email}</p>
+                <p className="text-xs text-slate-500">
+                  {selected.other_user.presence.status === "custom" && selected.other_user.presence.status_text
+                    ? selected.other_user.presence.status_text
+                    : selected.other_user.email}
+                </p>
               </div>
             </div>
 
@@ -524,9 +525,7 @@ export default function MessagesPage() {
                     onClick={() => startConversation(u.id)}
                     className="flex w-full items-center gap-3 px-6 py-2.5 text-left transition-colors hover:bg-white/5 disabled:opacity-50"
                   >
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-xs font-semibold text-white">
-                      {initials(`${u.first_name} ${u.last_name}`)}
-                    </div>
+                    <Avatar name={`${u.first_name} ${u.last_name}`} avatarUrl={u.avatar_url} presence={u.presence} size="sm" />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm text-white">{u.first_name} {u.last_name}</p>
                       <p className="truncate text-xs text-slate-500">{u.email}</p>

@@ -18,6 +18,7 @@ from app.schemas.auth import CurrentUser
 from app.schemas.meeting import MeetingCreate
 from app.schemas.messaging import ConversationSummary, LastMessagePreview, OtherUser
 from app.services.meeting import MeetingService
+from app.services.presence import compute_presence, offline_presence
 
 # Curated built-in sticker set - keys must match the STICKER_ART catalog in
 # frontend/components/stickers/StickerArt.tsx exactly, since the server
@@ -100,6 +101,8 @@ class MessagingService:
                 id=other_user.id if other_user else current_user_id,
                 full_name=other_user.full_name if other_user else "Unknown",
                 email=other_user.email if other_user else "",
+                avatar_url=other_user.avatar_url if other_user else None,
+                presence=compute_presence(other_user) if other_user else offline_presence(),
             ),
             last_message=LastMessagePreview(
                 content=_preview_text(last), created_at=last.created_at, sender_id=last.sender_id,

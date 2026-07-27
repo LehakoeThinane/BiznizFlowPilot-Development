@@ -8,6 +8,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.user import PresenceOut
+
 
 class ConversationCreate(BaseModel):
     user_id: UUID
@@ -17,6 +19,8 @@ class OtherUser(BaseModel):
     id: UUID
     full_name: str
     email: str
+    avatar_url: str | None = None
+    presence: PresenceOut
 
 
 class LastMessagePreview(BaseModel):
