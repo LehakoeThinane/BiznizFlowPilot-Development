@@ -21,12 +21,13 @@ const OPS_CARDS: { key: keyof PlatformStats; label: string }[] = [
 const TIER_LABELS: Record<string, string> = {
   trial: "Trial",
   starter: "Starter",
+  growth: "Growth",
   professional: "Professional",
   enterprise: "Enterprise",
   legacy: "Legacy",
 };
 
-const TIER_ORDER = ["trial", "starter", "professional", "enterprise", "legacy"];
+const TIER_ORDER = ["trial", "starter", "growth", "professional", "enterprise", "legacy"];
 
 function StatTile({ label, value }: { label: string; value: string | number }) {
   return (

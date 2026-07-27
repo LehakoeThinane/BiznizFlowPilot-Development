@@ -96,6 +96,7 @@ export default function PlatformOrganizationDetailPage() {
             <select className={INPUT} value={planTier} onChange={(e) => setPlanTier(e.target.value)}>
               <option value="trial">Trial</option>
               <option value="starter">Starter</option>
+              <option value="growth">Growth</option>
               <option value="professional">Professional</option>
               <option value="enterprise">Enterprise</option>
               <option value="legacy">Legacy</option>
