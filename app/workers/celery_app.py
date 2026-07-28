@@ -42,6 +42,10 @@ celery_app.conf.update(
             "task": "ops.send_trial_reminders",
             "schedule": timedelta(seconds=settings.trial_reminder_check_interval_seconds),
         },
+        "poll-linkedin-leads": {
+            "task": "ops.poll_linkedin_leads",
+            "schedule": timedelta(seconds=settings.linkedin_lead_poll_interval_seconds),
+        },
     },
 )
 

@@ -28,6 +28,7 @@ from app.api import (
     inventory,
     invoice,
     leads,
+    linkedin_leads,
     marketing_leads,
     meeting_rsvp,
     meetings,
@@ -221,6 +222,7 @@ app.include_router(search.router, dependencies=[Depends(require_active_trial)])
 # Platform (vendor staff) routes — fully separate auth boundary, cross-tenant
 app.include_router(platform_auth.router)
 app.include_router(platform_admin.router)
+app.include_router(linkedin_leads.router)
 
 
 # ============================================================================
