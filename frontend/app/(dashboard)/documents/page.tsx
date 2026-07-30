@@ -28,7 +28,7 @@ const DOCUMENT_AUTHORING_TIERS = new Set(["growth", "professional", "enterprise"
 
 const PAGE_SIZE = 25;
 
-const ENTITY_TYPES = ["", "lead", "task"];
+const ENTITY_TYPES = ["", "lead", "task", "customer"];
 
 const ACCENTS = [
   "bg-blue-500/20 text-blue-300",
@@ -52,6 +52,7 @@ function entityLabel(type: string): string {
 function entityHref(type: string, id: string): string {
   if (type === "lead") return `/leads?open=${id}`;
   if (type === "task") return `/tasks?open=${id}`;
+  if (type === "customer") return `/customers?open=${id}`;
   return "#";
 }
 
@@ -151,12 +152,14 @@ function DocumentRow({
   busyDocId,
   onDownload,
   onDelete,
+  onDuplicate,
 }: {
   doc: BusinessDocument;
   inFolder: boolean;
   busyDocId: string | null;
   onDownload: (doc: BusinessDocument) => void;
   onDelete: (doc: BusinessDocument, inFolder: boolean) => void;
+  onDuplicate: (doc: BusinessDocument) => void;
 }) {
   const isEditable = doc.content_type === "text/html";
   return (
@@ -193,14 +196,26 @@ function DocumentRow({
       <td className="px-4 py-3 text-slate-400">{formatSize(doc.size_bytes)}</td>
       <td className="px-4 py-3 text-slate-400">{formatDate(doc.created_at)}</td>
       <td className="px-4 py-3">
-        <button
-          type="button"
-          onClick={() => onDelete(doc, inFolder)}
-          disabled={busyDocId === doc.id}
-          className="text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40"
-        >
-          Delete
-        </button>
+        <div className="flex items-center gap-3">
+          {doc.has_access && (
+            <button
+              type="button"
+              onClick={() => onDuplicate(doc)}
+              disabled={busyDocId === doc.id}
+              className="text-xs text-[#8ab4f8] hover:underline disabled:opacity-40"
+            >
+              Duplicate
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onDelete(doc, inFolder)}
+            disabled={busyDocId === doc.id}
+            className="text-xs text-rose-400 hover:text-rose-300 disabled:opacity-40"
+          >
+            Delete
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -233,6 +248,13 @@ export default function DocumentLibraryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyDocId, setBusyDocId] = useState<string | null>(null);
+
+  // Duplicate modal
+  const [duplicatingDoc, setDuplicatingDoc] = useState<BusinessDocument | null>(null);
+  const [duplicateEntityType, setDuplicateEntityType] = useState("");
+  const [duplicateEntityId, setDuplicateEntityId] = useState("");
+  const [duplicateFilename, setDuplicateFilename] = useState("");
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   const token = getStoredToken();
   const currentFolder = folderPath[folderPath.length - 1] ?? null;
@@ -408,6 +430,47 @@ export default function DocumentLibraryPage() {
     }
   }
 
+  function openDuplicateModal(doc: BusinessDocument) {
+    setDuplicatingDoc(doc);
+    setDuplicateEntityType(doc.entity_type);
+    setDuplicateEntityId(doc.entity_id);
+    setDuplicateFilename(doc.filename);
+  }
+
+  function closeDuplicateModal() {
+    setDuplicatingDoc(null);
+    setDuplicateEntityType("");
+    setDuplicateEntityId("");
+    setDuplicateFilename("");
+  }
+
+  async function handleDuplicate() {
+    if (!duplicatingDoc || !duplicateEntityType.trim() || !duplicateEntityId.trim()) return;
+    setIsDuplicating(true);
+    setError(null);
+    try {
+      await apiRequest<BusinessDocument>(`/api/v1/documents/${duplicatingDoc.id}/duplicate`, {
+        method: "POST",
+        authToken: token,
+        body: {
+          entity_type: duplicateEntityType.trim(),
+          entity_id: duplicateEntityId.trim(),
+          filename: duplicateFilename.trim() || null,
+        },
+      });
+      closeDuplicateModal();
+      if (currentFolder) {
+        loadFolderContents(currentFolder.id);
+      } else {
+        loadFlat();
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to duplicate document");
+    } finally {
+      setIsDuplicating(false);
+    }
+  }
+
   return (
     <div className="-m-6 min-h-[calc(100vh-3rem)] px-8 py-8">
       {currentFolder ? (
@@ -504,6 +567,7 @@ export default function DocumentLibraryPage() {
                       busyDocId={busyDocId}
                       onDownload={handleDownload}
                       onDelete={handleDelete}
+                      onDuplicate={openDuplicateModal}
                     />
                   ))}
                 </tbody>
@@ -584,6 +648,7 @@ export default function DocumentLibraryPage() {
                       busyDocId={busyDocId}
                       onDownload={handleDownload}
                       onDelete={handleDelete}
+                      onDuplicate={openDuplicateModal}
                     />
                   ))}
                 </tbody>
@@ -599,6 +664,67 @@ export default function DocumentLibraryPage() {
             />
           </div>
         </>
+      )}
+
+      {duplicatingDoc && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#171b26] p-5">
+            <p className="text-sm font-semibold text-surface-bright">Duplicate &ldquo;{duplicatingDoc.filename}&rdquo;</p>
+            <p className="mt-1 text-xs text-on-surface-variant">
+              Copies the file content onto another record - the original is untouched.
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-on-surface-variant">Record type</label>
+                <select
+                  value={duplicateEntityType}
+                  onChange={(e) => setDuplicateEntityType(e.target.value)}
+                  className="erp-input w-full px-3 py-2 text-sm"
+                >
+                  {ENTITY_TYPES.filter(Boolean).map((t) => (
+                    <option key={t} value={t}>{entityLabel(t)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-on-surface-variant">Record ID</label>
+                <input
+                  value={duplicateEntityId}
+                  onChange={(e) => setDuplicateEntityId(e.target.value)}
+                  placeholder="Target record's ID"
+                  className="erp-input w-full px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-on-surface-variant">Filename</label>
+                <input
+                  value={duplicateFilename}
+                  onChange={(e) => setDuplicateFilename(e.target.value)}
+                  className="erp-input w-full px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void handleDuplicate()}
+                disabled={isDuplicating || !duplicateEntityType.trim() || !duplicateEntityId.trim()}
+                className="erp-button-primary flex-1 py-2 text-sm font-semibold disabled:opacity-40"
+              >
+                {isDuplicating ? "Duplicating…" : "Duplicate"}
+              </button>
+              <button
+                type="button"
+                onClick={closeDuplicateModal}
+                className="rounded-md border border-border px-3 py-2 text-sm text-[#ccc] hover:bg-white/5"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

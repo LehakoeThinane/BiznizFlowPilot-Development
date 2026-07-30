@@ -18,6 +18,7 @@ from app.schemas.document import (
     DocumentComposeRequest,
     DocumentDownloadResponse,
     DocumentDraftUpdate,
+    DocumentDuplicateRequest,
     DocumentListResponse,
     DocumentResponse,
     DocumentRestrictUpdate,
@@ -133,6 +134,36 @@ def finish_document_editing(
         raise HTTPException(status_code=400, detail=str(e))
     except ObjectStorageError as e:
         raise HTTPException(status_code=503, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return _to_response(doc, current_user, DocumentAccessService(db))
+
+
+@router.post("/{document_id}/duplicate", response_model=DocumentResponse, status_code=201)
+def duplicate_document(
+    document_id: UUID,
+    body: DocumentDuplicateRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Copy an existing document's file content onto a (possibly different)
+    entity - e.g. reusing a standard template for a new customer."""
+    try:
+        service = DocumentService(db)
+        doc = service.duplicate(
+            current_user.business_id, current_user, document_id,
+            body.entity_type, body.entity_id, body.filename,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        db.rollback()
+        raise
 
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")

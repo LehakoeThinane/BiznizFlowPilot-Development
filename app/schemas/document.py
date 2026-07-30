@@ -54,6 +54,14 @@ class DocumentComposeRequest(BaseModel):
     title: str = "Untitled Document"
 
 
+class DocumentDuplicateRequest(BaseModel):
+    """Copy an existing document's file content onto a (possibly different) entity."""
+
+    entity_type: str
+    entity_id: UUID
+    filename: Optional[str] = None
+
+
 class DocumentDraftUpdate(BaseModel):
     """Autosave payload - the editor's current (unsaved-as-a-version) content."""
 

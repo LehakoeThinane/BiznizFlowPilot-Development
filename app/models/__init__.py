@@ -34,6 +34,8 @@ from app.models.document_version import DocumentVersion
 from app.models.folder import Folder
 from app.models.pending_checkout import PendingCheckout
 from app.models.marketing_guide_lead import MarketingGuideLead
+from app.models.linkedin_lead import LinkedInLead
+from app.models.customer_portal_access import CustomerPortalAccess
 from app.models.chat import ChatConversation, ChatMessage
 from app.models.user_invitation import UserInvitation
 from app.models.user_email import UserEmailAccount
@@ -92,6 +94,8 @@ __all__ = [
     "Folder",
     "PendingCheckout",
     "MarketingGuideLead",
+    "LinkedInLead",
+    "CustomerPortalAccess",
     "ChatConversation",
     "ChatMessage",
     "UserInvitation",

@@ -37,6 +37,7 @@ FEATURE_TIERS: dict[str, frozenset[str]] = {
     "ai_chat": frozenset({"growth", "professional", "enterprise"}),
     "workflow_automation": frozenset({"growth", "professional", "enterprise"}),
     "document_authoring": frozenset({"growth", "professional", "enterprise"}),
+    "customer_portal": frozenset({"growth", "professional", "enterprise"}),
 }
 
 SEAT_LIMITS: dict[str, int | None] = {

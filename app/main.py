@@ -16,6 +16,7 @@ from app.api import (
     auth,
     billing,
     chat,
+    customer_portal,
     customers,
     dashboard,
     document_share,
@@ -157,6 +158,9 @@ app.include_router(document_share.public_router)
 
 # Marketing-site gated guide downloads (no auth required — see app/api/marketing_leads.py docstring)
 app.include_router(marketing_leads.router)
+
+# Customer portal (no auth required — see app/api/customer_portal.py docstring)
+app.include_router(customer_portal.public_router)
 
 # Meeting RSVP (no auth required — see app/api/meeting_rsvp.py docstring)
 app.include_router(meeting_rsvp.public_router)

@@ -379,6 +379,28 @@ export interface CustomerListResponse {
   limit: number;
 }
 
+export interface CustomerPortalAccess {
+  id: string;
+  customer_id: string;
+  created_at: string;
+  last_accessed_at: string | null;
+}
+
+export interface CustomerPortalAccessCreate extends CustomerPortalAccess {
+  portal_url: string;
+}
+
+export interface CustomerPortalDetail {
+  customer_name: string;
+  business_name: string;
+  documents: BusinessDocument[];
+}
+
+export interface CustomerPortalDownload {
+  url: string;
+  expires_in: number;
+}
+
 export type TaskStatusBackend = "pending" | "in_progress" | "completed" | "overdue";
 export type TaskPriorityBackend = "low" | "medium" | "high" | "urgent";
 
