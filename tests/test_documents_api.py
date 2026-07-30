@@ -16,9 +16,14 @@ def token(client: TestClient, registered_user: dict) -> str:
     return registered_user["access_token"]
 
 
+def _fake_upload(business_id, entity_type, entity_id, filename, content, content_type):
+    return f"fake/{business_id}/{entity_type}/{entity_id}/{uuid4()}-{filename}"
+
+
 @pytest.fixture(autouse=True)
 def _no_real_r2_calls():
-    with patch("app.services.document.object_storage.upload", return_value="fake/key.txt"), \
+    with patch("app.services.document.object_storage.upload", side_effect=_fake_upload), \
+         patch("app.services.document.object_storage.get", return_value=b"fake pdf bytes"), \
          patch("app.services.document.object_storage.presigned_download_url", return_value="https://signed.example/url"), \
          patch("app.services.document.object_storage.delete", return_value=None):
         yield
@@ -82,6 +87,45 @@ class TestDocumentDownloadApi:
     def test_404_for_missing_document(self, client: TestClient, token: str):
         r = client.get(f"/api/v1/documents/{uuid4()}/download-url", headers=auth(token))
         assert r.status_code == 404
+
+
+class TestDocumentDuplicateApi:
+    def test_duplicate_onto_different_entity(self, client: TestClient, token: str):
+        lead_id = str(uuid4())
+        customer_id = str(uuid4())
+        upload = client.post(
+            "/api/v1/documents",
+            data={"entity_type": "lead", "entity_id": lead_id},
+            files={"file": ("worksheet.pdf", b"fake pdf bytes", "application/pdf")},
+            headers=auth(token),
+        ).json()
+
+        r = client.post(
+            f"/api/v1/documents/{upload['id']}/duplicate",
+            json={"entity_type": "customer", "entity_id": customer_id},
+            headers=auth(token),
+        )
+        assert r.status_code == 201
+        body = r.json()
+        assert body["id"] != upload["id"]
+        assert body["entity_type"] == "customer"
+        assert body["entity_id"] == customer_id
+        assert body["filename"] == "worksheet.pdf"
+
+    def test_404_for_missing_document(self, client: TestClient, token: str):
+        r = client.post(
+            f"/api/v1/documents/{uuid4()}/duplicate",
+            json={"entity_type": "lead", "entity_id": str(uuid4())},
+            headers=auth(token),
+        )
+        assert r.status_code == 404
+
+    def test_requires_auth(self, client: TestClient):
+        r = client.post(
+            f"/api/v1/documents/{uuid4()}/duplicate",
+            json={"entity_type": "lead", "entity_id": str(uuid4())},
+        )
+        assert r.status_code == 401
 
 
 class TestDocumentDeleteApi:

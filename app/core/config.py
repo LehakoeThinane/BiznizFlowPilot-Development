@@ -135,6 +135,7 @@ class Settings(BaseSettings):
     stale_run_check_interval_seconds: int = 300
     followup_check_interval_seconds: int = 3600  # 1 hour
     trial_reminder_check_interval_seconds: int = 21600  # 6 hours
+    linkedin_lead_poll_interval_seconds: int = 3600  # 1 hour
 
     # Frontend base URL (used in emails)
     frontend_url: str = "http://localhost:3000"
@@ -147,6 +148,15 @@ class Settings(BaseSettings):
     payfast_merchant_key: str = ""
     payfast_passphrase: str = ""
     payfast_sandbox: bool = True
+
+    # LinkedIn Lead Sync API - only usable once LinkedIn grants Marketing
+    # Developer Platform partner access for Lead Sync (a separate, more
+    # restrictive tier than basic app access - not guaranteed self-serve).
+    # Empty client_id means the poll task no-ops rather than erroring -
+    # the CSV import path (app/api/linkedin_leads.py) works regardless.
+    linkedin_client_id: str = ""
+    linkedin_client_secret: str = ""
+    linkedin_access_token: str = ""
     # Mirrors the ZAR prices shown on the marketing site's pricing table
     # (kept in sync by hand - the two repos have no shared source of truth).
     # "enterprise" is deliberately absent: Custom pricing isn't self-serve

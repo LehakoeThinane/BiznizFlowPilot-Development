@@ -6,11 +6,15 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.customer import CustomerCreate, CustomerListResponse, CustomerResponse, CustomerUpdate
+from app.schemas.customer_portal import CustomerPortalAccessCreateResponse, CustomerPortalAccessResponse
 from app.services.customer import CustomerService
+from app.services.customer_portal import CustomerPortalService
 from app.services.event import EventService
 
 router = APIRouter(
@@ -122,6 +126,73 @@ def update_customer(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post(
+    "/{customer_id}/portal-access",
+    response_model=CustomerPortalAccessCreateResponse,
+    status_code=201,
+    dependencies=[Depends(require_feature("customer_portal"))],
+)
+def generate_customer_portal_access(
+    customer_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Generate (or regenerate, replacing any existing one) a durable,
+    revocable client-portal link for this customer. The raw URL is
+    returned exactly once - it can never be retrieved again afterward."""
+    try:
+        result = CustomerPortalService(db).generate_or_regenerate(current_user.business_id, current_user, customer_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if not result:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    access, raw_token = result
+    return CustomerPortalAccessCreateResponse(
+        id=access.id,
+        customer_id=access.customer_id,
+        created_at=access.created_at,
+        last_accessed_at=access.last_accessed_at,
+        portal_url=f"{settings.frontend_url}/portal/{raw_token}",
+    )
+
+
+@router.get(
+    "/{customer_id}/portal-access",
+    response_model=CustomerPortalAccessResponse | None,
+    dependencies=[Depends(require_feature("customer_portal"))],
+)
+def get_customer_portal_access_status(
+    customer_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Whether a portal link is currently active for this customer, and
+    when it was last used - never returns the token itself."""
+    return CustomerPortalService(db).get_status(current_user.business_id, current_user, customer_id)
+
+
+@router.delete(
+    "/{customer_id}/portal-access",
+    status_code=204,
+    dependencies=[Depends(require_feature("customer_portal"))],
+)
+def revoke_customer_portal_access(
+    customer_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Revoke this customer's active portal link, if any."""
+    try:
+        revoked = CustomerPortalService(db).revoke(current_user.business_id, current_user, customer_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if not revoked:
+        raise HTTPException(status_code=404, detail="No active portal link for this customer")
 
 
 @router.delete("/{customer_id}", response_model=dict)

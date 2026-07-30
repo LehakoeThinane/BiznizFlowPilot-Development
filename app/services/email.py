@@ -518,6 +518,31 @@ def send_marketing_guide_lead_email(
     _notify_staff(subject, html, plain)
 
 
+def send_linkedin_lead_email(
+    first_name: str,
+    last_name: str,
+    email: str,
+    company: str | None,
+    job_title: str | None,
+    campaign_name: str | None,
+) -> None:
+    company_part = company or "unknown company"
+    title_part = f", {job_title}" if job_title else ""
+    campaign_part = campaign_name or "unknown campaign"
+    subject = f"New LinkedIn lead: {first_name} {last_name} ({company_part}{title_part}) - {campaign_part}"
+    plain = (
+        f"A LinkedIn ad lead came in.\n\n"
+        f"Name: {first_name} {last_name}\nTitle: {job_title or '(none)'}\n"
+        f"Company: {company_part}\nEmail: {email}\nCampaign: {campaign_part}"
+    )
+    html = (
+        f"<p>A LinkedIn ad lead came in.</p>"
+        f"<p>Name: {first_name} {last_name}<br>Title: {job_title or '(none)'}<br>"
+        f"Company: {company_part}<br>Email: {email}<br>Campaign: {campaign_part}</p>"
+    )
+    _notify_staff(subject, html, plain)
+
+
 def send_onboarding_help_request_email(
     user_name: str, user_email: str, business_name: str, note: str | None
 ) -> None:

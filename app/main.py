@@ -16,6 +16,7 @@ from app.api import (
     auth,
     billing,
     chat,
+    customer_portal,
     customers,
     dashboard,
     document_share,
@@ -28,6 +29,7 @@ from app.api import (
     inventory,
     invoice,
     leads,
+    linkedin_leads,
     marketing_leads,
     meeting_rsvp,
     meetings,
@@ -157,6 +159,9 @@ app.include_router(document_share.public_router)
 # Marketing-site gated guide downloads (no auth required — see app/api/marketing_leads.py docstring)
 app.include_router(marketing_leads.router)
 
+# Customer portal (no auth required — see app/api/customer_portal.py docstring)
+app.include_router(customer_portal.public_router)
+
 # Meeting RSVP (no auth required — see app/api/meeting_rsvp.py docstring)
 app.include_router(meeting_rsvp.public_router)
 
@@ -221,6 +226,7 @@ app.include_router(search.router, dependencies=[Depends(require_active_trial)])
 # Platform (vendor staff) routes — fully separate auth boundary, cross-tenant
 app.include_router(platform_auth.router)
 app.include_router(platform_admin.router)
+app.include_router(linkedin_leads.router)
 
 
 # ============================================================================
