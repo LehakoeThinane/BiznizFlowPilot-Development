@@ -214,7 +214,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* ── Main content ─────────────────────────────────────────────── */}
           <div className="flex flex-1 flex-col overflow-hidden">
-            <header className="flex h-18 shrink-0 items-center justify-between border-b border-outline-variant bg-[#0d1628]/90 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.25)] backdrop-blur md:px-6">
+            <header className="relative z-20 flex h-18 shrink-0 items-center justify-between border-b border-outline-variant bg-[#0d1628]/90 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.25)] backdrop-blur md:px-6">
 
               {/* Left: hamburger (mobile) + search */}
               <div className="flex items-center gap-3">
