@@ -114,6 +114,17 @@ class DocumentService:
             raise PermissionError("This document is restricted - request access first")
         return object_storage.presigned_download_url(doc.storage_key, doc.filename)
 
+    def get_content(self, business_id: UUID, current_user: CurrentUser, document_id: UUID) -> str | None:
+        """Read a document's content directly (UTF-8 text) for the in-app
+        editor - see DocumentContentResponse for why this doesn't just
+        return a presigned URL like get_download_url() does."""
+        doc = self.repo.get(business_id=business_id, entity_id=document_id)
+        if not doc:
+            return None
+        if not self._access_service.has_access(doc, current_user):
+            raise PermissionError("This document is restricted - request access first")
+        return object_storage.get(doc.storage_key).decode("utf-8")
+
     def duplicate(
         self,
         business_id: UUID,

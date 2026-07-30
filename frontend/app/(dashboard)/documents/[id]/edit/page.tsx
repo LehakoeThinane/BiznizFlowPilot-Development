@@ -9,7 +9,7 @@ import DOMPurify from "dompurify";
 
 import { apiRequest, ApiError } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
-import type { BusinessDocument, DocumentDownloadResponse } from "@/types/api";
+import type { BusinessDocument, DocumentContentResponse } from "@/types/api";
 
 const AUTOSAVE_IDLE_MS = 3000;
 
@@ -100,13 +100,10 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
         checkedOutSuccessfully = true;
         setDoc(checkedOut);
 
-        const { url } = await apiRequest<DocumentDownloadResponse>(
-          `/api/v1/documents/${documentId}/download-url`,
+        const { content: html } = await apiRequest<DocumentContentResponse>(
+          `/api/v1/documents/${documentId}/content`,
           { authToken: token ?? undefined },
         );
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Couldn't load this document's content");
-        const html = await res.text();
         if (cancelled) return;
         editor?.commands.setContent(DOMPurify.sanitize(html));
       } catch (e) {
