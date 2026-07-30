@@ -12,6 +12,7 @@ from uuid import UUID
 
 import boto3
 from botocore.client import Config as BotoConfig
+from botocore.exceptions import ClientError
 
 from app.core.config import settings
 
@@ -20,6 +21,12 @@ _UNSAFE_HEADER_CHARS = re.compile(r'[\r\n"]')
 
 class ObjectStorageError(Exception):
     """Raised when R2 is not configured, or a storage operation fails."""
+
+
+class ObjectNotFoundError(ObjectStorageError):
+    """Raised when a storage key no longer resolves to a real object in R2 -
+    e.g. it was deleted directly in the R2 dashboard, outside the app,
+    leaving the database's reference to it orphaned."""
 
 
 def _client():
@@ -73,18 +80,37 @@ def upload_at_key(key: str, content: bytes, content_type: str) -> None:
 def get(storage_key: str) -> bytes:
     """Fetch an object's raw content directly (not a presigned URL) - used
     server-side, e.g. reading back a draft buffer to fold into a real
-    version."""
+    version, or the source file when duplicating a document."""
     try:
         return _client().get_object(Bucket=settings.r2_bucket_name, Key=storage_key)["Body"].read()
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            raise ObjectNotFoundError(f"Object not found: {storage_key}") from e
+        raise ObjectStorageError(f"Download failed: {e}") from e
     except Exception as e:
         raise ObjectStorageError(f"Download failed: {e}") from e
 
 
 def presigned_download_url(storage_key: str, filename: str, expires_in: int = 300) -> str:
-    """A short-lived, signed URL for downloading a private object directly from R2."""
+    """A short-lived, signed URL for downloading a private object directly from R2.
+
+    Confirms the object actually exists first - generate_presigned_url() is a
+    local signing operation with no network round-trip, so on its own it
+    would happily mint a working-looking URL for a key that was deleted out
+    from under the app (e.g. by hand, in the R2 dashboard), leaving callers
+    to send the user to a raw, unstyled R2 XML error page.
+    """
+    client = _client()
+    try:
+        client.head_object(Bucket=settings.r2_bucket_name, Key=storage_key)
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey"):
+            raise ObjectNotFoundError(f"Object not found: {storage_key}") from e
+        raise ObjectStorageError(f"Failed to verify file exists: {e}") from e
+
     safe_filename = _UNSAFE_HEADER_CHARS.sub("", filename)
     try:
-        return _client().generate_presigned_url(
+        return client.generate_presigned_url(
             "get_object",
             Params={
                 "Bucket": settings.r2_bucket_name,

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.dependencies import get_current_user
+from app.integrations.object_storage import ObjectNotFoundError
 from app.schemas.auth import CurrentUser
 from app.schemas.document_share import (
     DocumentShareLinkCreate,
@@ -86,7 +87,10 @@ def redeem_share_link(token: str, db: Annotated[Session, Depends(get_db)]):
     """Public, unauthenticated endpoint an external recipient actually clicks.
     No auth dependency on purpose - the token itself is the credential."""
     service = DocumentShareService(db)
-    url = service.resolve_public_download(token)
+    try:
+        url = service.resolve_public_download(token)
+    except ObjectNotFoundError:
+        url = None
     if not url:
         raise HTTPException(status_code=404, detail="This link is invalid, expired, or has been revoked")
     return RedirectResponse(url)

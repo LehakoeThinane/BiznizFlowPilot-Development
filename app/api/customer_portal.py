@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
+from app.integrations.object_storage import ObjectNotFoundError
 from app.schemas.customer_portal import CustomerPortalDetailResponse, CustomerPortalDownloadResponse
 from app.services.customer_portal import CustomerPortalService
 
@@ -47,7 +48,10 @@ def get_portal_document_download_url(
 ):
     """Signed download URL for one of this customer's documents - re-checks
     the document actually belongs to the token's own customer_id first."""
-    url = CustomerPortalService(db).get_document_download_url(token, document_id)
+    try:
+        url = CustomerPortalService(db).get_document_download_url(token, document_id)
+    except ObjectNotFoundError:
+        url = None
     if not url:
         raise HTTPException(status_code=404, detail="This link is invalid or has been revoked")
     return CustomerPortalDownloadResponse(url=url, expires_in=300)

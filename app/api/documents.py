@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
-from app.integrations.object_storage import ObjectStorageError
+from app.integrations.object_storage import ObjectNotFoundError, ObjectStorageError
 from app.models.document import Document
 from app.schemas.auth import CurrentUser
 from app.schemas.document import (
@@ -157,6 +157,8 @@ def duplicate_document(
         )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ObjectNotFoundError:
+        raise HTTPException(status_code=404, detail="The source file is no longer available in storage.")
     except ObjectStorageError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except ValueError as e:
@@ -214,6 +216,8 @@ def get_download_url(
     try:
         service = DocumentService(db)
         url = service.get_download_url(current_user.business_id, current_user, document_id)
+    except ObjectNotFoundError:
+        raise HTTPException(status_code=404, detail="This file is no longer available in storage.")
     except ObjectStorageError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except PermissionError as e:
@@ -423,6 +427,8 @@ def get_version_download_url(
         )
     except PermissionError as e:
         raise HTTPException(status_code=403, detail=str(e))
+    except ObjectNotFoundError:
+        raise HTTPException(status_code=404, detail="This file is no longer available in storage.")
     except ObjectStorageError as e:
         raise HTTPException(status_code=503, detail=str(e))
 
