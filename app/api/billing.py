@@ -15,13 +15,14 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.billing import CheckoutRequest, CheckoutResponse
 from app.services.billing import BillingError, create_checkout_session, verify_and_process_itn
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/billing", tags=["billing"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 
 @router.post("/checkout", response_model=CheckoutResponse)

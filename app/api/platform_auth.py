@@ -12,7 +12,7 @@ from app.schemas.platform import PlatformLoginRequest, PlatformTokenResponse
 from app.services.platform_auth import PlatformAuthService
 
 router = APIRouter(prefix="/platform/v1/auth", tags=["platform-auth"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 _COOKIE_SECURE = settings.environment == "production"
 _COOKIE_SAMESITE = "strict" if _COOKIE_SECURE else "lax"

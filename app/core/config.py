@@ -39,6 +39,15 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql://user:password@localhost:5432/biznizflowpilot_db"
+    # Per-process SQLAlchemy pool size - these are the backend's own
+    # defaults (unchanged). The Celery worker process imports the same
+    # app.core.database module and gets its own separate pool - it's given
+    # a smaller override via env vars in docker-compose.prod.yml, since it
+    # only ever runs a handful of periodic tasks, not concurrent web
+    # requests, and doesn't need 30 reserved Postgres connections sitting
+    # mostly idle on a connection-constrained tier.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
 
     # JWT — no default; app raises ValidationError on startup if SECRET_KEY is not set
     secret_key: str
@@ -126,7 +135,9 @@ class Settings(BaseSettings):
     # Environment
     environment: str = "development"  # development, staging, production
 
-    # Redis (for future use)
+    # Redis - also backs slowapi's shared rate-limit storage (app/main.py and
+    # friends), not just Celery's broker/backend below. Sits on db 0, which
+    # neither Celery setting below touches.
     redis_url: str = "redis://localhost:6379/0"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"

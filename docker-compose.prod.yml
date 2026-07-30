@@ -17,6 +17,14 @@ services:
     image: ghcr.io/lehakoethinane/biznizflowpilot-backend:latest
     restart: unless-stopped
     env_file: .env.production
+    environment:
+      # This process only ever runs a handful of periodic Celery beat tasks,
+      # never concurrent web requests - it doesn't need the backend's own
+      # 30-connection budget (pool_size=10 + max_overflow=20) sitting mostly
+      # idle. Shrinking it frees up real headroom on the Postgres connection
+      # ceiling at zero cost, since this pool was never actually being used.
+      DB_POOL_SIZE: "3"
+      DB_MAX_OVERFLOW: "2"
     command: ["celery", "-A", "app.workers.celery_app", "worker", "-B", "--loglevel=INFO"]
 
   frontend:

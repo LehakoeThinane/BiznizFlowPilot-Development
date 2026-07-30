@@ -20,7 +20,7 @@ from app.services.email import send_password_reset_email
 from app.services.invitation import InvitationService
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 _COOKIE_SECURE = settings.environment == "production"
 _COOKIE_SAMESITE = "strict" if _COOKIE_SECURE else "lax"

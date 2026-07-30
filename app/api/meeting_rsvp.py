@@ -11,12 +11,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.meeting import MeetingRsvpDetailOut, MeetingRsvpRespondRequest
 from app.services.meeting import MeetingService
 
 public_router = APIRouter(tags=["meeting-rsvp-public"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 
 def _to_rsvp_detail(participant) -> MeetingRsvpDetailOut:
