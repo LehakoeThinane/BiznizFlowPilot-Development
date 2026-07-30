@@ -16,6 +16,7 @@ from app.schemas.document import (
     DocumentAccessRequestListResponse,
     DocumentAccessRequestResponse,
     DocumentComposeRequest,
+    DocumentContentResponse,
     DocumentDownloadResponse,
     DocumentDraftUpdate,
     DocumentDuplicateRequest,
@@ -227,6 +228,31 @@ def get_download_url(
         raise HTTPException(status_code=404, detail="Document not found")
 
     return DocumentDownloadResponse(url=url, expires_in=300)
+
+
+@router.get("/{document_id}/content", response_model=DocumentContentResponse)
+def get_document_content(
+    document_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Read a document's content directly, through our own API - used by the
+    in-app editor to seed existing content. Deliberately not a presigned R2
+    URL: see DocumentContentResponse's docstring for why."""
+    try:
+        service = DocumentService(db)
+        content = service.get_content(current_user.business_id, current_user, document_id)
+    except ObjectNotFoundError:
+        raise HTTPException(status_code=404, detail="This file is no longer available in storage.")
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    if content is None:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    return DocumentContentResponse(content=content)
 
 
 @router.delete("/{document_id}", status_code=204)

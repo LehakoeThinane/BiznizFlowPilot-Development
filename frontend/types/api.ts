@@ -805,6 +805,10 @@ export interface DocumentDownloadResponse {
   expires_in: number;
 }
 
+export interface DocumentContentResponse {
+  content: string;
+}
+
 export interface DocumentShareLink {
   id: string;
   document_id: string;

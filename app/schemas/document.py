@@ -68,6 +68,17 @@ class DocumentDraftUpdate(BaseModel):
     content_html: str
 
 
+class DocumentContentResponse(BaseModel):
+    """The editor's current saved content, read back through our own API -
+    deliberately not a presigned R2 URL: the in-app editor needs to read the
+    bytes into JS directly (to seed the rich-text editor), and R2 has no
+    CORS policy allowing the app's origin, so a direct browser fetch() to a
+    presigned URL is blocked. Routing through our own same-origin API avoids
+    depending on R2 CORS configuration entirely."""
+
+    content: str
+
+
 class DocumentAccessRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -112,6 +112,31 @@ class TestDocumentDownloadApi:
         assert "no longer available" in r.json()["detail"]
 
 
+class TestDocumentContentApi:
+    """The in-app editor reads content through this endpoint, not the
+    download-url one - see DocumentContentResponse's docstring for why a
+    presigned R2 URL doesn't work for this (R2 has no CORS policy allowing
+    the app's own origin, so a browser fetch() to it is blocked outright)."""
+
+    def test_returns_document_content(self, client: TestClient, token: str):
+        lead_id = str(uuid4())
+        upload = client.post(
+            "/api/v1/documents",
+            data={"entity_type": "lead", "entity_id": lead_id},
+            files={"file": ("a.html", b"<p>hello</p>", "text/html")},
+            headers=auth(token),
+        ).json()
+
+        with patch("app.services.document.object_storage.get", return_value=b"<p>hello</p>"):
+            r = client.get(f"/api/v1/documents/{upload['id']}/content", headers=auth(token))
+        assert r.status_code == 200
+        assert r.json()["content"] == "<p>hello</p>"
+
+    def test_404_for_missing_document(self, client: TestClient, token: str):
+        r = client.get(f"/api/v1/documents/{uuid4()}/content", headers=auth(token))
+        assert r.status_code == 404
+
+
 class TestDocumentDuplicateApi:
     def test_duplicate_onto_different_entity(self, client: TestClient, token: str):
         lead_id = str(uuid4())

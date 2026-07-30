@@ -116,6 +116,27 @@ class TestDocumentDownload:
         assert service.get_download_url(owner_user.business_id, owner_user, uuid4()) is None
 
 
+class TestDocumentGetContent:
+    """The in-app editor reads content through get_content(), not a
+    presigned URL - see DocumentContentResponse's docstring: R2 has no CORS
+    policy allowing the app's own origin, so a browser-side fetch() to a
+    presigned URL is blocked outright. Routing bytes through our own API
+    avoids depending on R2 CORS configuration entirely."""
+
+    def test_returns_document_content_as_text(self, test_db: Session, owner_user: CurrentUser):
+        service = DocumentService(test_db)
+        doc = service.upload(owner_user.business_id, owner_user, "lead", uuid4(), "f.html", b"<p>hello</p>", "text/html")
+
+        with patch("app.services.document.object_storage.get", return_value=b"<p>hello</p>"):
+            content = service.get_content(owner_user.business_id, owner_user, doc.id)
+
+        assert content == "<p>hello</p>"
+
+    def test_returns_none_for_missing_document(self, test_db: Session, owner_user: CurrentUser):
+        service = DocumentService(test_db)
+        assert service.get_content(owner_user.business_id, owner_user, uuid4()) is None
+
+
 class TestDocumentDelete:
     def test_uploader_can_delete_own_document(self, test_db: Session, staff_user: CurrentUser):
         service = DocumentService(test_db)
