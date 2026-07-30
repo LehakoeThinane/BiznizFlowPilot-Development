@@ -88,6 +88,29 @@ class TestDocumentDownloadApi:
         r = client.get(f"/api/v1/documents/{uuid4()}/download-url", headers=auth(token))
         assert r.status_code == 404
 
+    def test_404_with_friendly_message_when_object_missing_from_storage(self, client: TestClient, token: str):
+        """The R2 object was deleted independently of the app (e.g. by hand
+        in the R2 dashboard) - the database row still exists, but the file
+        behind it doesn't. This must surface as a clean 404, never a raw,
+        unstyled R2 XML error page opened directly in the browser."""
+        from app.integrations.object_storage import ObjectNotFoundError
+
+        lead_id = str(uuid4())
+        upload = client.post(
+            "/api/v1/documents",
+            data={"entity_type": "lead", "entity_id": lead_id},
+            files={"file": ("a.pdf", b"data", "application/pdf")},
+            headers=auth(token),
+        ).json()
+
+        with patch(
+            "app.services.document.object_storage.presigned_download_url",
+            side_effect=ObjectNotFoundError("Object not found: fake/key"),
+        ):
+            r = client.get(f"/api/v1/documents/{upload['id']}/download-url", headers=auth(token))
+        assert r.status_code == 404
+        assert "no longer available" in r.json()["detail"]
+
 
 class TestDocumentDuplicateApi:
     def test_duplicate_onto_different_entity(self, client: TestClient, token: str):

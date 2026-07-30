@@ -90,19 +90,23 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
     async function open() {
       setLoading(true);
       setLockError(null);
+      let checkedOutSuccessfully = false;
       try {
         const checkedOut = await apiRequest<BusinessDocument>(`/api/v1/documents/${documentId}/checkout`, {
           method: "POST",
           authToken: token ?? undefined,
         });
         if (cancelled) return;
+        checkedOutSuccessfully = true;
         setDoc(checkedOut);
 
         const { url } = await apiRequest<DocumentDownloadResponse>(
           `/api/v1/documents/${documentId}/download-url`,
           { authToken: token ?? undefined },
         );
-        const html = await fetch(url).then((r) => r.text());
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Couldn't load this document's content");
+        const html = await res.text();
         if (cancelled) return;
         editor?.commands.setContent(DOMPurify.sanitize(html));
       } catch (e) {
@@ -111,6 +115,15 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
           setLockError("Someone else is already editing this document.");
         } else {
           setLockError(e instanceof Error ? e.message : "Couldn't open this document");
+        }
+        // Content failed to load after the checkout lock was already
+        // acquired - release it, or the document is stuck "checked out"
+        // with no way for anyone to retry.
+        if (checkedOutSuccessfully) {
+          apiRequest(`/api/v1/documents/${documentId}/checkout/cancel`, {
+            method: "POST",
+            authToken: token ?? undefined,
+          }).catch(() => {});
         }
       } finally {
         if (!cancelled) setLoading(false);
