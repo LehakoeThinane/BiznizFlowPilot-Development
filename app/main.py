@@ -65,7 +65,7 @@ from app.schemas.user import PresenceOut, StatusUpdateRequest
 from app.services.event import EventService
 from app.utils.logger import get_logger
 
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 logger = get_logger(__name__)
 

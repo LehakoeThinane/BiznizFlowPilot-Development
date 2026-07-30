@@ -12,13 +12,14 @@ from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.api.auth import _set_access_cookie, _set_refresh_cookie, _set_session_cookie
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.auth import TokenResponse
 from app.schemas.signup import TrialSignupGoogleRequest, TrialSignupRequest
 from app.services.trial_signup import TrialSignupService
 
 router = APIRouter(prefix="/signup", tags=["signup"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 
 @router.post("/trial", response_model=TokenResponse)

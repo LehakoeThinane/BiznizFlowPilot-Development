@@ -8,6 +8,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.entitlements import FULL_ACCESS_TIERS, SEAT_LIMITS
 from app.core.enums import EventType
@@ -22,7 +23,7 @@ from app.services.event import EventService
 from app.services.invitation import InvitationService
 
 router = APIRouter(prefix="/api/v1/users", tags=["invites"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 
 def _resolve_target_business_id(current_user: CurrentUser, body: InvitationCreate) -> UUID:

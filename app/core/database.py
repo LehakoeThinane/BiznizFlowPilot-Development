@@ -11,8 +11,8 @@ from app.core.config import settings
 engine = create_engine(
     settings.database_url,
     echo=settings.debug,  # Log SQL statements if debug=True
-    pool_size=10,  # Connection pool size
-    max_overflow=20,  # Max overflow connections
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
     pool_pre_ping=True,  # Check connections before using
 )
 

@@ -13,12 +13,13 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.schemas.customer_portal import CustomerPortalDetailResponse, CustomerPortalDownloadResponse
 from app.services.customer_portal import CustomerPortalService
 
 public_router = APIRouter(tags=["customer-portal-public"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 
 @public_router.get("/api/v1/portal/{token}", response_model=CustomerPortalDetailResponse, include_in_schema=False)

@@ -14,6 +14,7 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.repositories.marketing_guide_lead import MarketingGuideLeadRepository
 from app.schemas.linkedin_lead import LinkedInFormLeadCreate
@@ -22,7 +23,7 @@ from app.services.email import send_marketing_guide_lead_email
 from app.services.linkedin_leads import LinkedInLeadImportService
 
 router = APIRouter(prefix="/api/v1/marketing", tags=["marketing"])
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
 
 
 @router.post("/guide-leads", status_code=status.HTTP_201_CREATED)
