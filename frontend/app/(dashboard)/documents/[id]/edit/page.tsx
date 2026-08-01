@@ -5,15 +5,24 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { TextStyle } from "@tiptap/extension-text-style";
+import { Color } from "@tiptap/extension-color";
+import { Highlight } from "@tiptap/extension-highlight";
+import { TextAlign } from "@tiptap/extension-text-align";
 import DOMPurify from "dompurify";
 
 import { apiRequest, ApiError } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
+import { Indent } from "@/lib/tiptap-indent";
 import type { BusinessDocument, DocumentContentResponse } from "@/types/api";
 
 const AUTOSAVE_IDLE_MS = 3000;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
+
+function ToolbarDivider() {
+  return <div className="mx-1 h-5 w-px shrink-0 bg-white/10" />;
+}
 
 function ToolbarButton({
   onClick,
@@ -53,7 +62,14 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const editor = useEditor({
-    extensions: [StarterKit],
+    extensions: [
+      StarterKit,
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      TextAlign.configure({ types: ["paragraph", "heading"] }),
+      Indent,
+    ],
     content: "",
     immediatelyRender: false,
     editorProps: {
@@ -133,6 +149,17 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
     };
   }, [editor, documentId, token]);
 
+  function handleSetLink() {
+    if (!editor) return;
+    if (editor.isActive("link")) {
+      editor.chain().focus().unsetLink().run();
+      return;
+    }
+    const url = window.prompt("Link URL:", "https://");
+    if (!url) return;
+    editor.chain().focus().setLink({ href: url, target: "_blank", rel: "noopener noreferrer" }).run();
+  }
+
   async function handleDone() {
     setFinishing(true);
     if (autosaveTimer.current) clearTimeout(autosaveTimer.current);
@@ -184,7 +211,7 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
       </div>
 
       {editor && (
-        <div className="flex items-center gap-1 border-b border-white/10 px-6 py-2">
+        <div className="flex flex-wrap items-center gap-1 border-b border-white/10 px-6 py-2">
           <ToolbarButton label="Bold" active={editor.isActive("bold")} onClick={() => editor.chain().focus().toggleBold().run()}>
             B
           </ToolbarButton>
@@ -202,6 +229,71 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
           </ToolbarButton>
           <ToolbarButton label="Quote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()}>
             &ldquo;&rdquo;
+          </ToolbarButton>
+          <ToolbarButton label="Underline" active={editor.isActive("underline")} onClick={() => editor.chain().focus().toggleUnderline().run()}>
+            U
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <label className="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-xs text-[#ccc] hover:bg-white/10" title="Text color">
+            A
+            <input
+              type="color"
+              aria-label="Text color"
+              className="h-4 w-4 cursor-pointer border-0 bg-transparent p-0"
+              value={editor.getAttributes("textStyle").color ?? "#ffffff"}
+              onChange={(e) => editor.chain().focus().setColor(e.target.value).run()}
+            />
+          </label>
+          <label className="flex cursor-pointer items-center gap-1 rounded-md px-1.5 py-1 text-xs text-[#ccc] hover:bg-white/10" title="Highlight color">
+            ▧
+            <input
+              type="color"
+              aria-label="Highlight color"
+              className="h-4 w-4 cursor-pointer border-0 bg-transparent p-0"
+              value={editor.getAttributes("highlight").color ?? "#fef08a"}
+              onChange={(e) => editor.chain().focus().setHighlight({ color: e.target.value }).run()}
+            />
+          </label>
+
+          <ToolbarDivider />
+
+          <ToolbarButton label="Align left" active={editor.isActive({ textAlign: "left" })} onClick={() => editor.chain().focus().setTextAlign("left").run()}>
+            L
+          </ToolbarButton>
+          <ToolbarButton label="Align center" active={editor.isActive({ textAlign: "center" })} onClick={() => editor.chain().focus().setTextAlign("center").run()}>
+            C
+          </ToolbarButton>
+          <ToolbarButton label="Align right" active={editor.isActive({ textAlign: "right" })} onClick={() => editor.chain().focus().setTextAlign("right").run()}>
+            R
+          </ToolbarButton>
+          <ToolbarButton label="Justify" active={editor.isActive({ textAlign: "justify" })} onClick={() => editor.chain().focus().setTextAlign("justify").run()}>
+            J
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <ToolbarButton label="Outdent" onClick={() => editor.chain().focus().outdent().run()}>
+            &larr;&#124;
+          </ToolbarButton>
+          <ToolbarButton label="Indent" onClick={() => editor.chain().focus().indent().run()}>
+            &#124;&rarr;
+          </ToolbarButton>
+          <ToolbarButton label="Link" active={editor.isActive("link")} onClick={handleSetLink}>
+            Link
+          </ToolbarButton>
+
+          <ToolbarDivider />
+
+          <ToolbarButton label="Undo" onClick={() => editor.chain().focus().undo().run()}>
+            &#8630;
+          </ToolbarButton>
+          <ToolbarButton label="Redo" onClick={() => editor.chain().focus().redo().run()}>
+            &#8631;
+          </ToolbarButton>
+          <ToolbarButton label="Clear formatting" onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}>
+            Clear
           </ToolbarButton>
         </div>
       )}

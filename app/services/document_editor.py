@@ -21,6 +21,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import bleach
+from bleach.css_sanitizer import CSSSanitizer
 
 from app.integrations import object_storage
 from app.integrations.object_storage import ObjectStorageError
@@ -30,16 +31,34 @@ from app.schemas.auth import CurrentUser
 from app.services.document import DocumentService
 from app.services.document_checkout import DocumentCheckoutService
 
+_HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
 _ALLOWED_TAGS = [
     "p", "br", "strong", "em", "s", "u",
-    "h1", "h2", "h3", "h4", "h5", "h6",
+    *_HEADING_TAGS,
     "ul", "ol", "li", "blockquote", "code", "pre", "a", "hr",
+    # span (text color) and mark (highlight) - both TipTap marks render via
+    # an inline style attribute rather than a dedicated element/attribute
+    # pair, hence the CSS allowlist below rather than a plain attribute one.
+    "span", "mark",
 ]
-_ALLOWED_ATTRS = {"a": ["href", "target", "rel"]}
+_ALLOWED_ATTRS = {
+    "a": ["href", "target", "rel"],
+    "span": ["style"],
+    "mark": ["style", "data-color"],
+    # Paragraph/heading alignment (TextAlign) and indent level (our own
+    # Indent extension) both render as `style` on the block element itself.
+    **{tag: ["style"] for tag in ("p", *_HEADING_TAGS)},
+}
+# Deliberately narrow: only cosmetic text properties TipTap's toolbar
+# actually emits, never anything that could reposition/hide/resize content
+# (no position, display, width/height, z-index, etc.).
+_CSS_SANITIZER = CSSSanitizer(allowed_css_properties=["color", "background-color", "text-align", "margin-left"])
 
 
 def _sanitize(content_html: str) -> str:
-    return bleach.clean(content_html, tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRS, strip=True)
+    return bleach.clean(
+        content_html, tags=_ALLOWED_TAGS, attributes=_ALLOWED_ATTRS, css_sanitizer=_CSS_SANITIZER, strip=True,
+    )
 
 
 def _draft_key(document_id: UUID) -> str:

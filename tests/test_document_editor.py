@@ -55,6 +55,87 @@ def _no_real_r2_calls():
         yield
 
 
+class TestSanitize:
+    """_sanitize() (app/services/document_editor.py) had zero direct test
+    coverage before this - every existing test in this file exercises it
+    only indirectly through save_draft()/finish(), which never sends
+    anything adversarial. Testing it directly here is the only thing that
+    would actually catch a regression in the allowlist (e.g. a future
+    toolbar addition whose rendered HTML silently gets stripped, or an
+    accidentally-too-permissive CSS/tag allowance)."""
+
+    def test_preserves_all_toolbar_formatting(self):
+        from app.services.document_editor import _sanitize
+
+        html = (
+            '<p style="text-align: center; margin-left: 3em">'
+            '<span style="color: rgb(220, 38, 38)">colored</span> '
+            '<mark data-color="#fef08a" style="background-color: #fef08a; color: inherit">highlighted</mark> '
+            '<u>underlined</u> <strong>bold</strong> <em>italic</em>'
+            '</p>'
+            '<h2>Heading</h2>'
+            '<ul><li><p>item</p></li></ul>'
+            '<ol><li><p>item</p></li></ol>'
+            '<blockquote><p>quoted</p></blockquote>'
+            '<p><a href="https://example.com" target="_blank" rel="noopener noreferrer">a link</a></p>'
+        )
+        result = _sanitize(html)
+        assert 'text-align: center' in result
+        assert 'margin-left: 3em' in result
+        assert 'color: rgb(220, 38, 38)' in result
+        assert '<mark data-color="#fef08a"' in result
+        assert 'background-color: #fef08a' in result
+        assert '<u>underlined</u>' in result
+        assert '<h2>Heading</h2>' in result
+        assert '<blockquote><p>quoted</p></blockquote>' in result
+        assert 'href="https://example.com"' in result
+        assert 'target="_blank"' in result
+
+    def test_strips_script_tags(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<p>hello</p><script>alert(document.cookie)</script>')
+        assert '<script>' not in result
+        assert '</script>' not in result
+
+    def test_strips_event_handler_attributes(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<p onclick="alert(1)">hello</p>')
+        assert 'onclick' not in result
+
+    def test_strips_disallowed_tags_like_img_and_iframe(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<p>text</p><img src="x" onerror="alert(1)"><iframe src="evil.com"></iframe>')
+        assert '<img' not in result
+        assert '<iframe' not in result
+        assert 'onerror' not in result
+
+    def test_strips_javascript_protocol_from_links(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<a href="javascript:alert(1)">bad link</a>')
+        assert 'javascript:' not in result
+
+    def test_strips_disallowed_css_properties_but_keeps_allowed_ones(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize(
+            '<p style="text-align: center; position: fixed; top: 0; display: block; z-index: 9999">text</p>'
+        )
+        assert 'text-align: center' in result
+        assert 'position' not in result
+        assert 'z-index' not in result
+        assert 'display' not in result
+
+    def test_strips_style_from_disallowed_tag_like_div(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<div style="color: red">not an allowed tag</div>')
+        assert '<div' not in result
+
+
 def _make_org_owner(test_db: Session, plan_tier: str) -> CurrentUser:
     """Same pattern as tests/test_onboarding.py - a fresh org at a specific
     plan tier, with an owner user, for the tier-gating (403) tests. The
