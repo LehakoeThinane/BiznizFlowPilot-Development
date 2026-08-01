@@ -301,3 +301,27 @@ a:focus-visible,
   padding: 0.15em 0.4em;
   font-size: 0.9em;
 }
+.prose-doc.ProseMirror table {
+  border-collapse: collapse;
+  margin: 1em 0;
+  width: 100%;
+  table-layout: fixed;
+}
+.prose-doc.ProseMirror td,
+.prose-doc.ProseMirror th {
+  border: 1px solid #333;
+  padding: 0.4em 0.6em;
+  vertical-align: top;
+}
+.prose-doc.ProseMirror th {
+  background: #1a1a1a;
+  font-weight: 700;
+  text-align: left;
+}
+.prose-doc.ProseMirror td > p,
+.prose-doc.ProseMirror th > p {
+  margin: 0;
+}
+.prose-doc.ProseMirror .selectedCell {
+  background: rgba(45, 212, 191, 0.15);
+}
