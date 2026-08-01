@@ -307,16 +307,29 @@ a:focus-visible,
   width: 100%;
   table-layout: fixed;
 }
+/* #333 borders on near-black page background were nearly invisible
+   (confirmed from a screenshot of a real table - only the header row read
+   as distinct, body-row borders essentially disappeared). --outline-variant
+   is the same border tone already used everywhere else in the app
+   (inputs, dropdowns, panels) specifically because it holds up against this
+   background - reusing it here instead of a one-off color. Row backgrounds
+   (alternating + header) give the table a visible boundary against the
+   page even where borders alone would still read as too subtle. */
 .prose-doc.ProseMirror td,
 .prose-doc.ProseMirror th {
-  border: 1px solid #333;
-  padding: 0.4em 0.6em;
+  border: 1px solid var(--outline-variant);
+  padding: 0.5em 0.7em;
   vertical-align: top;
+  background: rgba(255, 255, 255, 0.035);
+}
+.prose-doc.ProseMirror tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.06);
 }
 .prose-doc.ProseMirror th {
-  background: #1a1a1a;
+  background: rgba(156, 192, 255, 0.16);
   font-weight: 700;
   text-align: left;
+  color: #fff;
 }
 .prose-doc.ProseMirror td > p,
 .prose-doc.ProseMirror th > p {
