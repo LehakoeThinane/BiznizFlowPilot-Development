@@ -124,4 +124,4 @@ class MessageAttachmentService:
             return None
         if not self.conversations.get_participant(attachment.conversation_id, current_user.user_id):
             raise PermissionError("Permission denied: You are not part of this conversation")
-        return object_storage.presigned_download_url(attachment.storage_key, attachment.filename)
+        return object_storage.presigned_download_url(attachment.storage_key, attachment.filename, disposition="attachment")

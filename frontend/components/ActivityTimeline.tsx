@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { apiRequest } from "@/lib/api";
 import { getCurrentUser, getStoredToken } from "@/lib/auth";
@@ -47,7 +48,7 @@ function formatTime(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleString(undefined, {
     month: "short", day: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
 
@@ -58,6 +59,7 @@ function formatSize(bytes: number): string {
 }
 
 export function ActivityTimeline({ entityType, entityId }: { entityType: string; entityId: string }) {
+  const router = useRouter();
   const [events, setEvents] = useState<BusinessEvent[]>([]);
   const [documents, setDocuments] = useState<BusinessDocument[]>([]);
   const [users, setUsers] = useState<BusinessUser[]>([]);
@@ -169,6 +171,19 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
       setIsUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  }
+
+  function handleOpenDocument(doc: BusinessDocument) {
+    // In-app composed documents open in the editor, same as clicking
+    // "Edit" - there's nothing useful to "download" for these, the raw
+    // HTML source isn't a file a user asked to save. Everything else opens
+    // inline (see disposition="inline" default in the backend's
+    // presigned_download_url) rather than forcing a save-to-disk dialog.
+    if (doc.content_type === "text/html") {
+      router.push(`/documents/${doc.id}/edit`);
+      return;
+    }
+    void handleDownload(doc);
   }
 
   async function handleDownload(doc: BusinessDocument) {
@@ -455,7 +470,7 @@ export function ActivityTimeline({ entityType, entityId }: { entityType: string;
                 {doc.has_access ? (
                   <button
                     type="button"
-                    onClick={() => void handleDownload(doc)}
+                    onClick={() => handleOpenDocument(doc)}
                     disabled={busyDocId === doc.id}
                     className="min-w-0 flex-1 truncate text-left text-[#ddd] hover:text-white hover:underline disabled:opacity-40"
                     title={doc.filename}

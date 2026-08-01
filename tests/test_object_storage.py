@@ -46,6 +46,28 @@ class TestPresignedDownloadUrl:
                 object_storage.presigned_download_url("some/key.pdf", "key.pdf")
         assert not isinstance(exc_info.value, ObjectNotFoundError)
 
+    def test_defaults_to_inline_disposition(self):
+        """Clicking a document to look at it shouldn't force a save-to-disk
+        dialog - inline is the default so browsers open/view PDFs, images,
+        etc. directly. Callers with genuine download intent (external
+        share/portal links) opt into disposition="attachment" explicitly."""
+        fake_client = MagicMock()
+        fake_client.head_object.return_value = {}
+        fake_client.generate_presigned_url.return_value = "https://signed.example/url"
+        with patch("app.integrations.object_storage._client", return_value=fake_client):
+            object_storage.presigned_download_url("some/key.pdf", "report.pdf")
+        params = fake_client.generate_presigned_url.call_args.kwargs["Params"]
+        assert params["ResponseContentDisposition"] == 'inline; filename="report.pdf"'
+
+    def test_attachment_disposition_can_be_requested_explicitly(self):
+        fake_client = MagicMock()
+        fake_client.head_object.return_value = {}
+        fake_client.generate_presigned_url.return_value = "https://signed.example/url"
+        with patch("app.integrations.object_storage._client", return_value=fake_client):
+            object_storage.presigned_download_url("some/key.pdf", "report.pdf", disposition="attachment")
+        params = fake_client.generate_presigned_url.call_args.kwargs["Params"]
+        assert params["ResponseContentDisposition"] == 'attachment; filename="report.pdf"'
+
 
 class TestGet:
     def test_raises_not_found_when_object_missing(self):

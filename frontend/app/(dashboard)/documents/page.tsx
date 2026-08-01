@@ -65,7 +65,7 @@ function formatSize(bytes: number): string {
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {
     month: "short", day: "numeric", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
+    hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
 
@@ -161,7 +161,6 @@ function DocumentRow({
   onDelete: (doc: BusinessDocument, inFolder: boolean) => void;
   onDuplicate: (doc: BusinessDocument) => void;
 }) {
-  const isEditable = doc.content_type === "text/html";
   return (
     <tr className="border-t border-white/5 hover:bg-white/[0.02]">
       <td className="px-4 py-3">
@@ -176,14 +175,6 @@ function DocumentRow({
             {doc.restricted ? "🔒 " : ""}{doc.filename}
           </button>
           {doc.version > 1 && <span className="text-xs text-muted">v{doc.version}</span>}
-          {isEditable && doc.has_access && (
-            <Link
-              href={`/documents/${doc.id}/edit`}
-              className="text-xs text-[#8ab4f8] hover:underline"
-            >
-              Edit
-            </Link>
-          )}
         </div>
       </td>
       {!inFolder && (
@@ -397,6 +388,19 @@ export default function DocumentLibraryPage() {
     }
   }
 
+  function handleOpenDocument(doc: BusinessDocument) {
+    // In-app composed documents open in the editor - there's nothing
+    // useful to "download" for these, the raw HTML source isn't a file a
+    // user asked to save. Everything else opens inline (see
+    // disposition="inline" default in the backend's presigned_download_url)
+    // rather than forcing a save-to-disk dialog.
+    if (doc.content_type === "text/html") {
+      router.push(`/documents/${doc.id}/edit`);
+      return;
+    }
+    void handleDownload(doc);
+  }
+
   async function handleDownload(doc: BusinessDocument) {
     setBusyDocId(doc.id);
     setError(null);
@@ -567,7 +571,7 @@ export default function DocumentLibraryPage() {
                       doc={doc}
                       inFolder
                       busyDocId={busyDocId}
-                      onDownload={handleDownload}
+                      onDownload={handleOpenDocument}
                       onDelete={handleDelete}
                       onDuplicate={openDuplicateModal}
                     />
@@ -648,7 +652,7 @@ export default function DocumentLibraryPage() {
                       doc={doc}
                       inFolder={false}
                       busyDocId={busyDocId}
-                      onDownload={handleDownload}
+                      onDownload={handleOpenDocument}
                       onDelete={handleDelete}
                       onDuplicate={openDuplicateModal}
                     />

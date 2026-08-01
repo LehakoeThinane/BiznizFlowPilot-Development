@@ -10,9 +10,15 @@ from functools import lru_cache
 import smtplib
 import socket
 import ssl
-from typing import Any
+from typing import Any, NamedTuple
 
 from app.core.config import settings
+
+
+class EmailAttachment(NamedTuple):
+    filename: str
+    content: bytes
+    mime_type: str
 
 
 @dataclass(slots=True)
@@ -59,6 +65,7 @@ class EmailProvider(ABC):
         metadata: dict[str, Any] | None = None,
         timeout_seconds: int | None = None,
         idempotency_key: str | None = None,
+        attachments: list[EmailAttachment] | None = None,
     ) -> EmailSendResult:
         """Send one email and return provider acceptance details.
 
@@ -113,6 +120,7 @@ class SMTPEmailProvider(EmailProvider):
         metadata: dict[str, Any] | None = None,
         timeout_seconds: int | None = None,
         idempotency_key: str | None = None,
+        attachments: list[EmailAttachment] | None = None,
     ) -> EmailSendResult:
         timeout = int(timeout_seconds or self.default_timeout_seconds)
         sender_email = (from_email or self.default_from_email or "").strip()
@@ -132,6 +140,13 @@ class SMTPEmailProvider(EmailProvider):
         # dedup - build the Message-ID directly from the caller's stable key.
         message["Message-ID"] = f"<{idempotency_key}@{domain}>" if idempotency_key else make_msgid(domain=domain)
         message.set_content(body)
+
+        for attachment in attachments or []:
+            maintype, _, subtype = (attachment.mime_type or "application/octet-stream").partition("/")
+            message.add_attachment(
+                attachment.content, maintype=maintype or "application", subtype=subtype or "octet-stream",
+                filename=attachment.filename,
+            )
 
         request_metadata = {
             "host": self.host,

@@ -82,6 +82,13 @@ def _sanitize(content_html: str) -> str:
     )
 
 
+def sanitize_document_html(content_html: str) -> str:
+    """Public entry point for callers outside this module (e.g. emailing the
+    document's live, possibly-unsaved editor content) that need the exact
+    same allowlist as compose/save-draft/finish."""
+    return _sanitize(content_html)
+
+
 def _draft_key(document_id: UUID) -> str:
     return f"drafts/{document_id}.html"
 

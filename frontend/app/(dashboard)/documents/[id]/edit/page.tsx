@@ -14,6 +14,7 @@ import DOMPurify from "dompurify";
 import { apiRequest, ApiError } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { Indent } from "@/lib/tiptap-indent";
+import { ComposeModal } from "@/components/email/ComposeModal";
 import type { BusinessDocument, DocumentContentResponse } from "@/types/api";
 
 const AUTOSAVE_IDLE_MS = 3000;
@@ -184,6 +185,7 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [finishing, setFinishing] = useState(false);
   const [showTablePicker, setShowTablePicker] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Toolbar active/disabled state (isActive, can().*) depends on the
   // editor's current selection, which changes on every click/keystroke
@@ -337,6 +339,16 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
     }
   }
 
+  async function handleSendDocumentEmail(to: string, subject: string, body: string) {
+    if (!editor) return;
+    const content_html = DOMPurify.sanitize(editor.getHTML());
+    await apiRequest<void>(`/api/v1/documents/${documentId}/email`, {
+      method: "POST",
+      authToken: token ?? undefined,
+      body: { to, subject, body, content_html },
+    });
+  }
+
   if (lockError) {
     return (
       <div className="mx-auto max-w-2xl py-16 text-center">
@@ -364,6 +376,15 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
           </span>
           <button
             type="button"
+            onClick={() => setShowEmailModal(true)}
+            disabled={loading}
+            className="flex items-center gap-1.5 rounded-md border border-outline-variant px-3 py-2 text-sm font-medium text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <span className="material-symbols-outlined text-[18px]">mail</span>
+            Email
+          </button>
+          <button
+            type="button"
             onClick={() => void handleDone()}
             disabled={finishing || loading}
             className="erp-button-primary px-4 py-2 text-sm font-semibold disabled:opacity-40"
@@ -372,6 +393,15 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
           </button>
         </div>
       </div>
+
+      {showEmailModal && (
+        <ComposeModal
+          title="Email this document"
+          initialSubject={doc?.filename.replace(/\.html$/, "") ?? ""}
+          onSend={handleSendDocumentEmail}
+          onClose={() => setShowEmailModal(false)}
+        />
+      )}
 
       {editor && (
         <div className="border-b border-outline-variant bg-[#0d1628]/60">

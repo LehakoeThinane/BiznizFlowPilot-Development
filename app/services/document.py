@@ -20,6 +20,8 @@ from app.repositories.document import DocumentRepository
 from app.schemas.auth import CurrentUser
 from app.services.document_access import DocumentAccessService
 from app.services.event import EventService
+from app.services.user_email import UserEmailAccountService
+from app.workflow_engine.email_provider import EmailAttachment
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25MB
 
@@ -149,6 +151,47 @@ class DocumentService:
             business_id, current_user, entity_type, entity_id,
             filename or doc.filename, content, doc.content_type,
         )
+
+    def email_document(
+        self,
+        business_id: UUID,
+        current_user: CurrentUser,
+        document_id: UUID,
+        to: str,
+        subject: str,
+        body: str,
+        content_html: str | None = None,
+    ) -> Document | None:
+        """Email a document as an attachment via the caller's own connected
+        mailbox - reuses the per-user SMTP account behind the Email page
+        rather than a separate delivery path. Raises
+        EmailAccountNotConfiguredError (from app.services.user_email) if the
+        caller hasn't connected a mailbox yet.
+
+        content_html, when given, is sanitized and sent as-is instead of
+        re-fetching doc.storage_key - this lets the in-app editor email its
+        current (possibly unsaved) content rather than the last saved
+        version."""
+        doc = self.repo.get(business_id=business_id, entity_id=document_id)
+        if not doc:
+            return None
+        if not self._access_service.has_access(doc, current_user):
+            raise PermissionError("This document is restricted - request access first")
+
+        if content_html is not None:
+            from app.services.document_editor import sanitize_document_html
+
+            content = sanitize_document_html(content_html).encode("utf-8")
+            mime_type = "text/html"
+        else:
+            content = object_storage.get(doc.storage_key)
+            mime_type = doc.content_type or "application/octet-stream"
+
+        attachment = EmailAttachment(filename=doc.filename, content=content, mime_type=mime_type)
+        UserEmailAccountService(self.db).send_message(
+            business_id, current_user.user_id, to, subject, body, attachments=[attachment],
+        )
+        return doc
 
     def has_access(self, doc: Document, current_user: CurrentUser) -> bool:
         return self._access_service.has_access(doc, current_user)

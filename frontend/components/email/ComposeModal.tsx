@@ -7,13 +7,19 @@ const INPUT = "erp-input w-full px-3 py-2 text-sm";
 export function ComposeModal({
   onSend,
   onClose,
+  title = "New email",
+  initialSubject = "",
+  initialBody = "",
 }: {
   onSend: (to: string, subject: string, body: string) => Promise<void>;
   onClose: () => void;
+  title?: string;
+  initialSubject?: string;
+  initialBody?: string;
 }) {
   const [to, setTo] = useState("");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
@@ -39,7 +45,7 @@ export function ComposeModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33] shadow-2xl">
         <div className="flex items-center justify-between border-b border-outline-variant px-6 py-4">
-          <h2 className="text-base font-semibold text-white">New email</h2>
+          <h2 className="text-base font-semibold text-white">{title}</h2>
           <button type="button" aria-label="Close" onClick={onClose} className="text-slate-400 hover:text-white">×</button>
         </div>
         <form onSubmit={handleSubmit} noValidate>

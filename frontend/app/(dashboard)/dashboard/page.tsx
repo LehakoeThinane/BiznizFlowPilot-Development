@@ -259,7 +259,7 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold text-white">Dashboard</h1>
           <p className="mt-0.5 text-xs text-muted">
             Auto-refreshes every {REFRESH_INTERVAL}s
-            {metrics && <> · last updated {new Date(metrics.refreshedAt).toLocaleTimeString()}</>}
+            {metrics && <> · last updated {new Date(metrics.refreshedAt).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false })}</>}
             {state !== "loading" && <> · next in <strong className="text-[#aaa]">{countdown}s</strong></>}
           </p>
         </div>

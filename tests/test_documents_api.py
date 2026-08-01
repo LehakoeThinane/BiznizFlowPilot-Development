@@ -176,6 +176,99 @@ class TestDocumentDuplicateApi:
         assert r.status_code == 401
 
 
+class TestDocumentEmailApi:
+    """Email this document from the library/editor, via the caller's own
+    connected mailbox (app/services/user_email.py) - not a separate
+    delivery path. require_feature("email") is satisfied here because the
+    shared registered_user/token fixture defaults to the "legacy" plan
+    tier, which is exempt from FEATURE_TIERS gating."""
+
+    def test_sends_document_when_mailbox_connected(self, client: TestClient, token: str, monkeypatch):
+        lead_id = str(uuid4())
+        upload = client.post(
+            "/api/v1/documents",
+            data={"entity_type": "lead", "entity_id": lead_id},
+            files={"file": ("worksheet.pdf", b"fake pdf bytes", "application/pdf")},
+            headers=auth(token),
+        ).json()
+
+        # Connecting a mailbox does a real IMAP login check before saving -
+        # stub it out so this test never depends on real network access.
+        monkeypatch.setattr("app.api.user_email.imap_client.list_messages", lambda *a, **kw: [])
+        connect = client.put(
+            "/api/v1/email-account",
+            json={
+                "imap_host": "imap.example.com", "imap_port": 993, "imap_username": "me@example.com",
+                "imap_password": "secret",
+                "smtp_host": "smtp.example.com", "smtp_port": 587, "smtp_username": "me@example.com",
+                "smtp_password": "smtp-secret", "smtp_from_email": "me@example.com", "smtp_from_name": "Me",
+            },
+            headers=auth(token),
+        )
+        assert connect.status_code == 200
+
+        with patch("app.services.document.UserEmailAccountService.send_message") as mock_send:
+            r = client.post(
+                f"/api/v1/documents/{upload['id']}/email",
+                json={"to": "client@example.com", "subject": "Your document", "body": "See attached."},
+                headers=auth(token),
+            )
+
+        assert r.status_code == 200
+        assert r.json() == {"sent": True}
+        mock_send.assert_called_once()
+        attachments = mock_send.call_args.kwargs["attachments"]
+        assert attachments[0].filename == "worksheet.pdf"
+        assert attachments[0].content == b"fake pdf bytes"
+
+    def test_400_when_mailbox_not_connected(self, client: TestClient, token: str):
+        lead_id = str(uuid4())
+        upload = client.post(
+            "/api/v1/documents",
+            data={"entity_type": "lead", "entity_id": lead_id},
+            files={"file": ("worksheet.pdf", b"fake pdf bytes", "application/pdf")},
+            headers=auth(token),
+        ).json()
+
+        r = client.post(
+            f"/api/v1/documents/{upload['id']}/email",
+            json={"to": "client@example.com", "subject": "Your document", "body": "See attached."},
+            headers=auth(token),
+        )
+        assert r.status_code == 400
+
+    def test_404_for_missing_document(self, client: TestClient, token: str):
+        r = client.post(
+            f"/api/v1/documents/{uuid4()}/email",
+            json={"to": "client@example.com", "subject": "Subject", "body": "Body"},
+            headers=auth(token),
+        )
+        assert r.status_code == 404
+
+    def test_requires_auth(self, client: TestClient):
+        r = client.post(
+            f"/api/v1/documents/{uuid4()}/email",
+            json={"to": "client@example.com", "subject": "Subject", "body": "Body"},
+        )
+        assert r.status_code == 401
+
+    def test_rejects_invalid_recipient_address(self, client: TestClient, token: str):
+        lead_id = str(uuid4())
+        upload = client.post(
+            "/api/v1/documents",
+            data={"entity_type": "lead", "entity_id": lead_id},
+            files={"file": ("worksheet.pdf", b"fake pdf bytes", "application/pdf")},
+            headers=auth(token),
+        ).json()
+
+        r = client.post(
+            f"/api/v1/documents/{upload['id']}/email",
+            json={"to": "not-an-email", "subject": "Subject", "body": "Body"},
+            headers=auth(token),
+        )
+        assert r.status_code == 422
+
+
 class TestDocumentDeleteApi:
     def test_uploader_can_delete(self, client: TestClient, token: str):
         lead_id = str(uuid4())

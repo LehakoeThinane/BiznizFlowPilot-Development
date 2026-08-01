@@ -8,7 +8,7 @@ const INPUT = "erp-input w-full px-3 py-2 text-sm";
 const SELECT = `${INPUT} appearance-none [&>option]:bg-[#0f1c33] [&>option]:text-white`;
 
 function formatMeetingTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export function EventComposerModal({
