@@ -379,13 +379,15 @@ export default function DocumentLibraryPage() {
 
   async function handleComposeDocument() {
     if (!currentFolder) return;
+    const title = window.prompt("Document name:", "Untitled Document");
+    if (title === null) return; // cancelled
     setIsComposing(true);
     setError(null);
     try {
       const doc = await apiRequest<BusinessDocument>("/api/v1/documents/compose", {
         method: "POST",
         authToken: token,
-        body: { entity_type: "folder", entity_id: currentFolder.id, title: "Untitled Document" },
+        body: { entity_type: "folder", entity_id: currentFolder.id, title: title.trim() || "Untitled Document" },
       });
       router.push(`/documents/${doc.id}/edit`);
     } catch (e) {

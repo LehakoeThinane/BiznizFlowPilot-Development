@@ -97,6 +97,69 @@ function ToolbarSelect({
   );
 }
 
+const TABLE_PICKER_MAX_ROWS = 8;
+const TABLE_PICKER_MAX_COLS = 10;
+
+function TableSizePicker({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (rows: number, cols: number) => void;
+  onClose: () => void;
+}) {
+  const [hover, setHover] = useState<{ row: number; col: number } | null>(null);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    }
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute left-0 top-full z-20 mt-1 w-max rounded-lg border border-outline-variant bg-[#0f1c33] p-3 shadow-2xl"
+    >
+      <p className="mb-2 text-xs text-on-surface-variant">
+        {hover ? `${hover.row + 1} x ${hover.col + 1} table` : "Insert table"}
+      </p>
+      <div
+        className="grid gap-[3px]"
+        style={{ gridTemplateColumns: `repeat(${TABLE_PICKER_MAX_COLS}, 18px)` }}
+        onMouseLeave={() => setHover(null)}
+      >
+        {Array.from({ length: TABLE_PICKER_MAX_ROWS * TABLE_PICKER_MAX_COLS }).map((_, i) => {
+          const row = Math.floor(i / TABLE_PICKER_MAX_COLS);
+          const col = i % TABLE_PICKER_MAX_COLS;
+          const active = !!hover && row <= hover.row && col <= hover.col;
+          return (
+            <button
+              key={i}
+              type="button"
+              aria-label={`${row + 1} x ${col + 1} table`}
+              onMouseEnter={() => setHover({ row, col })}
+              onClick={() => onSelect(row + 1, col + 1)}
+              className={`h-[18px] w-[18px] rounded-[2px] border transition-colors ${
+                active ? "border-tertiary-fixed-dim bg-tertiary-fixed-dim/50" : "border-outline-variant bg-white/5"
+              }`}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function ToolbarTextButton({ onClick, disabled, children }: { onClick: () => void; disabled?: boolean; children: React.ReactNode }) {
   return (
     <button
@@ -120,6 +183,7 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
   const [lockError, setLockError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [finishing, setFinishing] = useState(false);
+  const [showTablePicker, setShowTablePicker] = useState(false);
   const autosaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Toolbar active/disabled state (isActive, can().*) depends on the
   // editor's current selection, which changes on every click/keystroke
@@ -234,18 +298,9 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
     editor.chain().focus().setLink({ href: url, target: "_blank", rel: "noopener noreferrer" }).run();
   }
 
-  function handleInsertTable() {
-    if (!editor) return;
-    const size = window.prompt("Table size (rows x columns):", "3x3");
-    if (!size) return;
-    const match = size.trim().match(/^(\d+)\s*[xX×]\s*(\d+)$/);
-    if (!match) {
-      window.alert('Enter a size like "3x3".');
-      return;
-    }
-    const rows = Math.min(20, Math.max(1, parseInt(match[1], 10)));
-    const cols = Math.min(12, Math.max(1, parseInt(match[2], 10)));
-    editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
+  function handleInsertTableSize(rows: number, cols: number) {
+    setShowTablePicker(false);
+    editor?.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run();
   }
 
   function currentParagraphStyle(): string {
@@ -401,7 +456,12 @@ export default function DocumentEditPage({ params }: { params: Promise<{ id: str
             <ToolbarIconButton icon="format_list_numbered" label="Numbered list" active={editor.isActive("orderedList")} onClick={() => editor.chain().focus().toggleOrderedList().run()} />
             <ToolbarIconButton icon="format_quote" label="Quote" active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
             <ToolbarIconButton icon="link" label="Link" active={editor.isActive("link")} onClick={handleSetLink} />
-            <ToolbarIconButton icon="table" label="Insert table" onClick={handleInsertTable} />
+            <div className="relative">
+              <ToolbarIconButton icon="table" label="Insert table" onClick={() => setShowTablePicker((v) => !v)} />
+              {showTablePicker && (
+                <TableSizePicker onSelect={handleInsertTableSize} onClose={() => setShowTablePicker(false)} />
+              )}
+            </div>
 
             <ToolbarDivider />
 
