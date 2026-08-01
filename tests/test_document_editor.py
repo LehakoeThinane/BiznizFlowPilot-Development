@@ -91,6 +91,55 @@ class TestSanitize:
         assert 'href="https://example.com"' in result
         assert 'target="_blank"' in result
 
+    def test_preserves_table_structure(self):
+        from app.services.document_editor import _sanitize
+
+        # Matches Tiptap's actual Table extension output exactly (confirmed
+        # by reading its renderHTML source) - colgroup/col are always
+        # present, not just when a column has been manually resized.
+        html = (
+            '<table style="min-width: 300px">'
+            '<colgroup><col style="min-width: 150px"><col style="min-width: 150px"></colgroup>'
+            '<tbody>'
+            '<tr><th colspan="1" rowspan="1"><p>Header 1</p></th><th colspan="1" rowspan="1"><p>Header 2</p></th></tr>'
+            '<tr><td colspan="2" rowspan="1"><p>Merged cell</p></td></tr>'
+            '</tbody></table>'
+        )
+        result = _sanitize(html)
+        assert "<table" in result
+        assert "min-width: 300px" in result
+        assert "<colgroup>" in result
+        assert '<col style="min-width: 150px;">' in result
+        assert "<tbody>" in result
+        assert "<th" in result
+        assert 'colspan="2"' in result
+
+    def test_preserves_font_family_and_size(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<p><span style="font-family: Georgia, serif; font-size: 24px">styled</span></p>')
+        assert "font-family: Georgia, serif" in result
+        assert "font-size: 24px" in result
+
+    def test_strips_colwidth_attribute(self):
+        """Column resizing is disabled in the editor UI (resizable: false),
+        so colwidth should never legitimately appear - if a client sends it
+        directly via the API anyway, it should be silently dropped rather
+        than trusted."""
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize('<table><tbody><tr><td colwidth="500,500">cell</td></tr></tbody></table>')
+        assert "colwidth" not in result
+
+    def test_strips_position_and_display_even_inside_table_cell(self):
+        from app.services.document_editor import _sanitize
+
+        result = _sanitize(
+            '<table><tbody><tr><td style="position: fixed; display: block; width: 50px">cell</td></tr></tbody></table>'
+        )
+        assert "position" not in result
+        assert "display" not in result
+
     def test_strips_script_tags(self):
         from app.services.document_editor import _sanitize
 

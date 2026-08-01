@@ -32,14 +32,22 @@ from app.services.document import DocumentService
 from app.services.document_checkout import DocumentCheckoutService
 
 _HEADING_TAGS = ["h1", "h2", "h3", "h4", "h5", "h6"]
+# table, colgroup, col, tbody, tr, td, th - Tiptap's Table extension always
+# renders a full table/colgroup/col structure (one <col style="..."> per
+# column, unconditionally, not just when a column has been manually
+# resized), so all of these are load-bearing even for a plain inserted
+# table - confirmed by reading the extension's actual renderHTML output
+# rather than assuming.
+_TABLE_TAGS = ["table", "colgroup", "col", "tbody", "tr", "td", "th"]
 _ALLOWED_TAGS = [
     "p", "br", "strong", "em", "s", "u",
     *_HEADING_TAGS,
     "ul", "ol", "li", "blockquote", "code", "pre", "a", "hr",
-    # span (text color) and mark (highlight) - both TipTap marks render via
-    # an inline style attribute rather than a dedicated element/attribute
+    # span (text color/font) and mark (highlight) - both TipTap marks render
+    # via an inline style attribute rather than a dedicated element/attribute
     # pair, hence the CSS allowlist below rather than a plain attribute one.
     "span", "mark",
+    *_TABLE_TAGS,
 ]
 _ALLOWED_ATTRS = {
     "a": ["href", "target", "rel"],
@@ -48,11 +56,24 @@ _ALLOWED_ATTRS = {
     # Paragraph/heading alignment (TextAlign) and indent level (our own
     # Indent extension) both render as `style` on the block element itself.
     **{tag: ["style"] for tag in ("p", *_HEADING_TAGS)},
+    "table": ["style"],
+    "col": ["style"],
+    "td": ["colspan", "rowspan"],
+    "th": ["colspan", "rowspan"],
 }
-# Deliberately narrow: only cosmetic text properties TipTap's toolbar
-# actually emits, never anything that could reposition/hide/resize content
-# (no position, display, width/height, z-index, etc.).
-_CSS_SANITIZER = CSSSanitizer(allowed_css_properties=["color", "background-color", "text-align", "margin-left"])
+# Deliberately narrow: only cosmetic text/table-layout properties Tiptap's
+# toolbar actually emits, never anything that could reposition, hide, or
+# layer content (no position, display, z-index, etc.). width/min-width are
+# here only because Tiptap's table extension always sets one of them on
+# <table>/<col> even with column resizing disabled in the editor UI - on a
+# <p>/<span> they're cosmetic at worst (can't achieve overlay/clickjacking
+# without `position` too, which is deliberately not on this list).
+_CSS_SANITIZER = CSSSanitizer(
+    allowed_css_properties=[
+        "color", "background-color", "text-align", "margin-left",
+        "font-family", "font-size", "width", "min-width",
+    ],
+)
 
 
 def _sanitize(content_html: str) -> str:
