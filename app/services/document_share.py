@@ -103,4 +103,4 @@ class DocumentShareService:
         if not doc:
             return None
 
-        return object_storage.presigned_download_url(doc.storage_key, doc.filename)
+        return object_storage.presigned_download_url(doc.storage_key, doc.filename, disposition="attachment")

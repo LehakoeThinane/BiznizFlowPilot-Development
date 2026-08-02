@@ -13,7 +13,7 @@ function formatEventRange(start: string, end: string) {
   const s = new Date(start);
   const e = new Date(end);
   const dateOpts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
-  const timeOpts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
+  const timeOpts: Intl.DateTimeFormatOptions = { hour: "2-digit", minute: "2-digit", hour12: false };
   return `${s.toLocaleDateString(undefined, dateOpts)} · ${s.toLocaleTimeString(undefined, timeOpts)} – ${e.toLocaleTimeString(undefined, timeOpts)}`;
 }
 

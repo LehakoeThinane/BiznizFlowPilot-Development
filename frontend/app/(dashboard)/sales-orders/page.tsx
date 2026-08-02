@@ -476,7 +476,7 @@ export default function SalesOrdersPage() {
                 <DetailItem label="Carrier" value={selectedOrder.carrier ?? "—"} />
                 <DetailItem
                   label="Created"
-                  value={new Date(selectedOrder.created_at).toLocaleString()}
+                  value={new Date(selectedOrder.created_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })}
                 />
               </dl>
 

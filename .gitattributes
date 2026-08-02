@@ -1,0 +1,10 @@
+# Normalize line endings on checkin so cross-platform contributors don't
+# see the whole file flagged as changed just from CRLF/LF churn.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

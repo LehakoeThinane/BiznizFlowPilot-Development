@@ -43,7 +43,7 @@ function formatDate(date: string | null) {
   if (!date) return "";
   const parsed = new Date(date);
   if (Number.isNaN(parsed.getTime())) return date;
-  return parsed.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return parsed.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export default function EmailPage() {

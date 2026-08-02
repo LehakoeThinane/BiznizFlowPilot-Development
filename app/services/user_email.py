@@ -13,7 +13,7 @@ from app.integrations import imap_client
 from app.integrations.imap_client import MessageDetail, MessageSummary
 from app.models.user_email import UserEmailAccount
 from app.repositories.user_email import UserEmailAccountRepository
-from app.workflow_engine.email_provider import SMTPEmailProvider
+from app.workflow_engine.email_provider import EmailAttachment, SMTPEmailProvider
 
 
 class EmailAccountNotConfiguredError(Exception):
@@ -93,7 +93,15 @@ class UserEmailAccountService:
         password = decrypt_secret(account.imap_password_encrypted)
         return imap_client.get_message(account.imap_host, account.imap_port, account.imap_username, password, uid)
 
-    def send_message(self, business_id: UUID, user_id: UUID, to: str, subject: str, body: str) -> None:
+    def send_message(
+        self,
+        business_id: UUID,
+        user_id: UUID,
+        to: str,
+        subject: str,
+        body: str,
+        attachments: list[EmailAttachment] | None = None,
+    ) -> None:
         account = self.get_account(business_id, user_id)
         if not account or not (
             account.smtp_host and account.smtp_username and account.smtp_password_encrypted and account.smtp_from_email
@@ -111,7 +119,7 @@ class UserEmailAccountService:
             default_from_email=account.smtp_from_email,
             default_from_name=account.smtp_from_name,
         )
-        provider.send(recipient=to, subject=subject, body=body)
+        provider.send(recipient=to, subject=subject, body=body, attachments=attachments)
 
     def _require_account_with_imap(self, business_id: UUID, user_id: UUID) -> UserEmailAccount:
         account = self.get_account(business_id, user_id)

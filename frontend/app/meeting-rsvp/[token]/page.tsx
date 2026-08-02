@@ -10,8 +10,8 @@ function formatWhen(startIso: string, endIso: string): string {
   const start = new Date(startIso);
   const end = new Date(endIso);
   const dateStr = start.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
-  const startTime = start.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
-  const endTime = end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  const startTime = start.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
+  const endTime = end.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
   return `${dateStr}, ${startTime} – ${endTime}`;
 }
 

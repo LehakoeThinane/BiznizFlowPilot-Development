@@ -63,7 +63,9 @@ def _message_out(service: MessagingService, message: Message, current_user_id: U
     if message.attachment:
         attachment = MessageAttachmentOut.model_validate(message.attachment)
         try:
-            attachment.download_url = object_storage.presigned_download_url(message.attachment.storage_key, message.attachment.filename)
+            attachment.download_url = object_storage.presigned_download_url(
+                message.attachment.storage_key, message.attachment.filename, disposition="attachment",
+            )
         except ObjectStorageError:
             attachment.download_url = None
         out.attachment = attachment

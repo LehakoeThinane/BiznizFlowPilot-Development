@@ -20,6 +20,7 @@ from app.schemas.document import (
     DocumentDownloadResponse,
     DocumentDraftUpdate,
     DocumentDuplicateRequest,
+    DocumentEmailRequest,
     DocumentListResponse,
     DocumentResponse,
     DocumentRestrictUpdate,
@@ -29,6 +30,8 @@ from app.services.document import DocumentService
 from app.services.document_access import DocumentAccessService
 from app.services.document_checkout import DocumentCheckoutService
 from app.services.document_editor import DocumentEditorService
+from app.services.user_email import EmailAccountNotConfiguredError
+from app.workflow_engine.email_provider import RetryableEmailProviderError, TerminalEmailProviderError
 
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
@@ -171,6 +174,38 @@ def duplicate_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
     return _to_response(doc, current_user, DocumentAccessService(db))
+
+
+@router.post("/{document_id}/email", dependencies=[Depends(require_feature("email"))])
+def email_document(
+    document_id: UUID,
+    body: DocumentEmailRequest,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Send a document as an email attachment via the caller's own connected
+    mailbox (the same per-user account as the Email page)."""
+    try:
+        doc = DocumentService(db).email_document(
+            current_user.business_id, current_user, document_id, body.to, body.subject, body.body,
+            content_html=body.content_html,
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ObjectNotFoundError:
+        raise HTTPException(status_code=404, detail="The file is no longer available in storage.")
+    except ObjectStorageError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except TerminalEmailProviderError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except RetryableEmailProviderError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return {"sent": True}
 
 
 @router.get("", response_model=DocumentListResponse)

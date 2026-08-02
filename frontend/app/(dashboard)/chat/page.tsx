@@ -67,7 +67,7 @@ function MessageBubble({
         </div>
       )}
       <span className="text-xs text-[#555]">
-        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}
       </span>
     </div>
   );

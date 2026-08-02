@@ -31,7 +31,7 @@ function timeAgo(iso: string) {
 }
 
 function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 export default function MessagesPage() {

@@ -91,14 +91,23 @@ def get(storage_key: str) -> bytes:
         raise ObjectStorageError(f"Download failed: {e}") from e
 
 
-def presigned_download_url(storage_key: str, filename: str, expires_in: int = 300) -> str:
-    """A short-lived, signed URL for downloading a private object directly from R2.
+def presigned_download_url(
+    storage_key: str, filename: str, expires_in: int = 300, disposition: str = "inline",
+) -> str:
+    """A short-lived, signed URL for accessing a private object directly from R2.
 
     Confirms the object actually exists first - generate_presigned_url() is a
     local signing operation with no network round-trip, so on its own it
     would happily mint a working-looking URL for a key that was deleted out
     from under the app (e.g. by hand, in the R2 dashboard), leaving callers
     to send the user to a raw, unstyled R2 XML error page.
+
+    disposition defaults to "inline" (browser opens/views PDFs, images, etc.
+    directly) rather than "attachment" (forces a save-to-disk dialog
+    regardless of file type) - clicking a document to look at it shouldn't
+    feel like a download. Callers with a genuine download-intent UI (an
+    explicit "Download" affordance on an external-facing share/portal link)
+    pass disposition="attachment" explicitly to keep that behavior.
     """
     client = _client()
     try:
@@ -115,7 +124,7 @@ def presigned_download_url(storage_key: str, filename: str, expires_in: int = 30
             Params={
                 "Bucket": settings.r2_bucket_name,
                 "Key": storage_key,
-                "ResponseContentDisposition": f'attachment; filename="{safe_filename}"',
+                "ResponseContentDisposition": f'{disposition}; filename="{safe_filename}"',
             },
             ExpiresIn=expires_in,
         )

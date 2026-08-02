@@ -80,7 +80,7 @@ function formatDate(value?: string | null): string {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function toInputDateTime(value?: string | null): string {

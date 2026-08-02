@@ -51,7 +51,7 @@ function statusBadgeClass(status: Exclude<LeadStatusUi, "all">): string {
 function formatDate(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  return date.toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
 function splitName(name: string | null | undefined): { firstName: string; lastName: string } {

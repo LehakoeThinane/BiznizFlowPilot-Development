@@ -512,7 +512,7 @@ export default function CalendarPage() {
                       const meeting = ev.data;
                       const isOrganizer = meeting.organizer_id === user?.user_id;
                       const myParticipant = meeting.participants.find((p) => p.user_id === user?.user_id);
-                      const time = new Date(meeting.start_time).toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+                      const time = new Date(meeting.start_time).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
                       return (
                         <>
                           <p className="font-semibold">{meeting.title}</p>

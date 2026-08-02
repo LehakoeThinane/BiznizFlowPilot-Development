@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class DocumentResponse(BaseModel):
@@ -66,6 +66,22 @@ class DocumentDraftUpdate(BaseModel):
     """Autosave payload - the editor's current (unsaved-as-a-version) content."""
 
     content_html: str
+
+
+class DocumentEmailRequest(BaseModel):
+    """Send a document as an attachment via the caller's own connected mailbox.
+
+    content_html is optional and only meaningful for in-app authored
+    documents: when the editor is open, it carries the current, possibly
+    unsaved editor content, so "email this document" sends what's on
+    screen rather than the last version saved to storage. Omit it (or send
+    for a non-authored upload) to email the stored file as-is.
+    """
+
+    to: EmailStr
+    subject: str = Field(..., min_length=1, max_length=500)
+    body: str = Field(..., min_length=1)
+    content_html: Optional[str] = None
 
 
 class DocumentContentResponse(BaseModel):

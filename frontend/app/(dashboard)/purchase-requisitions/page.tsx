@@ -474,10 +474,10 @@ export default function PurchaseRequisitionsPage() {
               <dl className="grid grid-cols-2 gap-4">
                 <DetailItem label="Supplier" value={supplierName(selected.supplier_id)} />
                 <DetailItem label="Estimated Total" value={fmt(selected.estimated_total)} />
-                <DetailItem label="Submitted" value={new Date(selected.created_at).toLocaleString()} />
+                <DetailItem label="Submitted" value={new Date(selected.created_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })} />
                 <DetailItem
                   label="Decided"
-                  value={selected.approved_at ? new Date(selected.approved_at).toLocaleString() : "—"}
+                  value={selected.approved_at ? new Date(selected.approved_at).toLocaleString(undefined, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : "—"}
                 />
               </dl>
 
