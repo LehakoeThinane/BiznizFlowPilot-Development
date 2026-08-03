@@ -119,12 +119,11 @@
   "app/dependencies.py": [
     "db.query(User, Business.organization_id)"
   ],
+  "app/dependencies_marketing_cms.py": [
+    "db.query(MarketingCmsAdmin)"
+  ],
   "app/dependencies_platform.py": [
     "db.query(PlatformAdmin)"
-  ],
-  "app/main.py": [
-    "user = db.query(User).filter(User.id == current_user.user_id).first()",
-    "user = db.query(User).filter(User.id == current_user.user_id).first()"
   ],
   "app/services/chat.py": [
     "business = self.db.query(Business).filter(Business.id == business_id).first()",
