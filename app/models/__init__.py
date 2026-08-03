@@ -41,6 +41,8 @@ from app.models.user_invitation import UserInvitation
 from app.models.user_email import UserEmailAccount
 from app.models.platform_admin import PlatformAdmin
 from app.models.platform_audit_log import PlatformAuditLog
+from app.models.marketing_cms_admin import MarketingCmsAdmin
+from app.models.marketing_blog_post import MarketingBlogPost
 
 __all__ = [
     "Base",
@@ -102,4 +104,6 @@ __all__ = [
     "UserEmailAccount",
     "PlatformAdmin",
     "PlatformAuditLog",
+    "MarketingCmsAdmin",
+    "MarketingBlogPost",
 ]

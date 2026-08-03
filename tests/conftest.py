@@ -27,6 +27,7 @@ from app.models.customer import Customer
 from app.models.inventory import InventoryLocation
 from app.models.lead import Lead
 from app.models.platform_admin import PlatformAdmin
+from app.models.marketing_cms_admin import MarketingCmsAdmin
 from app.models.product import Product
 from app.models.supplier import Supplier
 from app.models.task import Task
@@ -395,6 +396,21 @@ def platform_admin(test_db: Session) -> PlatformAdmin:
         platform_role="support",
         is_active=True,
         impersonation_allowed=False,
+    )
+    test_db.add(admin)
+    test_db.commit()
+    return admin
+
+
+@pytest.fixture
+def marketing_cms_admin(test_db: Session) -> MarketingCmsAdmin:
+    """Create a marketing CMS (blog) admin."""
+    admin = MarketingCmsAdmin(
+        id=uuid4(),
+        email=f"blog-admin-{uuid4().hex[:8]}@mmnexus.co.za",
+        hashed_password=hash_password("password123"),
+        full_name="Blog Admin",
+        is_active=True,
     )
     test_db.add(admin)
     test_db.commit()

@@ -30,6 +30,8 @@ from app.api import (
     invoice,
     leads,
     linkedin_leads,
+    marketing_cms_auth,
+    marketing_cms_blog,
     marketing_leads,
     meeting_rsvp,
     meetings,
@@ -158,6 +160,8 @@ app.include_router(document_share.public_router)
 
 # Marketing-site gated guide downloads (no auth required — see app/api/marketing_leads.py docstring)
 app.include_router(marketing_leads.router)
+app.include_router(marketing_cms_auth.router)
+app.include_router(marketing_cms_blog.router)
 
 # Customer portal (no auth required — see app/api/customer_portal.py docstring)
 app.include_router(customer_portal.public_router)
