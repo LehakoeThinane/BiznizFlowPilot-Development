@@ -44,8 +44,8 @@ class EmployeeCreate(BaseModel):
     email: str | None = Field(None, max_length=254)
     phone: str | None = Field(None, max_length=30)
     position: str | None = Field(None, max_length=100)
-    employment_type: Literal["full_time", "part_time", "contract", "intern"] = "full_time"
-    salary_type: Literal["monthly", "annual"] = "monthly"
+    employment_type: Literal["full_time", "part_time", "contractor", "intern"] = "full_time"
+    salary_type: Literal["monthly", "hourly", "annual"] = "monthly"
     gross_salary: Decimal = Decimal("0")
     start_date: date | None = None
     national_id: str | None = Field(None, max_length=50)
@@ -62,8 +62,8 @@ class EmployeeUpdate(BaseModel):
     email: str | None = Field(None, max_length=254)
     phone: str | None = Field(None, max_length=30)
     position: str | None = Field(None, max_length=100)
-    employment_type: Literal["full_time", "part_time", "contract", "intern"] | None = None
-    salary_type: Literal["monthly", "annual"] | None = None
+    employment_type: Literal["full_time", "part_time", "contractor", "intern"] | None = None
+    salary_type: Literal["monthly", "hourly", "annual"] | None = None
     gross_salary: Decimal | None = None
     start_date: date | None = None
     end_date: date | None = None
@@ -176,6 +176,12 @@ class PayrollGenerateRequest(BaseModel):
     period_year: int
     period_month: int
     notes: str | None = None
+
+
+class PayslipAdjust(BaseModel):
+    overtime_pay: Decimal | None = None
+    bonus: Decimal | None = None
+    other_deductions: Decimal | None = None
 
 
 class PayslipOut(BaseModel):
