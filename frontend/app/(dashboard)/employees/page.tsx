@@ -22,7 +22,7 @@ interface Employee {
 }
 interface EmployeeListResponse { items: Employee[]; total: number }
 
-const EMPLOYMENT_TYPES = ["full_time", "part_time", "contract", "intern"];
+const EMPLOYMENT_TYPES = ["full_time", "part_time", "contractor", "intern"];
 const SALARY_TYPES = ["monthly", "annual", "hourly"];
 
 function fmt(n: number) {
@@ -37,7 +37,7 @@ function badge(type: string) {
   const m: Record<string, string> = {
     full_time: "bg-emerald-500/20 text-emerald-300",
     part_time: "bg-blue-500/20 text-blue-300",
-    contract:  "bg-orange-500/20 text-orange-300",
+    contractor: "bg-orange-500/20 text-orange-300",
     intern:    "bg-violet-500/20 text-violet-300",
   };
   return m[type] ?? "bg-white/10 text-slate-300";

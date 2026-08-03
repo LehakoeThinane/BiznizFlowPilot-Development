@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import calendar
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Annotated
 from uuid import UUID, uuid4
@@ -19,6 +19,7 @@ from app.core.enums import EventType
 from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
+from app.models.payroll import DeductionType, EmployeeDeduction, Timesheet
 from app.repositories.organization import OrganizationRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.hr import (
@@ -42,7 +43,7 @@ from app.schemas.hr import (
     PayslipOut,
 )
 from app.services.event import EventService
-from app.utils.notify import notify_business
+from app.utils.notify import notify_business, notify_user
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"], dependencies=[Depends(require_feature("hr"))])
 
@@ -495,6 +496,29 @@ def _calc_uif(monthly_gross: Decimal) -> Decimal:
     return min(monthly_gross * _UIF_RATE, _UIF_CAP).quantize(Decimal("0.01"))
 
 
+def _calc_employee_deductions(db: Session, employee_id: UUID, gross: Decimal) -> Decimal:
+    """Sum an employee's active configured deductions for one payslip.
+
+    Fringe-benefit tax treatment (e.g. medical aid tax credits) isn't
+    modeled yet - this only sums flat/percent-of-gross deductions."""
+    rows = (
+        db.query(EmployeeDeduction, DeductionType)
+        .join(DeductionType, EmployeeDeduction.deduction_type_id == DeductionType.id)
+        .filter(EmployeeDeduction.employee_id == employee_id, EmployeeDeduction.is_active.is_(True))
+        .all()
+    )
+    total = Decimal("0")
+    for assignment, dtype in rows:
+        amount = assignment.amount_override if assignment.amount_override is not None else dtype.default_amount
+        if amount is None:
+            continue
+        if dtype.calculation == "percent_of_gross":
+            total += (gross * amount / Decimal("100")).quantize(Decimal("0.01"))
+        else:
+            total += amount
+    return total
+
+
 @router.post("/payroll/generate", response_model=PayrollPeriodOut, status_code=201)
 def generate_payroll(
     data: PayrollGenerateRequest,
@@ -516,18 +540,11 @@ def generate_payroll(
         Employee.is_active.is_(True),
     ).all()
 
-    hourly_employees = [e for e in employees if e.salary_type == "hourly"]
-    if hourly_employees:
-        names = ", ".join(f"{e.first_name} {e.last_name}" for e in hourly_employees[:5])
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Payroll generation doesn't support hourly-rate employees yet "
-                f"({names}{', …' if len(hourly_employees) > 5 else ''}). "
-                "Timesheet-based hourly pay is a planned enhancement — exclude "
-                "or deactivate these employees before generating this period."
-            ),
-        )
+    period_start = date(data.period_year, data.period_month, 1)
+    period_end = date(
+        data.period_year, data.period_month,
+        calendar.monthrange(data.period_year, data.period_month)[1],
+    )
 
     period = PayrollPeriod(
         id=uuid4(),
@@ -548,16 +565,34 @@ def generate_payroll(
     total_net = Decimal("0")
 
     for emp in employees:
-        # salary_type is "monthly" or "annual" here — "hourly" is rejected above.
-        if emp.salary_type == "monthly":
+        if emp.salary_type == "hourly":
+            hours = db.query(sa.func.coalesce(sa.func.sum(Timesheet.hours_worked), 0)).filter(
+                Timesheet.employee_id == emp.id,
+                Timesheet.work_date >= period_start,
+                Timesheet.work_date <= period_end,
+            ).scalar()
+            if not hours:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"No timesheet entries logged for {emp.first_name} {emp.last_name} "
+                        f"in {calendar.month_name[data.period_month]} {data.period_year} — "
+                        "log hours before generating payroll for an hourly employee."
+                    ),
+                )
+            gross = (emp.gross_salary * Decimal(str(hours))).quantize(Decimal("0.01"))
+            annual_gross = gross * _MONTHS
+        elif emp.salary_type == "monthly":
             gross = emp.gross_salary
             annual_gross = emp.gross_salary * _MONTHS
-        else:
+        else:  # annual
             gross = emp.gross_salary / _MONTHS
             annual_gross = emp.gross_salary
+
         paye = _calc_paye(annual_gross)
         uif = _calc_uif(gross)
-        deductions = paye + uif
+        other_deductions = _calc_employee_deductions(db, emp.id, gross)
+        deductions = paye + uif + other_deductions
         net = gross - deductions
 
         slip = Payslip(
@@ -571,7 +606,7 @@ def generate_payroll(
             gross_pay=gross,
             tax_deduction=paye,
             uif_deduction=uif,
-            other_deductions=Decimal("0"),
+            other_deductions=other_deductions,
             total_deductions=deductions,
             net_pay=net,
             status="draft",
@@ -684,6 +719,30 @@ def approve_payroll(
     period.status = "completed"
     period.processed_at = datetime.now(timezone.utc)
     db.query(Payslip).filter(Payslip.payroll_period_id == period_id).update({"status": "finalized"})
+
+    slips = db.query(Payslip).filter(Payslip.payroll_period_id == period_id).all()
+    emp_map = {
+        e.id: e for e in db.query(Employee).filter(
+            Employee.id.in_({s.employee_id for s in slips})
+        ).all()
+    } if slips else {}
+    month_name = calendar.month_name[period.period_month]
+    for slip in slips:
+        emp = emp_map.get(slip.employee_id)
+        if emp and emp.user_id:
+            notify_user(
+                db, current_user.business_id, emp.user_id, "payroll",
+                "Payslip ready",
+                f"Your payslip for {month_name} {period.period_year} is ready. Net pay: R{slip.net_pay:,.2f}.",
+                action_url="/payroll", related_type="payslip", related_id=slip.id,
+            )
+    notify_business(
+        db, current_user.business_id, "payroll",
+        "Payroll approved",
+        f"Payroll for {month_name} {period.period_year} has been approved and finalized.",
+        action_url="/payroll", related_type="payroll_period", related_id=period.id,
+    )
+
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.PAYROLL_APPROVED, "payroll_period", period.id,
           description=f"Payroll approved: {period.period_month}/{period.period_year}",

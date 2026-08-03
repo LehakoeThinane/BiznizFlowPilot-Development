@@ -40,6 +40,7 @@ from app.api import (
     notification,
     onboarding,
     organizations,
+    payroll,
     platform_admin,
     platform_auth,
     products,
@@ -218,6 +219,7 @@ app.include_router(purchase_requisitions.router, dependencies=[Depends(require_a
 # Finance, HR, Invoicing, Notifications (auth required)
 app.include_router(finance.router, dependencies=[Depends(require_active_trial)])
 app.include_router(hr.router, dependencies=[Depends(require_active_trial)])
+app.include_router(payroll.router, dependencies=[Depends(require_active_trial)])
 app.include_router(invoice.router, dependencies=[Depends(require_active_trial)])
 app.include_router(notification.router, dependencies=[Depends(require_active_trial)])
 
