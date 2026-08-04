@@ -30,6 +30,8 @@ from app.api import (
     invoice,
     leads,
     linkedin_leads,
+    marketing_cms_auth,
+    marketing_cms_blog,
     marketing_leads,
     meeting_rsvp,
     meetings,
@@ -38,6 +40,7 @@ from app.api import (
     notification,
     onboarding,
     organizations,
+    payroll,
     platform_admin,
     platform_auth,
     products,
@@ -158,6 +161,8 @@ app.include_router(document_share.public_router)
 
 # Marketing-site gated guide downloads (no auth required — see app/api/marketing_leads.py docstring)
 app.include_router(marketing_leads.router)
+app.include_router(marketing_cms_auth.router)
+app.include_router(marketing_cms_blog.router)
 
 # Customer portal (no auth required — see app/api/customer_portal.py docstring)
 app.include_router(customer_portal.public_router)
@@ -214,6 +219,7 @@ app.include_router(purchase_requisitions.router, dependencies=[Depends(require_a
 # Finance, HR, Invoicing, Notifications (auth required)
 app.include_router(finance.router, dependencies=[Depends(require_active_trial)])
 app.include_router(hr.router, dependencies=[Depends(require_active_trial)])
+app.include_router(payroll.router, dependencies=[Depends(require_active_trial)])
 app.include_router(invoice.router, dependencies=[Depends(require_active_trial)])
 app.include_router(notification.router, dependencies=[Depends(require_active_trial)])
 

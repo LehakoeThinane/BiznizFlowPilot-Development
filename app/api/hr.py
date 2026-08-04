@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import calendar
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Annotated
 from uuid import UUID, uuid4
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -18,6 +19,7 @@ from app.core.enums import EventType
 from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
+from app.models.payroll import DeductionType, EmployeeDeduction, Timesheet
 from app.repositories.organization import OrganizationRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.hr import (
@@ -37,10 +39,11 @@ from app.schemas.hr import (
     OrgChartNode,
     PayrollGenerateRequest,
     PayrollPeriodOut,
+    PayslipAdjust,
     PayslipOut,
 )
 from app.services.event import EventService
-from app.utils.notify import notify_business
+from app.utils.notify import notify_business, notify_user
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"], dependencies=[Depends(require_feature("hr"))])
 
@@ -493,6 +496,29 @@ def _calc_uif(monthly_gross: Decimal) -> Decimal:
     return min(monthly_gross * _UIF_RATE, _UIF_CAP).quantize(Decimal("0.01"))
 
 
+def _calc_employee_deductions(db: Session, employee_id: UUID, gross: Decimal) -> Decimal:
+    """Sum an employee's active configured deductions for one payslip.
+
+    Fringe-benefit tax treatment (e.g. medical aid tax credits) isn't
+    modeled yet - this only sums flat/percent-of-gross deductions."""
+    rows = (
+        db.query(EmployeeDeduction, DeductionType)
+        .join(DeductionType, EmployeeDeduction.deduction_type_id == DeductionType.id)
+        .filter(EmployeeDeduction.employee_id == employee_id, EmployeeDeduction.is_active.is_(True))
+        .all()
+    )
+    total = Decimal("0")
+    for assignment, dtype in rows:
+        amount = assignment.amount_override if assignment.amount_override is not None else dtype.default_amount
+        if amount is None:
+            continue
+        if dtype.calculation == "percent_of_gross":
+            total += (gross * amount / Decimal("100")).quantize(Decimal("0.01"))
+        else:
+            total += amount
+    return total
+
+
 @router.post("/payroll/generate", response_model=PayrollPeriodOut, status_code=201)
 def generate_payroll(
     data: PayrollGenerateRequest,
@@ -514,6 +540,12 @@ def generate_payroll(
         Employee.is_active.is_(True),
     ).all()
 
+    period_start = date(data.period_year, data.period_month, 1)
+    period_end = date(
+        data.period_year, data.period_month,
+        calendar.monthrange(data.period_year, data.period_month)[1],
+    )
+
     period = PayrollPeriod(
         id=uuid4(),
         business_id=current_user.business_id,
@@ -533,10 +565,34 @@ def generate_payroll(
     total_net = Decimal("0")
 
     for emp in employees:
-        gross = emp.gross_salary if emp.salary_type == "monthly" else emp.gross_salary / _MONTHS
-        paye = _calc_paye(emp.gross_salary * _MONTHS if emp.salary_type == "monthly" else emp.gross_salary)
+        if emp.salary_type == "hourly":
+            hours = db.query(sa.func.coalesce(sa.func.sum(Timesheet.hours_worked), 0)).filter(
+                Timesheet.employee_id == emp.id,
+                Timesheet.work_date >= period_start,
+                Timesheet.work_date <= period_end,
+            ).scalar()
+            if not hours:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"No timesheet entries logged for {emp.first_name} {emp.last_name} "
+                        f"in {calendar.month_name[data.period_month]} {data.period_year} — "
+                        "log hours before generating payroll for an hourly employee."
+                    ),
+                )
+            gross = (emp.gross_salary * Decimal(str(hours))).quantize(Decimal("0.01"))
+            annual_gross = gross * _MONTHS
+        elif emp.salary_type == "monthly":
+            gross = emp.gross_salary
+            annual_gross = emp.gross_salary * _MONTHS
+        else:  # annual
+            gross = emp.gross_salary / _MONTHS
+            annual_gross = emp.gross_salary
+
+        paye = _calc_paye(annual_gross)
         uif = _calc_uif(gross)
-        deductions = paye + uif
+        other_deductions = _calc_employee_deductions(db, emp.id, gross)
+        deductions = paye + uif + other_deductions
         net = gross - deductions
 
         slip = Payslip(
@@ -550,7 +606,7 @@ def generate_payroll(
             gross_pay=gross,
             tax_deduction=paye,
             uif_deduction=uif,
-            other_deductions=Decimal("0"),
+            other_deductions=other_deductions,
             total_deductions=deductions,
             net_pay=net,
             status="draft",
@@ -663,6 +719,30 @@ def approve_payroll(
     period.status = "completed"
     period.processed_at = datetime.now(timezone.utc)
     db.query(Payslip).filter(Payslip.payroll_period_id == period_id).update({"status": "finalized"})
+
+    slips = db.query(Payslip).filter(Payslip.payroll_period_id == period_id).all()
+    emp_map = {
+        e.id: e for e in db.query(Employee).filter(
+            Employee.id.in_({s.employee_id for s in slips})
+        ).all()
+    } if slips else {}
+    month_name = calendar.month_name[period.period_month]
+    for slip in slips:
+        emp = emp_map.get(slip.employee_id)
+        if emp and emp.user_id:
+            notify_user(
+                db, current_user.business_id, emp.user_id, "payroll",
+                "Payslip ready",
+                f"Your payslip for {month_name} {period.period_year} is ready. Net pay: R{slip.net_pay:,.2f}.",
+                action_url="/payroll", related_type="payslip", related_id=slip.id,
+            )
+    notify_business(
+        db, current_user.business_id, "payroll",
+        "Payroll approved",
+        f"Payroll for {month_name} {period.period_year} has been approved and finalized.",
+        action_url="/payroll", related_type="payroll_period", related_id=period.id,
+    )
+
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.PAYROLL_APPROVED, "payroll_period", period.id,
           description=f"Payroll approved: {period.period_month}/{period.period_year}",
@@ -671,3 +751,144 @@ def approve_payroll(
     db.commit()
     db.refresh(period)
     return get_payroll_period(period_id, current_user, db)
+
+
+@router.patch("/payroll/payslips/{payslip_id}", response_model=PayslipOut)
+def adjust_payslip(
+    payslip_id: UUID,
+    data: PayslipAdjust,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    """Adjust a draft payslip's bonus/overtime/other-deductions and recompute
+    its and its period's totals. Only permitted while the period is a draft —
+    once approved, payslips are finalized and immutable."""
+    _require_manager(current_user)
+    slip = db.query(Payslip).filter(
+        Payslip.id == payslip_id, Payslip.business_id == current_user.business_id
+    ).first()
+    if not slip:
+        raise HTTPException(status_code=404, detail="Payslip not found")
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.id == slip.payroll_period_id).first()
+    if not period or period.status != "draft":
+        raise HTTPException(
+            status_code=400,
+            detail="Payslips can only be adjusted while the payroll period is a draft",
+        )
+
+    updates = data.model_dump(exclude_none=True)
+    for k, v in updates.items():
+        setattr(slip, k, v)
+
+    slip.gross_pay = slip.basic_pay + slip.overtime_pay + slip.bonus
+    slip.total_deductions = slip.tax_deduction + slip.uif_deduction + slip.other_deductions
+    slip.net_pay = slip.gross_pay - slip.total_deductions
+
+    # Recompute the parent period's totals from all its payslips (this one just changed).
+    all_slips = db.query(Payslip).filter(Payslip.payroll_period_id == period.id).all()
+    period.total_gross = sum((s.gross_pay for s in all_slips), Decimal("0"))
+    period.total_deductions = sum((s.total_deductions for s in all_slips), Decimal("0"))
+    period.total_net = sum((s.net_pay for s in all_slips), Decimal("0"))
+
+    _emit(db, current_user.business_id, current_user.user_id,
+          EventType.PAYSLIP_ADJUSTED, "payslip", slip.id,
+          description=f"Payslip adjusted for {period.period_month}/{period.period_year}",
+          data={"updated_fields": list(updates.keys())})
+    db.commit()
+    db.refresh(slip)
+
+    emp = db.query(Employee).filter(Employee.id == slip.employee_id).first()
+    out = PayslipOut.model_validate(slip)
+    out.employee_name = f"{emp.first_name} {emp.last_name}" if emp else ""
+    return out
+
+
+@router.get("/payroll/payslips/{payslip_id}/pdf", response_class=HTMLResponse)
+def payslip_pdf(
+    payslip_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+):
+    """Return a print-ready HTML page for the payslip (open in browser → Print → Save as PDF)."""
+    slip = db.query(Payslip).filter(
+        Payslip.id == payslip_id, Payslip.business_id == current_user.business_id
+    ).first()
+    if not slip:
+        raise HTTPException(status_code=404, detail="Payslip not found")
+    emp = db.query(Employee).filter(Employee.id == slip.employee_id).first()
+    period = db.query(PayrollPeriod).filter(PayrollPeriod.id == slip.payroll_period_id).first()
+    month_name = calendar.month_name[period.period_month] if period else ""
+    emp_name = f"{emp.first_name} {emp.last_name}" if emp else "—"
+
+    html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Payslip - {emp_name} - {month_name} {period.period_year if period else ""}</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; padding: 40px; }}
+    h1 {{ font-size: 28px; font-weight: 800; color: #1e3a8a; }}
+    .meta {{ display: flex; justify-content: space-between; margin: 24px 0; }}
+    .block {{ line-height: 1.7; }}
+    .block strong {{ display: block; font-size: 11px; text-transform: uppercase;
+                     letter-spacing: .05em; color: #666; margin-bottom: 2px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 24px; }}
+    th {{ background: #f1f5f9; text-align: left; padding: 8px 10px;
+          font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }}
+    td {{ padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }}
+    .totals {{ margin-top: 16px; text-align: right; }}
+    .totals table {{ width: auto; margin-left: auto; }}
+    .totals td {{ padding: 4px 10px; border: none; }}
+    .totals .total-row td {{ font-size: 16px; font-weight: 700; color: #1e3a8a; }}
+    .status {{ display: inline-block; padding: 4px 12px; border-radius: 20px;
+               font-size: 11px; font-weight: 700; text-transform: uppercase;
+               background: #dbeafe; color: #1e40af; margin-bottom: 8px; }}
+    @media print {{ body {{ padding: 0; }} }}
+  </style>
+</head>
+<body>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <h1>PAYSLIP</h1>
+      <div class="status">{slip.status.upper()}</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:20px;font-weight:700">{month_name} {period.period_year if period else ""}</div>
+    </div>
+  </div>
+
+  <div class="meta">
+    <div class="block">
+      <strong>Employee</strong>
+      {emp_name}<br/>
+      {emp.position or "" if emp else ""}
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Description</th><th style="text-align:right">Amount</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Basic pay</td><td style="text-align:right">R {slip.basic_pay:,.2f}</td></tr>
+      <tr><td>Overtime</td><td style="text-align:right">R {slip.overtime_pay:,.2f}</td></tr>
+      <tr><td>Bonus</td><td style="text-align:right">R {slip.bonus:,.2f}</td></tr>
+      <tr><td>PAYE</td><td style="text-align:right">- R {slip.tax_deduction:,.2f}</td></tr>
+      <tr><td>UIF</td><td style="text-align:right">- R {slip.uif_deduction:,.2f}</td></tr>
+      <tr><td>Other deductions</td><td style="text-align:right">- R {slip.other_deductions:,.2f}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="totals">
+    <table>
+      <tr><td>Gross pay</td><td>R {slip.gross_pay:,.2f}</td></tr>
+      <tr><td>Total deductions</td><td>- R {slip.total_deductions:,.2f}</td></tr>
+      <tr class="total-row"><td>Net pay</td><td>R {slip.net_pay:,.2f}</td></tr>
+    </table>
+  </div>
+
+  <script>window.onload = () => window.print();</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)

@@ -71,6 +71,26 @@ class Settings(BaseSettings):
         """The signing key actually used for platform tokens."""
         return self.platform_secret_key or self.secret_key
 
+    # Marketing CMS (MM Nexus's own blog CMS admins) JWT — same deliberate
+    # separate-signing-key rationale as platform_secret_key above, but this
+    # boundary is even narrower: a leaked marketing-CMS token must not be
+    # usable against tenant data OR platform-admin powers.
+    marketing_cms_secret_key: str = ""
+    marketing_cms_jwt_expiration_hours: int = 8
+    marketing_cms_refresh_token_expiration_days: int = 7
+
+    # GitHub repo the CMS commits published posts to (Contents API), and the
+    # fine-grained PAT authorizing it - scope that PAT to Contents:
+    # Read/Write on this repo only, nothing else.
+    marketing_cms_github_pat: str = ""
+    marketing_cms_github_repo: str = "LehakoeThinane/MM-Nexus-Website"
+    marketing_cms_github_branch: str = "main"
+
+    @property
+    def effective_marketing_cms_secret_key(self) -> str:
+        """The signing key actually used for marketing CMS tokens."""
+        return self.marketing_cms_secret_key or self.secret_key
+
     @model_validator(mode="after")
     def _guard_platform_secret_key_fallback(self) -> "Settings":
         """Fail closed in production instead of silently sharing keys.
@@ -93,6 +113,25 @@ class Settings(BaseSettings):
                 "PLATFORM_SECRET_KEY is not set; platform-admin tokens are "
                 "signed with SECRET_KEY as a dev/staging convenience. Set "
                 "PLATFORM_SECRET_KEY before deploying to production.",
+                stacklevel=2,
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _guard_marketing_cms_secret_key_fallback(self) -> "Settings":
+        """Fail closed in production - same rationale as the platform-secret
+        guard above, one boundary narrower."""
+        if not self.marketing_cms_secret_key:
+            if self.environment == "production":
+                raise ValueError(
+                    "MARKETING_CMS_SECRET_KEY must be set explicitly in production - "
+                    "it cannot silently fall back to SECRET_KEY once marketing-CMS "
+                    "auth is protecting the ability to publish to the live site."
+                )
+            warnings.warn(
+                "MARKETING_CMS_SECRET_KEY is not set; marketing-CMS tokens are "
+                "signed with SECRET_KEY as a dev/staging convenience. Set "
+                "MARKETING_CMS_SECRET_KEY before deploying to production.",
                 stacklevel=2,
             )
         return self

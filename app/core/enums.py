@@ -105,6 +105,7 @@ class EventType(str, Enum):
     # --- HR: Payroll ---
     PAYROLL_GENERATED = "payroll_generated"
     PAYROLL_APPROVED = "payroll_approved"
+    PAYSLIP_ADJUSTED = "payslip_adjusted"
 
     # --- Finance: Expenses ---
     EXPENSE_CREATED = "expense_created"

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { label: "Headcount & Demographics", href: "/employees" },
   { label: "Leave", href: "/leave" },
+  { label: "Timesheets", href: "/timesheets" },
   { label: "Recruitment", href: "/recruitment" },
   { label: "Performance & Productivity", href: "/performance" },
   { label: "Compensation & Benefits", href: "/compensation" },
@@ -14,8 +15,8 @@ const TABS = [
 
 /** Sub-navigation shown on every page inside the "HR" hub, so switching
  * between its sections doesn't require going back to the Home page's tile
- * grid first. Recruitment/Performance/Compensation/Engagement are
- * placeholder pages today - see each page for status. */
+ * grid first. Recruitment/Performance/Engagement are placeholder pages
+ * today - see each page for status. */
 export function HRSubNav() {
   const pathname = usePathname();
 

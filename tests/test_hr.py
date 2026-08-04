@@ -441,3 +441,158 @@ class TestPayroll:
         ).json()
         slip = period["payslips"][0]
         assert float(slip["uif_deduction"]) == 177.12
+
+    def test_generate_payroll_rejects_hourly_employee_without_timesheets(self, client: TestClient, token: str):
+        """An hourly employee with no logged hours should fail loudly rather
+        than silently producing a nonsense payslip."""
+        client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Hour", "last_name": "Ly", "gross_salary": "150", "salary_type": "hourly"},
+            headers=auth(token),
+        )
+        r = client.post(
+            "/api/v1/hr/payroll/generate",
+            json={"period_year": 2025, "period_month": 11},
+            headers=auth(token),
+        )
+        assert r.status_code == 400
+        assert "hourly" in r.json()["detail"].lower()
+
+    def test_generate_payroll_hourly_with_timesheets(self, client: TestClient, token: str):
+        """Hourly gross pay = rate * hours logged for the period."""
+        emp = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Hour", "last_name": "Worker", "gross_salary": "150", "salary_type": "hourly"},
+            headers=auth(token),
+        ).json()
+        for day, hours in (("2025-07-07", "8"), ("2025-07-14", "8"), ("2025-07-21", "4")):
+            r = client.post(
+                "/api/v1/hr/timesheets",
+                json={"employee_id": emp["id"], "work_date": day, "hours_worked": hours},
+                headers=auth(token),
+            )
+            assert r.status_code == 201
+        # Outside the period — should not count toward this month's hours.
+        client.post(
+            "/api/v1/hr/timesheets",
+            json={"employee_id": emp["id"], "work_date": "2025-08-01", "hours_worked": "8"},
+            headers=auth(token),
+        )
+
+        period = client.post(
+            "/api/v1/hr/payroll/generate",
+            json={"period_year": 2025, "period_month": 7},
+            headers=auth(token),
+        ).json()
+        slip = period["payslips"][0]
+        assert float(slip["basic_pay"]) == pytest.approx(150 * 20)
+        assert float(slip["gross_pay"]) == pytest.approx(3000.0)
+
+    def test_adjust_payslip_recomputes_totals(self, client: TestClient, token: str):
+        client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Adj", "last_name": "Ust", "gross_salary": "20000"},
+            headers=auth(token),
+        )
+        period = client.post(
+            "/api/v1/hr/payroll/generate",
+            json={"period_year": 2025, "period_month": 10},
+            headers=auth(token),
+        ).json()
+        slip = period["payslips"][0]
+
+        r = client.patch(
+            f"/api/v1/hr/payroll/payslips/{slip['id']}",
+            json={"overtime_pay": "500", "bonus": "1000", "other_deductions": "200"},
+            headers=auth(token),
+        )
+        assert r.status_code == 200
+        data = r.json()
+        assert float(data["overtime_pay"]) == 500.0
+        assert float(data["bonus"]) == 1000.0
+        assert float(data["other_deductions"]) == 200.0
+        expected_gross = float(slip["basic_pay"]) + 500.0 + 1000.0
+        expected_net = expected_gross - float(slip["tax_deduction"]) - float(slip["uif_deduction"]) - 200.0
+        assert float(data["gross_pay"]) == pytest.approx(expected_gross)
+        assert float(data["net_pay"]) == pytest.approx(expected_net)
+
+        period_after = client.get(f"/api/v1/hr/payroll/{period['id']}", headers=auth(token)).json()
+        assert float(period_after["total_net"]) == pytest.approx(expected_net)
+
+    def test_adjust_payslip_rejected_once_approved(self, client: TestClient, token: str):
+        client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Locked", "last_name": "Slip", "gross_salary": "15000"},
+            headers=auth(token),
+        )
+        period = client.post(
+            "/api/v1/hr/payroll/generate",
+            json={"period_year": 2025, "period_month": 9},
+            headers=auth(token),
+        ).json()
+        slip = period["payslips"][0]
+        client.patch(f"/api/v1/hr/payroll/{period['id']}/approve", headers=auth(token))
+
+        r = client.patch(
+            f"/api/v1/hr/payroll/payslips/{slip['id']}",
+            json={"bonus": "100"},
+            headers=auth(token),
+        )
+        assert r.status_code == 400
+
+    def test_payslip_pdf(self, client: TestClient, token: str):
+        client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "PDF", "last_name": "Slip", "gross_salary": "12000"},
+            headers=auth(token),
+        )
+        period = client.post(
+            "/api/v1/hr/payroll/generate",
+            json={"period_year": 2025, "period_month": 8},
+            headers=auth(token),
+        ).json()
+        slip = period["payslips"][0]
+
+        r = client.get(f"/api/v1/hr/payroll/payslips/{slip['id']}/pdf", headers=auth(token))
+        assert r.status_code == 200
+        assert "text/html" in r.headers["content-type"]
+        assert "PDF Slip" in r.text
+
+    def test_generate_payroll_applies_employee_deductions(self, client: TestClient, token: str):
+        emp = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Ded", "last_name": "Uction", "gross_salary": "20000"},
+            headers=auth(token),
+        ).json()
+        fixed = client.post(
+            "/api/v1/hr/deduction-types",
+            json={"name": "Medical Aid", "calculation": "fixed_amount", "default_amount": "500"},
+            headers=auth(token),
+        ).json()
+        percent = client.post(
+            "/api/v1/hr/deduction-types",
+            json={"name": "Pension", "calculation": "percent_of_gross", "default_amount": "5"},
+            headers=auth(token),
+        ).json()
+        client.post(
+            "/api/v1/hr/employee-deductions",
+            json={"employee_id": emp["id"], "deduction_type_id": fixed["id"]},
+            headers=auth(token),
+        )
+        client.post(
+            "/api/v1/hr/employee-deductions",
+            json={"employee_id": emp["id"], "deduction_type_id": percent["id"]},
+            headers=auth(token),
+        )
+
+        period = client.post(
+            "/api/v1/hr/payroll/generate",
+            json={"period_year": 2025, "period_month": 6},
+            headers=auth(token),
+        ).json()
+        slip = period["payslips"][0]
+        # 500 fixed + 5% of 20000 (=1000) = 1500 on top of PAYE/UIF.
+        expected_other = 1500.0
+        assert float(slip["other_deductions"]) == pytest.approx(expected_other)
+        expected_net = 20000.0 - float(slip["tax_deduction"]) - float(slip["uif_deduction"]) - expected_other
+        assert float(slip["net_pay"]) == pytest.approx(expected_net)

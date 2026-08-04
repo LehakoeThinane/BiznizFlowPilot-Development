@@ -189,3 +189,73 @@ def get_platform_token_subject(token: str) -> Optional[dict[str, Any]]:
         return decode_platform_token(token)
     except JWTError:
         return None
+
+
+# ============================================================================
+# Marketing CMS (MM Nexus blog admins) JWT Management
+#
+# Signed with a distinct key (settings.effective_marketing_cms_secret_key) and
+# carry "marketing_cms_access"/"marketing_cms_refresh" type claims - a leaked
+# token here must be unusable against tenant OR platform-admin boundaries.
+# ============================================================================
+
+
+def create_marketing_cms_access_token(
+    subject: dict[str, Any],
+    expires_delta: Optional[timedelta] = None,
+) -> str:
+    """Create a marketing-CMS-admin JWT access token."""
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            hours=settings.marketing_cms_jwt_expiration_hours
+        )
+
+    to_encode = {**subject, "exp": expire, "type": "marketing_cms_access"}
+    return jwt.encode(
+        to_encode,
+        settings.effective_marketing_cms_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def create_marketing_cms_refresh_token(
+    subject: dict[str, Any],
+    expires_delta: Optional[timedelta] = None,
+) -> str:
+    """Create a marketing-CMS-admin JWT refresh token."""
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(
+            days=settings.marketing_cms_refresh_token_expiration_days
+        )
+
+    to_encode = {**subject, "exp": expire, "type": "marketing_cms_refresh"}
+    return jwt.encode(
+        to_encode,
+        settings.effective_marketing_cms_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+
+def decode_marketing_cms_token(token: str) -> dict[str, Any]:
+    """Decode and validate a marketing-CMS-admin JWT token.
+
+    Raises:
+        JWTError: If token is invalid or expired
+    """
+    return jwt.decode(
+        token,
+        settings.effective_marketing_cms_secret_key,
+        algorithms=[settings.jwt_algorithm],
+    )
+
+
+def get_marketing_cms_token_subject(token: str) -> Optional[dict[str, Any]]:
+    """Get subject from a marketing CMS token. Returns None if invalid."""
+    try:
+        return decode_marketing_cms_token(token)
+    except JWTError:
+        return None

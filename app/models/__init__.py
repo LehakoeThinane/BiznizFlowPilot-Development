@@ -21,6 +21,7 @@ from app.models.purchase_order import PurchaseOrder, PurchaseOrderLineItem
 from app.models.purchase_requisition import PurchaseRequisition, PurchaseRequisitionLineItem
 from app.models.finance import Expense, ExpenseCategory
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
+from app.models.payroll import BenefitType, DeductionType, EmployeeBenefit, EmployeeDeduction, Timesheet
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.messaging import Conversation, ConversationParticipant, Message
 from app.models.message_attachment import MessageAttachment
@@ -41,6 +42,8 @@ from app.models.user_invitation import UserInvitation
 from app.models.user_email import UserEmailAccount
 from app.models.platform_admin import PlatformAdmin
 from app.models.platform_audit_log import PlatformAuditLog
+from app.models.marketing_cms_admin import MarketingCmsAdmin
+from app.models.marketing_blog_post import MarketingBlogPost
 
 __all__ = [
     "Base",
@@ -75,6 +78,11 @@ __all__ = [
     "LeaveRequest",
     "PayrollPeriod",
     "Payslip",
+    "DeductionType",
+    "BenefitType",
+    "EmployeeDeduction",
+    "EmployeeBenefit",
+    "Timesheet",
     "Meeting",
     "MeetingParticipant",
     "Conversation",
@@ -102,4 +110,6 @@ __all__ = [
     "UserEmailAccount",
     "PlatformAdmin",
     "PlatformAuditLog",
+    "MarketingCmsAdmin",
+    "MarketingBlogPost",
 ]
