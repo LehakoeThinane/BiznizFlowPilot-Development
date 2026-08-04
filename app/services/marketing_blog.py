@@ -82,7 +82,8 @@ def _build_markdown_file(post: MarketingBlogPost, markdown_body: str) -> str:
         "---\n"
         f"title: {_yaml_quote(post.title)}\n"
         f"description: {_yaml_quote(post.description)}\n"
-        f"publishedDate: {published_date}\n"
+        + (f"coverImage: {_yaml_quote(post.cover_image_url)}\n" if post.cover_image_url else "")
+        + f"publishedDate: {published_date}\n"
         f"author: {_yaml_quote(post.author)}\n"
         "---\n"
     )
