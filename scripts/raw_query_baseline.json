@@ -40,15 +40,26 @@
     "db.query(LeaveRequest)",
     "emp = db.query(Employee).filter(",
     "db.query(LeaveRequest)",
+    "db.query(EmployeeDeduction, DeductionType)",
     "existing = db.query(PayrollPeriod).filter(",
     "employees = db.query(Employee).filter(",
+    "hours = db.query(sa.func.coalesce(sa.func.sum(Timesheet.hours_worked), 0)).filter(",
     "slips = db.query(Payslip).filter(Payslip.payroll_period_id == period.id).all()",
     "periods = db.query(PayrollPeriod).filter(",
     "period = db.query(PayrollPeriod).filter(",
     "slips = db.query(Payslip).filter(Payslip.payroll_period_id == period_id).all()",
     "for emp in db.query(Employee).filter(Employee.id.in_(emp_ids)).all()",
     "period = db.query(PayrollPeriod).filter(",
-    "db.query(Payslip).filter(Payslip.payroll_period_id == period_id).update({\"status\": \"finalized\"})"
+    "db.query(Payslip).filter(Payslip.payroll_period_id == period_id).update({\"status\": \"finalized\"})",
+    "slips = db.query(Payslip).filter(Payslip.payroll_period_id == period_id).all()",
+    "e.id: e for e in db.query(Employee).filter(",
+    "slip = db.query(Payslip).filter(",
+    "period = db.query(PayrollPeriod).filter(PayrollPeriod.id == slip.payroll_period_id).first()",
+    "all_slips = db.query(Payslip).filter(Payslip.payroll_period_id == period.id).all()",
+    "emp = db.query(Employee).filter(Employee.id == slip.employee_id).first()",
+    "slip = db.query(Payslip).filter(",
+    "emp = db.query(Employee).filter(Employee.id == slip.employee_id).first()",
+    "period = db.query(PayrollPeriod).filter(PayrollPeriod.id == slip.payroll_period_id).first()"
   ],
   "app/api/invites.py": [
     "target_business = db.query(Business).filter(Business.id == target_business_id).first()"
@@ -83,6 +94,21 @@
     "business = db.query(Business).filter(Business.id == business_id).first()",
     "user_count = db.query(func.count(User.id)).filter(User.business_id == business.id).scalar() or 0",
     "business = db.query(Business).filter(Business.id == business_id).first()"
+  ],
+  "app/api/payroll.py": [
+    "emp = db.query(Employee).filter(",
+    "return db.query(DeductionType).filter(",
+    "dt = db.query(DeductionType).filter(",
+    "return db.query(BenefitType).filter(",
+    "bt = db.query(BenefitType).filter(",
+    "q = db.query(EmployeeDeduction).filter(",
+    "dt = db.query(DeductionType).filter(",
+    "row = db.query(EmployeeDeduction).filter(",
+    "q = db.query(EmployeeBenefit).filter(",
+    "bt = db.query(BenefitType).filter(",
+    "row = db.query(EmployeeBenefit).filter(",
+    "q = db.query(Timesheet).filter(Timesheet.business_id == current_user.business_id)",
+    "ts = db.query(Timesheet).filter("
   ],
   "app/api/platform_admin.py": [
     "total_organizations = db.query(func.count(Organization.id)).scalar() or 0",
