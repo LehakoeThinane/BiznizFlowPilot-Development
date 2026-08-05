@@ -194,6 +194,26 @@ export interface OrganizationAdminUpdate {
   seats_included?: number;
 }
 
+export interface UserPlatformListItem {
+  id: string;
+  business_id: string;
+  business_name: string;
+  organization_id: string;
+  organization_name: string;
+  email: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  plan_tier: string;
+  subscription_status: string;
+  created_at: string;
+}
+
+export interface UserPlatformListResponse {
+  total: number;
+  items: UserPlatformListItem[];
+}
+
 export interface OrganizationEmailConfig {
   smtp_host: string | null;
   smtp_port: number | null;

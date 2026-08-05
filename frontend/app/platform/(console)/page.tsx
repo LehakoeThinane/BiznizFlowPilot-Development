@@ -1,15 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { platformApiRequest } from "@/lib/platform-api";
 import type { PlatformStats } from "@/types/api";
 
-const BUSINESS_CARDS: { key: keyof PlatformStats; label: string }[] = [
-  { key: "total_organizations", label: "Organizations" },
+const BUSINESS_CARDS: { key: keyof PlatformStats; label: string; href?: string }[] = [
+  { key: "total_organizations", label: "Organizations", href: "/platform/organizations" },
   { key: "total_tenants", label: "Subsidiaries" },
-  { key: "total_users", label: "Total users" },
-  { key: "active_users", label: "Active users" },
+  { key: "total_users", label: "Total users", href: "/platform/users" },
+  { key: "active_users", label: "Active users", href: "/platform/users" },
 ];
 
 const OPS_CARDS: { key: keyof PlatformStats; label: string }[] = [
@@ -29,13 +30,26 @@ const TIER_LABELS: Record<string, string> = {
 
 const TIER_ORDER = ["trial", "starter", "growth", "professional", "enterprise", "legacy"];
 
-function StatTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
+function StatTile({ label, value, href }: { label: string; value: string | number; href?: string }) {
+  const content = (
+    <>
       <p className="text-label-caps text-muted">{label}</p>
       <p className="mt-1 text-2xl font-semibold text-foreground">{value}</p>
-    </div>
+    </>
   );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="block rounded-xl border border-border bg-surface p-4 transition-colors hover:border-violet-500/60 hover:bg-white/[0.02]"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return <div className="rounded-xl border border-border bg-surface p-4">{content}</div>;
 }
 
 export default function PlatformOverviewPage() {
@@ -97,7 +111,12 @@ export default function PlatformOverviewPage() {
       <p className="text-label-caps mb-2 mt-8 text-muted">Business</p>
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {BUSINESS_CARDS.map((card) => (
-          <StatTile key={card.key} label={card.label} value={stats ? (stats[card.key] as number) : "—"} />
+          <StatTile
+            key={card.key}
+            label={card.label}
+            value={stats ? (stats[card.key] as number) : "—"}
+            href={card.href}
+          />
         ))}
       </div>
 

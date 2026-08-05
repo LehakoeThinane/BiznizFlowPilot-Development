@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { apiRequest } from "@/lib/api";
 import { useRequireRole } from "@/hooks/useRequireRole";
-import type { InvitationListResponse, UserInvitation, UserRole } from "@/types/api";
+import type { InvitationListResponse, OrganizationDomain, UserInvitation, UserRole } from "@/types/api";
 
 const INPUT =
   "w-full rounded-md border border-[#333] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none placeholder:text-[#555] focus:ring-2 focus:ring-brand/50";
@@ -30,6 +30,7 @@ export default function InvitesPage() {
   const { allowed, checked } = useRequireRole(["it_admin"]);
 
   const [invites, setInvites] = useState<UserInvitation[]>([]);
+  const [domains, setDomains] = useState<OrganizationDomain[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>("staff");
@@ -45,8 +46,12 @@ export default function InvitesPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await apiRequest<InvitationListResponse>("/api/v1/users/invites");
-      setInvites(res.items);
+      const [invitesRes, domainsRes] = await Promise.all([
+        apiRequest<InvitationListResponse>("/api/v1/users/invites"),
+        apiRequest<OrganizationDomain[]>("/api/v1/org/domains"),
+      ]);
+      setInvites(invitesRes.items);
+      setDomains(domainsRes);
     } finally {
       setLoading(false);
     }
@@ -91,8 +96,9 @@ export default function InvitesPage() {
         </Link>
         <h1 className="mt-1 text-2xl font-semibold text-white">Invitations</h1>
         <p className="mt-1 text-sm text-[#888]">
-          Invite employees across every subsidiary in your organization. If you&apos;ve set authorized email
-          domains, only matching addresses can be invited.
+          Invite employees across every subsidiary in your organization. The invite is sent as a link to the
+          email address below — there&apos;s no SMS option, so the address must be one the person can actually
+          check.
         </p>
       </div>
 
@@ -108,6 +114,20 @@ export default function InvitesPage() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="person@company.com"
             />
+            <p className="mt-1.5 text-xs text-[#666]">
+              {domains.length > 0 ? (
+                <>
+                  Only addresses on {domains.map((d) => d.domain).join(", ")} can be invited. If they
+                  don&apos;t have a company mailbox yet, provision one first — a personal email won&apos;t be
+                  accepted.
+                </>
+              ) : (
+                <>
+                  No authorized domains are configured, so any address works — a personal email is fine if
+                  they don&apos;t have a company one yet.
+                </>
+              )}
+            </p>
           </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#aaa]">Role</label>

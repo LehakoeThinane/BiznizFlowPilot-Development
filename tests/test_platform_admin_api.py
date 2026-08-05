@@ -129,6 +129,34 @@ class TestPlatformTenants:
         assert r.json()["is_active"] is False
 
 
+class TestPlatformUsers:
+    def test_requires_platform_auth(self, client):
+        r = client.get("/platform/v1/users")
+        assert r.status_code == 401
+
+    def test_list_users(self, client, platform_admin: PlatformAdmin, owner_business: Business, owner_user: CurrentUser):
+        r = client.get("/platform/v1/users", headers=_platform_headers(platform_admin))
+        assert r.status_code == 200
+        body = r.json()
+        assert body["total"] >= 1
+
+        row = next(u for u in body["items"] if u["id"] == str(owner_user.user_id))
+        assert row["email"] == "owner@test.com"
+        assert row["full_name"] == "Owner User"
+        assert row["business_name"] == "Owner Business"
+        assert row["organization_name"] == "Owner Organization"
+        assert row["plan_tier"] == "legacy"  # Organization.plan_tier server_default - owner_organization fixture doesn't set one
+        assert row["role"] == "owner"
+        assert row["is_active"] is True
+
+    def test_pagination(self, client, platform_admin: PlatformAdmin, owner_user: CurrentUser):
+        r = client.get(
+            "/platform/v1/users", params={"skip": 0, "limit": 1}, headers=_platform_headers(platform_admin)
+        )
+        assert r.status_code == 200
+        assert len(r.json()["items"]) == 1
+
+
 class TestPlatformOrganizations:
     def test_list_organizations(self, client, platform_admin: PlatformAdmin, owner_business: Business):
         r = client.get("/platform/v1/organizations", headers=_platform_headers(platform_admin))

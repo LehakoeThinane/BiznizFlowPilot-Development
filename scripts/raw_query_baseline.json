@@ -123,6 +123,8 @@
     "users = db.query(User).filter(User.business_id == tenant_id).all()",
     "event_count = db.query(func.count(Event.id)).filter(Event.business_id == tenant_id).scalar() or 0",
     "run_count = db.query(func.count(WorkflowRun.id)).filter(WorkflowRun.business_id == tenant_id).scalar() or 0",
+    "total = db.query(func.count(User.id)).scalar() or 0",
+    "db.query(User, Business, Organization)",
     "user = db.query(User).filter(User.id == user_id).first()",
     "q = db.query(Event)",
     "q = db.query(WorkflowRun)",

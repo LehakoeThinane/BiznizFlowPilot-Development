@@ -253,6 +253,46 @@ class TestPublishPost:
         assert second.json()["github_commit_sha"] == "first-sha"
         mock_client2.put.assert_not_called()
 
+    def test_build_markdown_file_includes_cover_image_when_set(self, client, test_db, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog",
+            json={"title": "Cover Image Post", "slug": "cover-image-post"},
+            headers=headers,
+        ).json()
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}",
+            json={"description": "Has a cover.", "cover_image_url": "/blog/covers/cover-image-post.png"},
+            headers=headers,
+        )
+
+        from app.repositories.marketing_blog_post import MarketingBlogPostRepository
+        from app.services import marketing_blog
+
+        post = MarketingBlogPostRepository(test_db).get_by_id(UUID(created["id"]))
+        file_content = marketing_blog._build_markdown_file(post, "Body.")
+        assert 'coverImage: "/blog/covers/cover-image-post.png"' in file_content
+
+    def test_build_markdown_file_omits_cover_image_when_unset(self, client, test_db, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog",
+            json={"title": "No Cover Post", "slug": "no-cover-post"},
+            headers=headers,
+        ).json()
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}",
+            json={"description": "No cover."},
+            headers=headers,
+        )
+
+        from app.repositories.marketing_blog_post import MarketingBlogPostRepository
+        from app.services import marketing_blog
+
+        post = MarketingBlogPostRepository(test_db).get_by_id(UUID(created["id"]))
+        file_content = marketing_blog._build_markdown_file(post, "Body.")
+        assert "coverImage:" not in file_content
+
     def test_publish_without_pat_configured_fails_cleanly(self, client, marketing_cms_admin, monkeypatch):
         monkeypatch.setattr("app.core.config.settings.marketing_cms_github_pat", "")
         headers = auth(client, marketing_cms_admin)

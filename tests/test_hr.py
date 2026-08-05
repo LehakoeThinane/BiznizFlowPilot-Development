@@ -212,6 +212,78 @@ class TestEmployeeEmailDomain:
         assert r.status_code == 400
 
 
+class TestEmployeeUserLink:
+    def test_create_without_user_id_notifies_it_admin(self, client: TestClient, owner_user, org_admin_user):
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "New", "last_name": "Hire", "gross_salary": "20000"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+        assert r.json()["user_id"] is None
+
+        notes = client.get("/api/v1/notifications", headers=_auth_headers(org_admin_user)).json()
+        assert any(
+            n["type"] == "onboarding" and "needs a login" in n["title"].lower()
+            for n in notes["items"]
+        )
+
+    def test_create_with_user_id_links_employee(self, client: TestClient, owner_user, staff_user):
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={
+                "first_name": "Linked", "last_name": "Person", "gross_salary": "20000",
+                "user_id": str(staff_user.user_id),
+            },
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+        assert r.json()["user_id"] == str(staff_user.user_id)
+
+    def test_create_with_unknown_user_id_rejected(self, client: TestClient, owner_user):
+        from uuid import uuid4
+
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Bad", "last_name": "Link", "gross_salary": "20000", "user_id": str(uuid4())},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 400
+
+    def test_create_with_already_linked_user_id_rejected(self, client: TestClient, owner_user, staff_user):
+        client.post(
+            "/api/v1/hr/employees",
+            json={
+                "first_name": "First", "last_name": "Link", "gross_salary": "20000",
+                "user_id": str(staff_user.user_id),
+            },
+            headers=_auth_headers(owner_user),
+        )
+        r = client.post(
+            "/api/v1/hr/employees",
+            json={
+                "first_name": "Second", "last_name": "Link", "gross_salary": "20000",
+                "user_id": str(staff_user.user_id),
+            },
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 400
+
+    def test_update_can_link_user_id(self, client: TestClient, owner_user, staff_user):
+        emp = client.post(
+            "/api/v1/hr/employees",
+            json={"first_name": "Unlinked", "last_name": "Person", "gross_salary": "20000"},
+            headers=_auth_headers(owner_user),
+        ).json()
+        r = client.patch(
+            f"/api/v1/hr/employees/{emp['id']}",
+            json={"user_id": str(staff_user.user_id)},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 200
+        assert r.json()["user_id"] == str(staff_user.user_id)
+
+
 class TestOrgChart:
     def test_org_chart_reflects_manager_hierarchy(self, client: TestClient, token: str):
         manager = client.post(

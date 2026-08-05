@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.notification import Notification
 from app.models.user import User
+from app.repositories.user import UserRepository
 
 
 def notify_business(
@@ -40,6 +41,45 @@ def notify_business(
             Notification(
                 id=uuid4(),
                 business_id=business_id,
+                user_id=user.id,
+                type=type_,
+                title=title,
+                message=message,
+                action_url=action_url,
+                related_type=related_type,
+                related_id=related_id,
+                is_read=False,
+            )
+        )
+
+
+def notify_organization_role(
+    db: Session,
+    organization_id: UUID,
+    role: str,
+    type_: str,
+    title: str,
+    message: str,
+    action_url: str | None = None,
+    related_type: str | None = None,
+    related_id: UUID | None = None,
+) -> None:
+    """Queue a notification for every active user with a given role across
+    every subsidiary in an organization.
+
+    IT Admins (and other org-wide roles) aren't scoped to a single
+    business_id the way notify_business assumes - use this instead when the
+    audience spans the organization's subsidiaries. Same sanctioned
+    business_id-bypass as UserRepository.count_active_in_organization.
+
+    Does NOT commit — same contract as notify_business.
+    """
+    users = UserRepository(db).list_by_role_in_organization(organization_id, role)
+    for user in users:
+        db.add(
+            Notification(
+                id=uuid4(),
+                business_id=user.business_id,
                 user_id=user.id,
                 type=type_,
                 title=title,

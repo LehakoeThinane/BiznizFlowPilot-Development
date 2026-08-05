@@ -17,10 +17,12 @@ interface Employee {
   email: string | null; phone: string | null; position: string | null;
   employment_type: string; salary_type: string; gross_salary: number;
   department_id: string | null; department_name: string | null;
-  manager_id: string | null; manager_name: string | null;
+  manager_id: string | null; manager_name: string | null; user_id: string | null;
   is_active: boolean; start_date: string | null;
 }
 interface EmployeeListResponse { items: Employee[]; total: number }
+interface BusinessUser { id: string; first_name: string; last_name: string; email: string }
+interface UserListResponse { items: BusinessUser[]; total: number }
 
 const EMPLOYMENT_TYPES = ["full_time", "part_time", "contractor", "intern"];
 const SALARY_TYPES = ["monthly", "annual", "hourly"];
@@ -66,12 +68,12 @@ function XIcon() {
 interface EmployeeForm {
   first_name: string; last_name: string; email: string; phone: string;
   position: string; department_id: string; manager_id: string; employment_type: string;
-  salary_type: string; gross_salary: string; start_date: string; notes: string;
+  salary_type: string; gross_salary: string; start_date: string; notes: string; user_id: string;
 }
 const EMPTY_FORM: EmployeeForm = {
   first_name: "", last_name: "", email: "", phone: "",
   position: "", department_id: "", manager_id: "", employment_type: "full_time",
-  salary_type: "monthly", gross_salary: "", start_date: "", notes: "",
+  salary_type: "monthly", gross_salary: "", start_date: "", notes: "", user_id: "",
 };
 function empToForm(e: Employee): EmployeeForm {
   return {
@@ -81,6 +83,7 @@ function empToForm(e: Employee): EmployeeForm {
     manager_id: e.manager_id ?? "",
     employment_type: e.employment_type, salary_type: e.salary_type,
     gross_salary: String(e.gross_salary), start_date: e.start_date ?? "", notes: "",
+    user_id: e.user_id ?? "",
   };
 }
 
@@ -98,6 +101,7 @@ export default function EmployeesPage() {
   const [page, setPage]             = useState(1);
   const [loading, setLoading]       = useState(true);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [users, setUsers]           = useState<BusinessUser[]>([]);
 
   // ── Headcount & Demographics state ─────────────────────────────────────────
   const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
@@ -141,7 +145,13 @@ export default function EmployeesPage() {
       .then(setDepartments).catch(console.error).finally(() => setDeptLoading(false));
   }, [token]);
 
-  useEffect(() => { loadEmployees(); loadDepartments(); }, [loadEmployees, loadDepartments]);
+  const loadUsers = useCallback(() => {
+    apiRequest<UserListResponse>("/api/v1/users?limit=200", { authToken: token })
+      .then((d) => setUsers(d.items ?? []))
+      .catch(console.error);
+  }, [token]);
+
+  useEffect(() => { loadEmployees(); loadDepartments(); loadUsers(); }, [loadEmployees, loadDepartments, loadUsers]);
 
   useEffect(() => {
     setDemographicsLoading(true);
@@ -223,6 +233,7 @@ export default function EmployeesPage() {
       if (form.manager_id)    body.manager_id    = form.manager_id;
       if (form.start_date)    body.start_date    = form.start_date;
       if (form.notes)         body.notes         = form.notes.trim();
+      if (form.user_id)       body.user_id       = form.user_id;
 
       if (editTarget) {
         await apiRequest(`/api/v1/hr/employees/${editTarget.id}`, { method: "PATCH", body, authToken: token });
@@ -267,6 +278,13 @@ export default function EmployeesPage() {
       setDeptServerError(err instanceof Error ? err.message : "Failed to save department.");
     } finally { setDeptSaving(false); }
   }
+
+  const linkableUsers = useMemo(() => {
+    const linkedElsewhere = new Set(
+      allEmployees.filter((e) => e.user_id && e.id !== editTarget?.id).map((e) => e.user_id)
+    );
+    return users.filter((u) => !linkedElsewhere.has(u.id));
+  }, [users, allEmployees, editTarget]);
 
   const active       = employees.filter((e) => e.is_active).length;
   const totalPayroll = employees.filter((e) => e.is_active).reduce((s, e) => s + Number(e.gross_salary), 0);
@@ -419,6 +437,11 @@ export default function EmployeesPage() {
                         {emp.email ? ` · ${emp.email}` : ""}
                       </p>
                     </div>
+                    {!emp.user_id && emp.is_active && (
+                      <span className="shrink-0 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-400">
+                        No login
+                      </span>
+                    )}
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge(emp.employment_type)}`}>
                       {emp.employment_type.replace("_", " ")}
                     </span>
@@ -573,6 +596,14 @@ export default function EmployeesPage() {
                   </Field>
                   <Field label="Start Date">
                     <input type="date" aria-label="Start date" className={INPUT} value={form.start_date} onChange={(e) => set("start_date", e.target.value)} />
+                  </Field>
+                  <Field label="Linked Account">
+                    <select aria-label="Linked Account" className={SELECT} value={form.user_id} onChange={(e) => set("user_id", e.target.value)}>
+                      <option value="">No login yet</option>
+                      {linkableUsers.map((u) => (
+                        <option key={u.id} value={u.id}>{u.first_name} {u.last_name} ({u.email})</option>
+                      ))}
+                    </select>
                   </Field>
                 </div>
                 <div className="mt-4">

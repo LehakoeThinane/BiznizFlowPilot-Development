@@ -39,6 +39,7 @@ class DepartmentOut(BaseModel):
 class EmployeeCreate(BaseModel):
     department_id: UUID | None = None
     manager_id: UUID | None = None
+    user_id: UUID | None = None
     first_name: str = Field(..., max_length=100)
     last_name: str = Field(..., max_length=100)
     email: str | None = Field(None, max_length=254)
@@ -57,6 +58,7 @@ class EmployeeCreate(BaseModel):
 class EmployeeUpdate(BaseModel):
     department_id: UUID | None = None
     manager_id: UUID | None = None
+    user_id: UUID | None = None
     first_name: str | None = Field(None, max_length=100)
     last_name: str | None = Field(None, max_length=100)
     email: str | None = Field(None, max_length=254)
@@ -80,6 +82,7 @@ class EmployeeOut(BaseModel):
     business_id: UUID
     department_id: UUID | None
     manager_id: UUID | None = None
+    user_id: UUID | None = None
     first_name: str
     last_name: str
     full_name: str = ""

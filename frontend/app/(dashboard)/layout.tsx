@@ -300,9 +300,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     onClick={() => setShowProfile((v) => !v)}
                     className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-surface-container-high"
                   >
-                    <span className="hidden text-sm font-semibold text-primary-fixed-dim sm:block">
-                      {firstName}
-                    </span>
+                    <div className="hidden text-right sm:block">
+                      <p className="text-sm font-semibold leading-tight text-primary-fixed-dim">{firstName}</p>
+                      {user?.role && (
+                        <p className="text-[10px] uppercase leading-tight tracking-wide text-on-surface-variant">
+                          {user.role.replace("_", " ")}
+                        </p>
+                      )}
+                    </div>
                     <div className="relative shrink-0">
                       {user?.avatar_url ? (
                         <img src={user.avatar_url} alt="avatar" className="h-8 w-8 rounded-full object-cover" />

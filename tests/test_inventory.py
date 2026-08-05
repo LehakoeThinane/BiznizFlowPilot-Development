@@ -189,6 +189,32 @@ class TestStockAdjustment:
 
         assert stock.quantity == 10
 
+    def test_it_admin_can_adjust(
+        self,
+        test_db: Session,
+        org_admin_user: CurrentUser,
+        sample_product: Product,
+        sample_location: InventoryLocation,
+    ):
+        """IT Admin now gets normal-employee dashboard access alongside their
+        existing Organization-only tools - this locks in that ALL_BUSINESS_ROLES
+        includes it_admin."""
+        sample_product.business_id = org_admin_user.business_id
+        sample_location.business_id = org_admin_user.business_id
+        test_db.commit()
+
+        service = InventoryService(test_db)
+        data = StockAdjustment(
+            product_id=sample_product.id,
+            location_id=sample_location.id,
+            quantity_change=10,
+            reason="IT Admin adjustment",
+        )
+
+        stock = service.adjust_stock(org_admin_user.business_id, org_admin_user, data)
+
+        assert stock.quantity == 10
+
     def test_low_stock_event_emitted(
         self,
         test_db: Session,

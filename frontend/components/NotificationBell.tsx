@@ -36,6 +36,7 @@ function typeColor(type: string) {
   if (type === "payroll")     return "bg-violet-500";
   if (type === "order_status") return "bg-emerald-500";
   if (type === "low_stock")   return "bg-orange-500";
+  if (type === "onboarding")  return "bg-teal-500";
   return "bg-slate-500";
 }
 

@@ -20,7 +20,9 @@ from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
 from app.models.payroll import DeductionType, EmployeeDeduction, Timesheet
+from app.repositories.employee import EmployeeRepository
 from app.repositories.organization import OrganizationRepository
+from app.repositories.user import UserRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.hr import (
     DepartmentCreate,
@@ -43,7 +45,7 @@ from app.schemas.hr import (
     PayslipOut,
 )
 from app.services.event import EventService
-from app.utils.notify import notify_business, notify_user
+from app.utils.notify import notify_business, notify_organization_role, notify_user
 
 router = APIRouter(prefix="/api/v1/hr", tags=["hr"], dependencies=[Depends(require_feature("hr"))])
 
@@ -66,6 +68,18 @@ def _validate_employee_email_domain(db: Session, user: CurrentUser, email: str |
             status_code=400,
             detail="This email's domain is not authorized for your organization",
         )
+
+
+def _validate_employee_user_link(
+    db: Session, business_id: Any, user_id: UUID, employee_id: UUID | None
+) -> None:
+    """A linked user_id must belong to this business and not already be linked
+    to a different active employee."""
+    user = UserRepository(db).get(business_id, user_id)
+    if not user:
+        raise HTTPException(status_code=400, detail="User not found in this business")
+    if EmployeeRepository(db).find_linked_to_user(business_id, user_id, exclude_employee_id=employee_id):
+        raise HTTPException(status_code=400, detail="This user is already linked to another employee")
 
 
 def _emit(
@@ -258,6 +272,8 @@ def create_employee(
 ):
     _require_manager(current_user)
     _validate_employee_email_domain(db, current_user, data.email)
+    if data.user_id:
+        _validate_employee_user_link(db, current_user.business_id, data.user_id, None)
     new_id = uuid4()
     if data.manager_id:
         _assert_no_manager_cycle(db, new_id, data.manager_id)
@@ -272,6 +288,15 @@ def create_employee(
         action_url="/employees",
         related_type="employee", related_id=emp.id,
     )
+    if not emp.user_id and current_user.organization_id:
+        notify_organization_role(
+            db, current_user.organization_id, "it_admin", "onboarding",
+            "New employee needs a login",
+            f"{emp.first_name} {emp.last_name} was added to HR but has no user account yet. "
+            "Invite them if they need dashboard access.",
+            action_url="/organization/invites",
+            related_type="employee", related_id=emp.id,
+        )
     _emit(db, current_user.business_id, current_user.user_id,
           EventType.EMPLOYEE_CREATED, "employee", emp.id,
           description=f"Employee created: {emp.first_name} {emp.last_name}",
@@ -295,6 +320,8 @@ def update_employee(
     ).first()
     if not emp:
         raise HTTPException(status_code=404, detail="Employee not found")
+    if data.user_id:
+        _validate_employee_user_link(db, current_user.business_id, data.user_id, emp.id)
     if data.manager_id:
         _assert_no_manager_cycle(db, emp.id, data.manager_id)
     updated_fields = list(data.model_dump(exclude_none=True).keys())
