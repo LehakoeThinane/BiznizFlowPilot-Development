@@ -6,7 +6,7 @@ from app.schemas.auth import CurrentUser
 
 PRIVILEGED_ROLES = frozenset({"owner", "manager"})
 OWNER_ONLY = frozenset({"owner"})
-ALL_BUSINESS_ROLES = frozenset({"owner", "manager", "staff"})
+ALL_BUSINESS_ROLES = frozenset({"owner", "manager", "staff", "it_admin"})
 INVITE_MANAGERS = frozenset({"owner", "manager", "it_admin"})
 
 

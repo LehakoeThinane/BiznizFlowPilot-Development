@@ -6,17 +6,22 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.enums import EventType
 from app.core.security import hash_password
 from app.models.business import Business
+from app.models.hr import Employee
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.user_invitation import UserInvitation
 from app.repositories.invitation import InvitationRepository
 from app.repositories.organization import OrganizationRepository
 from app.schemas.auth import TokenResponse
+from app.services.event import EventService
+from app.utils.notify import notify_business
 
 
 def _hash_token(raw_token: str) -> str:
@@ -168,9 +173,54 @@ class InvitationService:
             is_active=True,
         )
         self.db.add(user)
+        self.db.flush()  # populate user.id for the employee link + event below
 
         invitation.status = "accepted"
         invitation.accepted_at = datetime.now(timezone.utc)
+
+        # Sync IT's onboarding action back to HR: auto-link a pre-existing
+        # Employee record by email if one exists, and either way let
+        # owner/manager know the account is now live - they otherwise have
+        # no visibility into invitations, which only IT Admin can see.
+        employee = (
+            self.db.query(Employee)
+            .filter(
+                Employee.business_id == invitation.business_id,
+                Employee.user_id.is_(None),
+                func.lower(Employee.email) == invitation.email.lower(),
+            )
+            .first()
+        )
+        if employee:
+            employee.user_id = user.id
+            notify_business(
+                self.db, invitation.business_id, "onboarding",
+                "Employee account activated",
+                f"{first_name} {last_name} accepted their invite and is now linked to their employee record.",
+                action_url="/employees",
+                related_type="employee", related_id=employee.id,
+                roles=("owner", "manager"),
+            )
+        else:
+            notify_business(
+                self.db, invitation.business_id, "onboarding",
+                "New team member joined — HR record needed",
+                f"{first_name} {last_name} ({invitation.email}) accepted their invite but has no "
+                "employee record yet. Add one to enable payroll and leave.",
+                action_url="/employees",
+                roles=("owner", "manager"),
+            )
+
+        EventService(self.db).create_event(
+            business_id=invitation.business_id,
+            event_type=EventType.USER_INVITE_ACCEPTED,
+            entity_type="user_invitation",
+            entity_id=invitation.id,
+            actor_id=user.id,
+            description=f"{first_name} {last_name} accepted their invitation",
+            commit=False,
+        )
+
         self.db.commit()
         self.db.refresh(user)
 

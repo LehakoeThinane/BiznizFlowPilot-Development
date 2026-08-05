@@ -138,6 +138,21 @@ class TestCreateInvitation:
         )
         assert r.status_code == 201  # owner is allowed to mint it_admin invites
 
+    def test_invite_notifies_owner_and_manager(self, client, owner_user: CurrentUser):
+        """Owner/manager have no page that shows IT's invitations, so a
+        notification is their only visibility into onboarding activity."""
+        r = client.post(
+            "/api/v1/users/invite",
+            json={"email": "newhire@example.com"},
+            headers=_auth_headers(owner_user),
+        )
+        assert r.status_code == 201
+        notes = client.get("/api/v1/notifications", headers=_auth_headers(owner_user)).json()
+        assert any(
+            n["type"] == "onboarding" and "invited" in n["title"].lower()
+            for n in notes["items"]
+        )
+
 
 # ── GET /api/v1/users/invites ────────────────────────────────────────────────
 
@@ -293,6 +308,89 @@ class TestValidateAndAcceptInvite:
             },
         )
         assert r.status_code == 400
+
+    def test_accept_links_matching_employee_and_notifies_hr(
+        self, client, owner_user: CurrentUser, monkeypatch
+    ):
+        """A pre-existing Employee record with a matching, still-unlinked
+        email should be auto-linked the moment the invite is accepted."""
+        captured = {}
+
+        def _fake_send_invite_email(**kwargs):
+            captured["raw_token"] = kwargs["raw_token"]
+
+        monkeypatch.setattr(
+            "app.services.email.send_invite_email", _fake_send_invite_email
+        )
+
+        emp = client.post(
+            "/api/v1/hr/employees",
+            json={
+                "first_name": "New", "last_name": "Hire",
+                "gross_salary": "20000", "email": "newhire@example.com",
+            },
+            headers=_auth_headers(owner_user),
+        ).json()
+        assert emp["user_id"] is None
+
+        self._create_invite(client, owner_user, email="newhire@example.com")
+        raw_token = captured["raw_token"]
+
+        r = client.post(
+            "/api/v1/auth/invite/accept",
+            json={
+                "token": raw_token,
+                "password": "newpassword123",
+                "first_name": "New",
+                "last_name": "Hire",
+            },
+        )
+        assert r.status_code == 200
+
+        emp_after = client.get(
+            f"/api/v1/hr/employees/{emp['id']}", headers=_auth_headers(owner_user)
+        ).json()
+        assert emp_after["user_id"] is not None
+
+        notes = client.get("/api/v1/notifications", headers=_auth_headers(owner_user)).json()
+        assert any(
+            n["type"] == "onboarding" and "activated" in n["title"].lower()
+            for n in notes["items"]
+        )
+
+    def test_accept_without_matching_employee_notifies_hr_of_gap(
+        self, client, owner_user: CurrentUser, monkeypatch
+    ):
+        """No matching Employee exists yet - HR should be told explicitly
+        rather than the new hire silently having no HR record."""
+        captured = {}
+
+        def _fake_send_invite_email(**kwargs):
+            captured["raw_token"] = kwargs["raw_token"]
+
+        monkeypatch.setattr(
+            "app.services.email.send_invite_email", _fake_send_invite_email
+        )
+
+        self._create_invite(client, owner_user, email="noemployee@example.com")
+        raw_token = captured["raw_token"]
+
+        r = client.post(
+            "/api/v1/auth/invite/accept",
+            json={
+                "token": raw_token,
+                "password": "newpassword123",
+                "first_name": "No",
+                "last_name": "Employee",
+            },
+        )
+        assert r.status_code == 200
+
+        notes = client.get("/api/v1/notifications", headers=_auth_headers(owner_user)).json()
+        assert any(
+            n["type"] == "onboarding" and "hr record needed" in n["title"].lower()
+            for n in notes["items"]
+        )
 
 
 class TestSeatLimit:

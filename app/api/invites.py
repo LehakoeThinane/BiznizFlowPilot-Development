@@ -21,6 +21,7 @@ from app.schemas.auth import CurrentUser
 from app.schemas.invitation import InvitationCreate, InvitationListResponse, InvitationResponse
 from app.services.event import EventService
 from app.services.invitation import InvitationService
+from app.utils.notify import notify_business
 
 router = APIRouter(prefix="/api/v1/users", tags=["invites"])
 limiter = Limiter(key_func=get_remote_address, storage_uri=settings.redis_url, in_memory_fallback_enabled=True)
@@ -103,6 +104,18 @@ def create_invitation(
         )
     except Exception:
         pass  # email delivery failure is logged inside send_invite_email
+
+    # Owner/manager have no page that surfaces invitations IT sends (that's
+    # IT-Admin-only UI) - notify them so onboarding stays visible on both
+    # sides. Piggybacks on the EventService call's commit below.
+    notify_business(
+        db, target_business_id, "onboarding",
+        "New team member invited",
+        f"{current_user.full_name} invited {body.email} as {body.role}.",
+        action_url="/employees",
+        related_type="user_invitation", related_id=invitation.id,
+        roles=("owner", "manager"),
+    )
 
     # The invitation itself is already committed above (create_invitation),
     # and send_invite_email is an external network call - true one-transaction
