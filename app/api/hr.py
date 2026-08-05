@@ -20,8 +20,9 @@ from app.core.permissions import PRIVILEGED_ROLES
 from app.dependencies import get_current_user
 from app.models.hr import Department, Employee, LeaveRequest, LeaveType, PayrollPeriod, Payslip
 from app.models.payroll import DeductionType, EmployeeDeduction, Timesheet
-from app.models.user import User
+from app.repositories.employee import EmployeeRepository
 from app.repositories.organization import OrganizationRepository
+from app.repositories.user import UserRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.hr import (
     DepartmentCreate,
@@ -74,13 +75,10 @@ def _validate_employee_user_link(
 ) -> None:
     """A linked user_id must belong to this business and not already be linked
     to a different active employee."""
-    user = db.query(User).filter(User.id == user_id, User.business_id == business_id).first()
+    user = UserRepository(db).get(business_id, user_id)
     if not user:
         raise HTTPException(status_code=400, detail="User not found in this business")
-    q = db.query(Employee).filter(Employee.user_id == user_id, Employee.is_active.is_(True))
-    if employee_id:
-        q = q.filter(Employee.id != employee_id)
-    if q.first():
+    if EmployeeRepository(db).find_linked_to_user(business_id, user_id, exclude_employee_id=employee_id):
         raise HTTPException(status_code=400, detail="This user is already linked to another employee")
 
 

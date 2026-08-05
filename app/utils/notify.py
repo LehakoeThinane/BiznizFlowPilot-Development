@@ -6,9 +6,9 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
-from app.models.business import Business
 from app.models.notification import Notification
 from app.models.user import User
+from app.repositories.user import UserRepository
 
 
 def notify_business(
@@ -74,16 +74,7 @@ def notify_organization_role(
 
     Does NOT commit — same contract as notify_business.
     """
-    users = (
-        db.query(User)
-        .join(Business, Business.id == User.business_id)
-        .filter(
-            Business.organization_id == organization_id,
-            User.role == role,
-            User.is_active.is_(True),
-        )
-        .all()
-    )
+    users = UserRepository(db).list_by_role_in_organization(organization_id, role)
     for user in users:
         db.add(
             Notification(

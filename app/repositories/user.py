@@ -113,6 +113,26 @@ class UserRepository(BaseRepository[User]):
             User.role == role,
         ).count()
 
+    def list_by_role_in_organization(self, organization_id: UUID, role: str) -> list[User]:
+        """List active users with a specific role across every subsidiary in
+        an organization - e.g. every IT Admin, who isn't scoped to a single
+        business_id the way most roles are.
+
+        🧨 Deliberately bypasses the single-business_id filter for an
+        org-wide audience - same sanctioned exception as
+        count_active_in_organization.
+        """
+        return (
+            self.db.query(User)
+            .join(Business, Business.id == User.business_id)
+            .filter(
+                Business.organization_id == organization_id,
+                User.role == role,
+                User.is_active.is_(True),
+            )
+            .all()
+        )
+
     def count_active_in_organization(self, organization_id: UUID) -> int:
         """Count active users across every subsidiary in an organization.
 

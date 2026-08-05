@@ -6,17 +6,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.enums import EventType
 from app.core.security import hash_password
 from app.models.business import Business
-from app.models.hr import Employee
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.user_invitation import UserInvitation
+from app.repositories.employee import EmployeeRepository
 from app.repositories.invitation import InvitationRepository
 from app.repositories.organization import OrganizationRepository
 from app.schemas.auth import TokenResponse
@@ -36,6 +35,7 @@ class InvitationService:
         self.db = db
         self.invite_repo = InvitationRepository(db)
         self.org_repo = OrganizationRepository(db)
+        self.employee_repo = EmployeeRepository(db)
 
     def create_invitation(
         self,
@@ -182,15 +182,7 @@ class InvitationService:
         # Employee record by email if one exists, and either way let
         # owner/manager know the account is now live - they otherwise have
         # no visibility into invitations, which only IT Admin can see.
-        employee = (
-            self.db.query(Employee)
-            .filter(
-                Employee.business_id == invitation.business_id,
-                Employee.user_id.is_(None),
-                func.lower(Employee.email) == invitation.email.lower(),
-            )
-            .first()
-        )
+        employee = self.employee_repo.find_unlinked_by_email(invitation.business_id, invitation.email)
         if employee:
             employee.user_id = user.id
             notify_business(
