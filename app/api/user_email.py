@@ -18,6 +18,8 @@ from app.integrations.imap_client import ImapAuthenticationError, ImapConnection
 from app.models.user_email import UserEmailAccount
 from app.schemas.auth import CurrentUser
 from app.schemas.user_email import (
+    EmailDisplayPrefsResponse,
+    EmailDisplayPrefsUpdate,
     EmailFolderListResponse,
     EmailFolderResponse,
     EmailListResponse,
@@ -118,6 +120,31 @@ def delete_email_account(
 ):
     service = UserEmailAccountService(db)
     service.delete_account(current_user.business_id, current_user.user_id)
+
+
+@router.get("/display-prefs", response_model=EmailDisplayPrefsResponse)
+def get_email_display_prefs(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmailDisplayPrefsResponse:
+    """Email-page-scoped theme/background - available even before a mailbox
+    is connected, unlike the main account GET/PUT above."""
+    service = UserEmailAccountService(db)
+    theme, background = service.get_display_prefs(current_user.business_id, current_user.user_id)
+    return EmailDisplayPrefsResponse(theme=theme, background=background)
+
+
+@router.put("/display-prefs", response_model=EmailDisplayPrefsResponse)
+def set_email_display_prefs(
+    body: EmailDisplayPrefsUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmailDisplayPrefsResponse:
+    service = UserEmailAccountService(db)
+    theme, background = service.set_display_prefs(
+        current_user.business_id, current_user.user_id, body.theme, body.background
+    )
+    return EmailDisplayPrefsResponse(theme=theme, background=background)
 
 
 @router.get("/folders", response_model=EmailFolderListResponse)

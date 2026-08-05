@@ -1,6 +1,7 @@
 "use client";
 
 import type { EmailMessageSummary } from "@/types/api";
+import { archiveHoverClass, hoverBgClass, rowBorderClass, selectedBgClass, textClass, type EmailTheme } from "./emailTheme";
 
 function formatDate(date: string | null) {
   if (!date) return "";
@@ -16,6 +17,7 @@ export function EmailMessageRow({
   onToggleStar,
   onArchive,
   onDelete,
+  theme,
 }: {
   message: EmailMessageSummary;
   selected: boolean;
@@ -23,13 +25,18 @@ export function EmailMessageRow({
   onToggleStar: (uid: string, starred: boolean) => void;
   onArchive: (uid: string) => void;
   onDelete: (uid: string) => void;
+  theme: EmailTheme;
 }) {
+  const readClass = theme === "dark" ? "text-slate-300" : "text-slate-600";
+  const subjectReadClass = theme === "dark" ? "text-slate-500" : "text-slate-500";
+  const subjectUnreadClass = theme === "dark" ? "text-slate-300" : "text-slate-700";
+
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`group relative flex w-full cursor-pointer flex-col border-b border-outline-variant/50 px-3 py-2.5 text-left hover:bg-white/5 ${
-        selected ? "bg-white/10" : ""
+      className={`group relative flex w-full cursor-pointer flex-col border-b px-3 py-2.5 text-left ${rowBorderClass(theme)} ${hoverBgClass(theme)} ${
+        selected ? selectedBgClass(theme) : ""
       }`}
       onClick={() => onSelect(message.uid)}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(message.uid); }}
@@ -40,13 +47,13 @@ export function EmailMessageRow({
           aria-label={message.is_starred ? "Unstar" : "Star"}
           onClick={(e) => { e.stopPropagation(); onToggleStar(message.uid, !message.is_starred); }}
           className={`material-symbols-outlined shrink-0 text-[16px] ${
-            message.is_starred ? "text-amber-400" : "text-slate-600 hover:text-slate-300"
+            message.is_starred ? "text-amber-400" : "text-slate-500 hover:text-slate-400"
           }`}
           style={{ fontVariationSettings: message.is_starred ? "'FILL' 1" : "'FILL' 0" }}
         >
           star
         </button>
-        <p className={`min-w-0 flex-1 truncate text-sm ${message.is_read ? "text-slate-300" : "font-semibold text-white"}`}>
+        <p className={`min-w-0 flex-1 truncate text-sm ${message.is_read ? readClass : `font-semibold ${textClass(theme)}`}`}>
           {message.from_address}
         </p>
         <span className="shrink-0 text-[11px] text-slate-500 group-hover:hidden">{formatDate(message.date)}</span>
@@ -55,7 +62,7 @@ export function EmailMessageRow({
             type="button"
             aria-label="Archive"
             onClick={(e) => { e.stopPropagation(); onArchive(message.uid); }}
-            className="material-symbols-outlined text-[16px] text-slate-500 hover:text-white"
+            className={`material-symbols-outlined text-[16px] text-slate-500 ${archiveHoverClass(theme)}`}
           >
             archive
           </button>
@@ -69,7 +76,7 @@ export function EmailMessageRow({
           </button>
         </span>
       </div>
-      <p className={`mt-0.5 truncate pl-6 text-xs ${message.is_read ? "text-slate-500" : "text-slate-300"}`}>
+      <p className={`mt-0.5 truncate pl-6 text-xs ${message.is_read ? subjectReadClass : subjectUnreadClass}`}>
         {message.subject || "(no subject)"}
       </p>
     </div>

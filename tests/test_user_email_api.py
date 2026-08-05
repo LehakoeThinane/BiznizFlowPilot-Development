@@ -340,3 +340,50 @@ class TestArchiveAndDelete:
         )
         r = client.delete("/api/v1/email-account/messages/1", headers=_auth_headers(owner_user))
         assert r.status_code == 204
+
+
+class TestDisplayPrefs:
+    def test_get_returns_defaults_before_connecting(self, client, owner_user):
+        r = client.get("/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user))
+        assert r.status_code == 200
+        assert r.json() == {"theme": "dark", "background": None}
+
+    def test_put_succeeds_without_any_mailbox_configured(self, client, owner_user):
+        r = client.put(
+            "/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user),
+            json={"theme": "light", "background": "sunset"},
+        )
+        assert r.status_code == 200
+        assert r.json() == {"theme": "light", "background": "sunset"}
+
+        get_r = client.get("/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user))
+        assert get_r.json() == {"theme": "light", "background": "sunset"}
+
+    def test_put_rejects_invalid_theme(self, client, owner_user):
+        r = client.put(
+            "/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user),
+            json={"theme": "blue", "background": None},
+        )
+        assert r.status_code == 422
+
+    def test_put_null_background_clears_it(self, client, owner_user):
+        client.put(
+            "/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user),
+            json={"theme": "light", "background": "sunset"},
+        )
+        r = client.put(
+            "/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user),
+            json={"theme": "light", "background": None},
+        )
+        assert r.status_code == 200
+        assert r.json()["background"] is None
+
+    def test_prefs_survive_connecting_a_mailbox(self, client, owner_user, monkeypatch):
+        client.put(
+            "/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user),
+            json={"theme": "light", "background": "sunset"},
+        )
+        _connect(client, owner_user, monkeypatch)
+
+        r = client.get("/api/v1/email-account/display-prefs", headers=_auth_headers(owner_user))
+        assert r.json() == {"theme": "light", "background": "sunset"}

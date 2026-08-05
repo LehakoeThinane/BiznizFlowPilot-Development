@@ -340,3 +340,45 @@ class TestDeleteMessageService:
 
         service.delete_message(business.id, user_id, "5")
         assert captured == {"uid": "5", "source_folder": "INBOX"}
+
+
+class TestDisplayPrefs:
+    def test_get_returns_defaults_with_no_account_row(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        theme, background = service.get_display_prefs(business.id, uuid4())
+        assert (theme, background) == ("dark", None)
+
+    def test_set_creates_bare_prefs_only_row(self, test_db: Session):
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+
+        theme, background = service.set_display_prefs(business.id, user_id, "light", "sunset")
+        assert (theme, background) == ("light", "sunset")
+
+        account = service.get_account(business.id, user_id)
+        assert account is not None
+        assert account.imap_host is None  # prefs-only row, no mailbox configured
+
+    def test_set_on_configured_account_leaves_imap_fields_untouched(self, test_db: Session):
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        service.set_display_prefs(business.id, user_id, "light", None)
+
+        account = service.get_account(business.id, user_id)
+        assert account.email_theme == "light"
+        assert account.email_background is None
+        assert account.imap_host == "imap.example.com"
+
+    def test_set_background_none_clears_it(self, test_db: Session):
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+
+        service.set_display_prefs(business.id, user_id, "dark", "sunset")
+        theme, background = service.set_display_prefs(business.id, user_id, "dark", None)
+        assert (theme, background) == ("dark", None)

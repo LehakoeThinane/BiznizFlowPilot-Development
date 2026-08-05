@@ -1,5 +1,7 @@
 """Schemas for the per-user email account/inbox endpoints."""
 
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
@@ -94,3 +96,17 @@ class EmailMessageFlagsUpdate(BaseModel):
         if self.is_starred is None and self.is_read is None:
             raise ValueError("At least one of is_starred or is_read must be provided.")
         return self
+
+
+class EmailDisplayPrefsResponse(BaseModel):
+    theme: str
+    background: str | None
+
+
+class EmailDisplayPrefsUpdate(BaseModel):
+    """Full-replace, not a partial patch - both fields are required so
+    background: null is unambiguous ("no background"), not confusable with
+    "leave unchanged"."""
+
+    theme: Literal["light", "dark"]
+    background: str | None

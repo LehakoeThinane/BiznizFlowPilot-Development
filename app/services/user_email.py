@@ -88,6 +88,35 @@ class UserEmailAccountService:
             return False
         return self.repo.delete(business_id, account.id)
 
+    def get_display_prefs(self, business_id: UUID, user_id: UUID) -> tuple[str, str | None]:
+        """Email-page-scoped display prefs (theme, background) - independent
+        of whether a mailbox is actually connected. Returns the default
+        ("dark", None) if no account row exists at all yet."""
+        account = self.get_account(business_id, user_id)
+        if account is None:
+            return "dark", None
+        return account.email_theme, account.email_background
+
+    def set_display_prefs(
+        self, business_id: UUID, user_id: UUID, theme: str, background: str | None,
+    ) -> tuple[str, str | None]:
+        """Full-replace the display-pref columns - creates a bare prefs-only
+        row if none exists yet, and never touches IMAP/SMTP fields on an
+        existing row. background=None unambiguously means "no background"
+        (this is PUT semantics, not a partial patch)."""
+        account = self.get_account(business_id, user_id)
+        if account is None:
+            account = self.repo.create(
+                business_id=business_id, user_id=user_id,
+                email_theme=theme, email_background=background,
+            )
+        else:
+            account.email_theme = theme
+            account.email_background = background
+            self.db.commit()
+            self.db.refresh(account)
+        return account.email_theme, account.email_background
+
     def list_folders(self, business_id: UUID, user_id: UUID) -> list[imap_client.FolderInfo]:
         account = self._require_account_with_imap(business_id, user_id)
         password = decrypt_secret(account.imap_password_encrypted)

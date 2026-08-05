@@ -1058,3 +1058,13 @@ export interface EmailFolderResponse {
 export interface EmailFolderListResponse {
   items: EmailFolderResponse[];
 }
+
+export interface EmailDisplayPrefsResponse {
+  theme: string;
+  background: string | null;
+}
+
+export interface EmailDisplayPrefsUpdate {
+  theme: "light" | "dark";
+  background: string | null;
+}
