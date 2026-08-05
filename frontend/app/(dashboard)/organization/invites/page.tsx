@@ -5,12 +5,13 @@ import Link from "next/link";
 
 import { apiRequest } from "@/lib/api";
 import { useRequireRole } from "@/hooks/useRequireRole";
-import type { InvitationListResponse, OrganizationDomain, UserInvitation, UserRole } from "@/types/api";
+import { useUser } from "@/contexts/UserContext";
+import type { InvitationListResponse, Organization, UserInvitation, UserRole } from "@/types/api";
 
 const INPUT =
   "w-full rounded-md border border-[#333] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none placeholder:text-[#555] focus:ring-2 focus:ring-brand/50";
 
-const ROLE_OPTIONS: UserRole[] = ["staff", "manager", "owner", "it_admin"];
+const ALL_ROLE_OPTIONS: UserRole[] = ["staff", "manager", "owner", "it_admin"];
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
@@ -27,10 +28,18 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 export default function InvitesPage() {
-  const { allowed, checked } = useRequireRole(["it_admin"]);
+  const { allowed, checked } = useRequireRole(["owner", "manager", "it_admin"]);
+  const { user } = useUser();
+  const isItAdmin = user?.role === "it_admin";
+  // Only an owner or an existing IT Admin can mint another IT Admin invite
+  // (backend-enforced in InvitationService.create_invitation) - hide the
+  // option rather than let a manager pick it and get a 400.
+  const roleOptions = user?.role === "manager"
+    ? ALL_ROLE_OPTIONS.filter((r) => r !== "it_admin")
+    : ALL_ROLE_OPTIONS;
 
   const [invites, setInvites] = useState<UserInvitation[]>([]);
-  const [domains, setDomains] = useState<OrganizationDomain[]>([]);
+  const [domains, setDomains] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UserRole>("staff");
@@ -46,12 +55,12 @@ export default function InvitesPage() {
   async function load() {
     setLoading(true);
     try {
-      const [invitesRes, domainsRes] = await Promise.all([
+      const [invitesRes, orgRes] = await Promise.all([
         apiRequest<InvitationListResponse>("/api/v1/users/invites"),
-        apiRequest<OrganizationDomain[]>("/api/v1/org/domains"),
+        apiRequest<Organization>("/api/v1/org"),
       ]);
       setInvites(invitesRes.items);
-      setDomains(domainsRes);
+      setDomains(orgRes.domains);
     } finally {
       setLoading(false);
     }
@@ -91,14 +100,18 @@ export default function InvitesPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
-        <Link href="/organization" className="text-xs text-[#666] hover:text-[#aaa]">
-          ← Organization
-        </Link>
+        {isItAdmin && (
+          <Link href="/organization" className="text-xs text-[#666] hover:text-[#aaa]">
+            ← Organization
+          </Link>
+        )}
         <h1 className="mt-1 text-2xl font-semibold text-white">Invitations</h1>
         <p className="mt-1 text-sm text-[#888]">
-          Invite employees across every subsidiary in your organization. The invite is sent as a link to the
-          email address below — there&apos;s no SMS option, so the address must be one the person can actually
-          check.
+          {isItAdmin
+            ? "Invite employees across every subsidiary in your organization."
+            : "Invite employees into your business."}
+          {" "}The invite is sent as a link to the email address below — there&apos;s no SMS option, so the
+          address must be one the person can actually check.
         </p>
       </div>
 
@@ -117,7 +130,7 @@ export default function InvitesPage() {
             <p className="mt-1.5 text-xs text-[#666]">
               {domains.length > 0 ? (
                 <>
-                  Only addresses on {domains.map((d) => d.domain).join(", ")} can be invited. If they
+                  Only addresses on {domains.join(", ")} can be invited. If they
                   don&apos;t have a company mailbox yet, provision one first — a personal email won&apos;t be
                   accepted.
                 </>
@@ -132,7 +145,7 @@ export default function InvitesPage() {
           <div>
             <label className="mb-1.5 block text-sm font-medium text-[#aaa]">Role</label>
             <select className={INPUT} value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-              {ROLE_OPTIONS.map((r) => (
+              {roleOptions.map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>
