@@ -11,6 +11,7 @@ import type { CurrentPlatformAdmin } from "@/types/api";
 const NAV = [
   { label: "Overview", href: "/platform" },
   { label: "Organizations", href: "/platform/organizations" },
+  { label: "Users", href: "/platform/users" },
   { label: "Settings", href: "/platform/settings" },
 ];
 

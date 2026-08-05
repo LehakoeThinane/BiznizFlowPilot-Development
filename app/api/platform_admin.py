@@ -76,6 +76,26 @@ class UserAdminView(BaseModel):
     created_at: str
 
 
+class UserPlatformListItem(BaseModel):
+    id: str
+    business_id: str
+    business_name: str
+    organization_id: str
+    organization_name: str
+    email: str
+    full_name: str
+    role: str
+    is_active: bool
+    plan_tier: str
+    subscription_status: str
+    created_at: str
+
+
+class UserPlatformListResponse(BaseModel):
+    total: int
+    items: list[UserPlatformListItem]
+
+
 class EventAdminView(BaseModel):
     id: str
     business_id: str
@@ -233,6 +253,51 @@ def get_tenant(
             "events": event_count,
             "workflow_runs": run_count,
         },
+    )
+
+
+@router.get("/users", response_model=UserPlatformListResponse)
+def list_users(
+    _: Annotated[CurrentPlatformAdmin, Depends(get_current_platform_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> UserPlatformListResponse:
+    """Flat, cross-tenant list of every user - who they are, which company
+    they belong to, and whether that company is on a trial or a paid plan.
+    Same three-table join _org_to_admin_response already does per-org,
+    just flattened to one row per user instead of one row per org."""
+    total = db.query(func.count(User.id)).scalar() or 0
+
+    rows = (
+        db.query(User, Business, Organization)
+        .join(Business, Business.id == User.business_id)
+        .join(Organization, Organization.id == Business.organization_id)
+        .order_by(User.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return UserPlatformListResponse(
+        total=total,
+        items=[
+            UserPlatformListItem(
+                id=str(user.id),
+                business_id=str(business.id),
+                business_name=business.name,
+                organization_id=str(org.id),
+                organization_name=org.name,
+                email=user.email,
+                full_name=user.full_name,
+                role=user.role,
+                is_active=user.is_active,
+                plan_tier=org.plan_tier,
+                subscription_status=org.subscription_status,
+                created_at=user.created_at.isoformat(),
+            )
+            for user, business, org in rows
+        ],
     )
 
 
