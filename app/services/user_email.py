@@ -20,6 +20,11 @@ class EmailAccountNotConfiguredError(Exception):
     """Raised when the caller has no (or an incomplete) connected mailbox."""
 
 
+class FolderNotFoundError(Exception):
+    """Raised when a role key (sent/drafts/trash) can't be resolved to a
+    real folder on the caller's mailbox."""
+
+
 class UserEmailAccountService:
     def __init__(self, db: Session):
         self.db = db
@@ -83,15 +88,68 @@ class UserEmailAccountService:
             return False
         return self.repo.delete(business_id, account.id)
 
-    def list_inbox(self, business_id: UUID, user_id: UUID, limit: int = 50, offset: int = 0) -> list[MessageSummary]:
+    def list_folders(self, business_id: UUID, user_id: UUID) -> list[imap_client.FolderInfo]:
         account = self._require_account_with_imap(business_id, user_id)
         password = decrypt_secret(account.imap_password_encrypted)
-        return imap_client.list_messages(account.imap_host, account.imap_port, account.imap_username, password, limit, offset)
+        return imap_client.list_folders(account.imap_host, account.imap_port, account.imap_username, password)
 
-    def get_message(self, business_id: UUID, user_id: UUID, uid: str) -> MessageDetail:
+    def list_inbox(
+        self, business_id: UUID, user_id: UUID, limit: int = 50, offset: int = 0, folder: str = "inbox"
+    ) -> list[MessageSummary]:
         account = self._require_account_with_imap(business_id, user_id)
         password = decrypt_secret(account.imap_password_encrypted)
-        return imap_client.get_message(account.imap_host, account.imap_port, account.imap_username, password, uid)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        return imap_client.list_messages(
+            account.imap_host, account.imap_port, account.imap_username, password,
+            limit, offset, folder=real_folder, only_flagged=(folder == "starred"),
+        )
+
+    def get_message(self, business_id: UUID, user_id: UUID, uid: str, folder: str = "inbox") -> MessageDetail:
+        account = self._require_account_with_imap(business_id, user_id)
+        password = decrypt_secret(account.imap_password_encrypted)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        return imap_client.get_message(
+            account.imap_host, account.imap_port, account.imap_username, password, uid, folder=real_folder
+        )
+
+    def set_message_flags(
+        self, business_id: UUID, user_id: UUID, uid: str, folder: str = "inbox",
+        is_starred: bool | None = None, is_read: bool | None = None,
+    ) -> None:
+        account = self._require_account_with_imap(business_id, user_id)
+        password = decrypt_secret(account.imap_password_encrypted)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        imap_client.set_message_flags(
+            account.imap_host, account.imap_port, account.imap_username, password, uid,
+            folder=real_folder, is_starred=is_starred, is_read=is_read,
+        )
+
+    def archive_message(self, business_id: UUID, user_id: UUID, uid: str, folder: str = "inbox") -> str:
+        account = self._require_account_with_imap(business_id, user_id)
+        password = decrypt_secret(account.imap_password_encrypted)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        return imap_client.archive_message(
+            account.imap_host, account.imap_port, account.imap_username, password, uid, source_folder=real_folder
+        )
+
+    def delete_message(self, business_id: UUID, user_id: UUID, uid: str, folder: str = "inbox") -> None:
+        account = self._require_account_with_imap(business_id, user_id)
+        password = decrypt_secret(account.imap_password_encrypted)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        imap_client.delete_message(
+            account.imap_host, account.imap_port, account.imap_username, password, uid, source_folder=real_folder
+        )
+
+    def _resolve_folder_name(self, business_id: UUID, user_id: UUID, role_key: str) -> str:
+        """Map a role key (sent/drafts/trash/...) to this account's real
+        IMAP mailbox name. inbox/starred are handled by callers directly
+        (literal "INBOX", no round-trip needed) - this is only reached for
+        the roles that require a folder listing."""
+        folders = self.list_folders(business_id, user_id)
+        match = next((f for f in folders if f.role == role_key), None)
+        if match is None:
+            raise FolderNotFoundError(f"No folder with role {role_key!r} found on this mailbox.")
+        return match.name
 
     def send_message(
         self,

@@ -18,14 +18,17 @@ from app.integrations.imap_client import ImapAuthenticationError, ImapConnection
 from app.models.user_email import UserEmailAccount
 from app.schemas.auth import CurrentUser
 from app.schemas.user_email import (
+    EmailFolderListResponse,
+    EmailFolderResponse,
     EmailListResponse,
     EmailMessageDetail,
+    EmailMessageFlagsUpdate,
     EmailMessageSummary,
     EmailSendRequest,
     UserEmailAccountResponse,
     UserEmailAccountUpdate,
 )
-from app.services.user_email import EmailAccountNotConfiguredError, UserEmailAccountService
+from app.services.user_email import EmailAccountNotConfiguredError, FolderNotFoundError, UserEmailAccountService
 from app.workflow_engine.email_provider import RetryableEmailProviderError, TerminalEmailProviderError
 
 router = APIRouter(
@@ -117,24 +120,45 @@ def delete_email_account(
     service.delete_account(current_user.business_id, current_user.user_id)
 
 
+@router.get("/folders", response_model=EmailFolderListResponse)
+def list_email_folders(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmailFolderListResponse:
+    service = UserEmailAccountService(db)
+    try:
+        folders = service.list_folders(current_user.business_id, current_user.user_id)
+    except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (ImapAuthenticationError, ImapConnectionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return EmailFolderListResponse(
+        items=[EmailFolderResponse(name=f.name, role=f.role) for f in folders]
+    )
+
+
 @router.get("/messages", response_model=EmailListResponse)
 def list_email_messages(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    folder: str = Query("inbox"),
 ) -> EmailListResponse:
     service = UserEmailAccountService(db)
     try:
-        messages = service.list_inbox(current_user.business_id, current_user.user_id, limit, offset)
+        messages = service.list_inbox(current_user.business_id, current_user.user_id, limit, offset, folder=folder)
     except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FolderNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except (ImapAuthenticationError, ImapConnectionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     return EmailListResponse(
         items=[
             EmailMessageSummary(
-                uid=m.uid, from_address=m.from_address, subject=m.subject, date=m.date, is_read=m.is_read,
+                uid=m.uid, from_address=m.from_address, subject=m.subject, date=m.date,
+                is_read=m.is_read, is_starred=m.is_starred,
             )
             for m in messages
         ]
@@ -146,11 +170,14 @@ def get_email_message(
     uid: str,
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    folder: str = Query("inbox"),
 ) -> EmailMessageDetail:
     service = UserEmailAccountService(db)
     try:
-        message = service.get_message(current_user.business_id, current_user.user_id, uid)
+        message = service.get_message(current_user.business_id, current_user.user_id, uid, folder=folder)
     except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FolderNotFoundError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except (ImapAuthenticationError, ImapConnectionError) as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -159,7 +186,77 @@ def get_email_message(
     return EmailMessageDetail(
         uid=message.uid, from_address=message.from_address, to_address=message.to_address,
         subject=message.subject, date=message.date, body_html=message.body_html, body_text=message.body_text,
+        attachment_count=message.attachment_count,
+        attachments=[
+            {"filename": a.filename, "size": a.size, "content_type": a.content_type} for a in message.attachments
+        ],
     )
+
+
+@router.patch("/messages/{uid}/flags")
+def update_email_message_flags(
+    uid: str,
+    body: EmailMessageFlagsUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    folder: str = Query("inbox"),
+) -> dict:
+    service = UserEmailAccountService(db)
+    try:
+        service.set_message_flags(
+            current_user.business_id, current_user.user_id, uid, folder=folder,
+            is_starred=body.is_starred, is_read=body.is_read,
+        )
+    except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FolderNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (ImapAuthenticationError, ImapConnectionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ImapError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"updated": True}
+
+
+@router.post("/messages/{uid}/archive")
+def archive_email_message(
+    uid: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    folder: str = Query("inbox"),
+) -> dict:
+    service = UserEmailAccountService(db)
+    try:
+        resolved = service.archive_message(current_user.business_id, current_user.user_id, uid, folder=folder)
+    except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FolderNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (ImapAuthenticationError, ImapConnectionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ImapError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    return {"archived": True, "folder": resolved}
+
+
+@router.delete("/messages/{uid}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_email_message(
+    uid: str,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    folder: str = Query("inbox"),
+):
+    service = UserEmailAccountService(db)
+    try:
+        service.delete_message(current_user.business_id, current_user.user_id, uid, folder=folder)
+    except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FolderNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (ImapAuthenticationError, ImapConnectionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ImapError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @router.post("/send")

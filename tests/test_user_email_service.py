@@ -8,9 +8,10 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_secret
+from app.integrations.imap_client import FolderInfo
 from app.models.business import Business
 from app.models.organization import Organization
-from app.services.user_email import EmailAccountNotConfiguredError, UserEmailAccountService
+from app.services.user_email import EmailAccountNotConfiguredError, FolderNotFoundError, UserEmailAccountService
 
 
 def _make_business(test_db: Session) -> Business:
@@ -177,3 +178,165 @@ class TestSendMessage:
         )
         service.send_message(business.id, user_id, "to@example.com", "Hello", "Body")
         assert captured.get("ssl") is True
+
+
+def _connect_account(service: UserEmailAccountService, business_id, user_id) -> None:
+    service.set_account(
+        business_id, user_id,
+        imap_host="imap.example.com", imap_port=993, imap_username="me@example.com",
+        imap_password="secret",
+        smtp_host="smtp.example.com", smtp_port=587, smtp_username="me@example.com",
+        smtp_password="secret", smtp_from_email="me@example.com", smtp_from_name="Me",
+    )
+
+
+class TestListFolders:
+    def test_raises_when_not_configured(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        with pytest.raises(EmailAccountNotConfiguredError):
+            service.list_folders(business.id, uuid4())
+
+    def test_delegates_to_imap_client(self, test_db: Session, monkeypatch):
+        captured = {}
+
+        def _fake_list_folders(host, port, username, password):
+            captured["args"] = (host, port, username, password)
+            return [FolderInfo(name="Sent", delimiter="/", attributes=["\\Sent"], role="sent")]
+
+        monkeypatch.setattr("app.services.user_email.imap_client.list_folders", _fake_list_folders)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        folders = service.list_folders(business.id, user_id)
+        assert folders[0].role == "sent"
+        assert captured["args"][2] == "me@example.com"
+
+
+class TestListInboxFolder:
+    def test_inbox_and_starred_skip_folder_resolution(self, test_db: Session, monkeypatch):
+        captured = {}
+
+        def _fake_list_messages(host, port, username, password, limit, offset, folder, only_flagged):
+            captured["folder"] = folder
+            captured["only_flagged"] = only_flagged
+            return []
+
+        monkeypatch.setattr("app.services.user_email.imap_client.list_messages", _fake_list_messages)
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.list_folders",
+            lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not resolve folders for inbox/starred")),
+        )
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        service.list_inbox(business.id, user_id, folder="starred")
+        assert captured["folder"] == "INBOX"
+        assert captured["only_flagged"] is True
+
+    def test_other_folder_resolves_via_list_folders(self, test_db: Session, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.list_folders",
+            lambda *a, **k: [FolderInfo(name="Sent Items", delimiter="/", attributes=[], role="sent")],
+        )
+        captured = {}
+
+        def _fake_list_messages(host, port, username, password, limit, offset, folder, only_flagged):
+            captured["folder"] = folder
+            return []
+
+        monkeypatch.setattr("app.services.user_email.imap_client.list_messages", _fake_list_messages)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        service.list_inbox(business.id, user_id, folder="sent")
+        assert captured["folder"] == "Sent Items"
+
+    def test_unresolvable_folder_raises(self, test_db: Session, monkeypatch):
+        monkeypatch.setattr("app.services.user_email.imap_client.list_folders", lambda *a, **k: [])
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        with pytest.raises(FolderNotFoundError):
+            service.list_inbox(business.id, user_id, folder="sent")
+
+
+class TestSetMessageFlagsService:
+    def test_raises_when_not_configured(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        with pytest.raises(EmailAccountNotConfiguredError):
+            service.set_message_flags(business.id, uuid4(), "5", is_starred=True)
+
+    def test_delegates_to_imap_client(self, test_db: Session, monkeypatch):
+        captured = {}
+
+        def _fake_set_flags(host, port, username, password, uid, folder, is_starred, is_read):
+            captured.update(uid=uid, folder=folder, is_starred=is_starred, is_read=is_read)
+
+        monkeypatch.setattr("app.services.user_email.imap_client.set_message_flags", _fake_set_flags)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        service.set_message_flags(business.id, user_id, "5", is_starred=True)
+        assert captured == {"uid": "5", "folder": "INBOX", "is_starred": True, "is_read": None}
+
+
+class TestArchiveMessageService:
+    def test_raises_when_not_configured(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        with pytest.raises(EmailAccountNotConfiguredError):
+            service.archive_message(business.id, uuid4(), "5")
+
+    def test_delegates_to_imap_client(self, test_db: Session, monkeypatch):
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.archive_message",
+            lambda host, port, username, password, uid, source_folder: "Archive",
+        )
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        assert service.archive_message(business.id, user_id, "5") == "Archive"
+
+
+class TestDeleteMessageService:
+    def test_raises_when_not_configured(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        with pytest.raises(EmailAccountNotConfiguredError):
+            service.delete_message(business.id, uuid4(), "5")
+
+    def test_delegates_to_imap_client(self, test_db: Session, monkeypatch):
+        captured = {}
+
+        def _fake_delete(host, port, username, password, uid, source_folder):
+            captured.update(uid=uid, source_folder=source_folder)
+
+        monkeypatch.setattr("app.services.user_email.imap_client.delete_message", _fake_delete)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        service.delete_message(business.id, user_id, "5")
+        assert captured == {"uid": "5", "source_folder": "INBOX"}
