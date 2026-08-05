@@ -1,6 +1,6 @@
 """Schemas for the per-user email account/inbox endpoints."""
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class UserEmailAccountUpdate(BaseModel):
@@ -45,6 +45,13 @@ class EmailMessageSummary(BaseModel):
     subject: str
     date: str | None
     is_read: bool
+    is_starred: bool = False
+
+
+class EmailAttachmentInfo(BaseModel):
+    filename: str
+    size: int
+    content_type: str
 
 
 class EmailMessageDetail(BaseModel):
@@ -55,6 +62,8 @@ class EmailMessageDetail(BaseModel):
     date: str | None
     body_html: str | None
     body_text: str | None
+    attachment_count: int = 0
+    attachments: list[EmailAttachmentInfo] = Field(default_factory=list)
 
 
 class EmailListResponse(BaseModel):
@@ -65,3 +74,23 @@ class EmailSendRequest(BaseModel):
     to: EmailStr
     subject: str = Field(..., min_length=1, max_length=500)
     body: str = Field(..., min_length=1)
+
+
+class EmailFolderResponse(BaseModel):
+    name: str
+    role: str | None
+
+
+class EmailFolderListResponse(BaseModel):
+    items: list[EmailFolderResponse]
+
+
+class EmailMessageFlagsUpdate(BaseModel):
+    is_starred: bool | None = None
+    is_read: bool | None = None
+
+    @model_validator(mode="after")
+    def _require_at_least_one_flag(self) -> "EmailMessageFlagsUpdate":
+        if self.is_starred is None and self.is_read is None:
+            raise ValueError("At least one of is_starred or is_read must be provided.")
+        return self

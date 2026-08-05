@@ -7,7 +7,14 @@ from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_secret
 from app.core.security import create_access_token
-from app.integrations.imap_client import ImapAuthenticationError, ImapConnectionError, MessageDetail, MessageSummary
+from app.integrations.imap_client import (
+    FolderInfo,
+    ImapAuthenticationError,
+    ImapConnectionError,
+    MessageDetail,
+    MessageSummary,
+    NoArchiveFolderError,
+)
 from app.models.user_email import UserEmailAccount
 from app.schemas.auth import CurrentUser
 
@@ -145,7 +152,7 @@ class TestMessages:
 
         monkeypatch.setattr(
             "app.services.user_email.imap_client.list_messages",
-            lambda host, port, username, password, limit, offset: [
+            lambda host, port, username, password, limit, offset, folder, only_flagged: [
                 MessageSummary(uid="1", from_address="a@example.com", subject="Hi", date=None, is_read=False),
             ],
         )
@@ -162,7 +169,7 @@ class TestMessages:
 
         monkeypatch.setattr(
             "app.services.user_email.imap_client.get_message",
-            lambda host, port, username, password, uid: MessageDetail(
+            lambda host, port, username, password, uid, folder: MessageDetail(
                 uid=uid, from_address="a@example.com", to_address="me@example.com",
                 subject="Hi", date=None, body_html=None, body_text="Body",
             ),
@@ -220,3 +227,116 @@ class TestSend:
         assert r.status_code == 200
         assert r.json()["sent"] is True
         assert len(_FakeSMTP.sent_messages) == 1
+
+
+def _connect(client, owner_user, monkeypatch):
+    monkeypatch.setattr(
+        "app.api.user_email.imap_client.list_messages",
+        lambda host, port, username, password, limit=1: [],
+    )
+    client.put("/api/v1/email-account", headers=_auth_headers(owner_user), json=_connect_body())
+
+
+class TestFolders:
+    def test_requires_configured_account(self, client, owner_user):
+        r = client.get("/api/v1/email-account/folders", headers=_auth_headers(owner_user))
+        assert r.status_code == 404
+
+    def test_happy_path(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.list_folders",
+            lambda host, port, username, password: [
+                FolderInfo(name="INBOX", delimiter="/", attributes=[], role="inbox"),
+                FolderInfo(name="Sent", delimiter="/", attributes=["\\Sent"], role="sent"),
+            ],
+        )
+        r = client.get("/api/v1/email-account/folders", headers=_auth_headers(owner_user))
+        assert r.status_code == 200
+        items = r.json()["items"]
+        assert {"name": "Sent", "role": "sent"} in items
+
+
+class TestMessageFlags:
+    def test_requires_configured_account(self, client, owner_user):
+        r = client.patch(
+            "/api/v1/email-account/messages/1/flags", headers=_auth_headers(owner_user), json={"is_starred": True},
+        )
+        assert r.status_code == 404
+
+    def test_rejects_body_with_no_flags(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+        r = client.patch(
+            "/api/v1/email-account/messages/1/flags", headers=_auth_headers(owner_user), json={},
+        )
+        assert r.status_code == 422
+
+    def test_star_only(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+        captured = {}
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.set_message_flags",
+            lambda host, port, username, password, uid, folder, is_starred, is_read: captured.update(
+                is_starred=is_starred, is_read=is_read
+            ),
+        )
+        r = client.patch(
+            "/api/v1/email-account/messages/1/flags", headers=_auth_headers(owner_user), json={"is_starred": True},
+        )
+        assert r.status_code == 200
+        assert captured == {"is_starred": True, "is_read": None}
+
+    def test_both_flags(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+        captured = {}
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.set_message_flags",
+            lambda host, port, username, password, uid, folder, is_starred, is_read: captured.update(
+                is_starred=is_starred, is_read=is_read
+            ),
+        )
+        r = client.patch(
+            "/api/v1/email-account/messages/1/flags", headers=_auth_headers(owner_user),
+            json={"is_starred": False, "is_read": True},
+        )
+        assert r.status_code == 200
+        assert captured == {"is_starred": False, "is_read": True}
+
+
+class TestArchiveAndDelete:
+    def test_archive_requires_configured_account(self, client, owner_user):
+        r = client.post("/api/v1/email-account/messages/1/archive", headers=_auth_headers(owner_user))
+        assert r.status_code == 404
+
+    def test_archive_happy_path(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.archive_message",
+            lambda host, port, username, password, uid, source_folder: "Archive",
+        )
+        r = client.post("/api/v1/email-account/messages/1/archive", headers=_auth_headers(owner_user))
+        assert r.status_code == 200
+        assert r.json() == {"archived": True, "folder": "Archive"}
+
+    def test_archive_no_archive_folder_is_404(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+
+        def _raise(*args, **kwargs):
+            raise NoArchiveFolderError("No Archive folder found on this mailbox.")
+
+        monkeypatch.setattr("app.services.user_email.imap_client.archive_message", _raise)
+        r = client.post("/api/v1/email-account/messages/1/archive", headers=_auth_headers(owner_user))
+        assert r.status_code == 404
+
+    def test_delete_requires_configured_account(self, client, owner_user):
+        r = client.delete("/api/v1/email-account/messages/1", headers=_auth_headers(owner_user))
+        assert r.status_code == 404
+
+    def test_delete_happy_path(self, client, owner_user, monkeypatch):
+        _connect(client, owner_user, monkeypatch)
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.delete_message",
+            lambda host, port, username, password, uid, source_folder: None,
+        )
+        r = client.delete("/api/v1/email-account/messages/1", headers=_auth_headers(owner_user))
+        assert r.status_code == 204

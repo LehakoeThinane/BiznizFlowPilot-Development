@@ -4,15 +4,30 @@ import DOMPurify from "dompurify";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
 import { apiRequest } from "@/lib/api";
-import { ComposeModal } from "@/components/email/ComposeModal";
-import type { EmailListResponse, EmailMessageDetail, EmailMessageSummary, UserEmailAccount } from "@/types/api";
+import { ComposeDraft, ComposePanel } from "@/components/email/ComposePanel";
+import { EmailFolder, EmailSidebar } from "@/components/email/EmailSidebar";
+import { EmailMessageRow } from "@/components/email/EmailMessageRow";
+import type {
+  EmailFolderListResponse,
+  EmailListResponse,
+  EmailMessageDetail,
+  EmailMessageSummary,
+  UserEmailAccount,
+} from "@/types/api";
 
-const INPUT =
-  "w-full rounded-md border border-[#333] bg-[#0f0f0f] px-3 py-2 text-sm text-white outline-none placeholder:text-[#555] focus:ring-2 focus:ring-brand/50";
+const EMPTY_DRAFT: ComposeDraft = { to: "", subject: "", body: "" };
+
+const ROLE_DISPLAY: Record<string, { label: string; icon: string }> = {
+  sent: { label: "Sent", icon: "send" },
+  drafts: { label: "Drafts", icon: "draft" },
+  trash: { label: "Trash", icon: "delete" },
+};
+
+const INPUT = "erp-input w-full px-3 py-2 text-sm";
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-[#222] bg-[#141414] p-6">
+    <div className="erp-panel p-6">
       <h2 className="mb-5 text-base font-semibold text-white">{title}</h2>
       {children}
     </div>
@@ -22,7 +37,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-[#aaa]">{label}</label>
+      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-400">{label}</label>
       {children}
     </div>
   );
@@ -63,13 +78,16 @@ export default function EmailPage() {
   const [savingAccount, setSavingAccount] = useState(false);
   const [accountMsg, setAccountMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  const [activeFolder, setActiveFolder] = useState("inbox");
+  const [remoteFolders, setRemoteFolders] = useState<EmailFolderListResponse["items"]>([]);
   const [messages, setMessages] = useState<EmailMessageSummary[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [inboxError, setInboxError] = useState<string | null>(null);
   const [selectedUid, setSelectedUid] = useState<string | null>(null);
   const [selectedMessage, setSelectedMessage] = useState<EmailMessageDetail | null>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [showCompose, setShowCompose] = useState(false);
+  const [composeState, setComposeState] = useState<"closed" | "open" | "minimized">("closed");
+  const [composeDraft, setComposeDraft] = useState<ComposeDraft>(EMPTY_DRAFT);
 
   const isConnected = !!account?.imap_host;
 
@@ -94,14 +112,25 @@ export default function EmailPage() {
     loadAccount().finally(() => setLoadingAccount(false));
   }, [loadAccount]);
 
+  const loadFolders = useCallback(() => {
+    return apiRequest<EmailFolderListResponse>("/api/v1/email-account/folders")
+      .then((data) => setRemoteFolders(data.items ?? []))
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    if (!isConnected) return;
+    void loadFolders();
+  }, [isConnected, loadFolders]);
+
   const loadMessages = useCallback(() => {
-    return apiRequest<EmailListResponse>("/api/v1/email-account/messages")
+    return apiRequest<EmailListResponse>(`/api/v1/email-account/messages?folder=${encodeURIComponent(activeFolder)}`)
       .then((data) => {
         setMessages(data.items ?? []);
         setInboxError(null);
       })
       .catch((err) => setInboxError(err instanceof Error ? err.message : "Failed to load inbox."));
-  }, []);
+  }, [activeFolder]);
 
   useEffect(() => {
     if (!isConnected) return;
@@ -115,11 +144,55 @@ export default function EmailPage() {
     if (!selectedUid) return;
     setLoadingDetail(true);
     setSelectedMessage(null);
-    apiRequest<EmailMessageDetail>(`/api/v1/email-account/messages/${encodeURIComponent(selectedUid)}`)
+    apiRequest<EmailMessageDetail>(
+      `/api/v1/email-account/messages/${encodeURIComponent(selectedUid)}?folder=${encodeURIComponent(activeFolder)}`
+    )
       .then(setSelectedMessage)
       .catch((err) => setInboxError(err instanceof Error ? err.message : "Failed to load message."))
       .finally(() => setLoadingDetail(false));
-  }, [selectedUid]);
+  }, [selectedUid, activeFolder]);
+
+  function selectFolder(key: string) {
+    setActiveFolder(key);
+    setSelectedUid(null);
+    setSelectedMessage(null);
+  }
+
+  async function handleToggleStar(uid: string, starred: boolean) {
+    setMessages((prev) => prev.map((m) => (m.uid === uid ? { ...m, is_starred: starred } : m)));
+    try {
+      await apiRequest(`/api/v1/email-account/messages/${encodeURIComponent(uid)}/flags?folder=${encodeURIComponent(activeFolder)}`, {
+        method: "PATCH", body: { is_starred: starred },
+      });
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : "Failed to update star.");
+      void loadMessages();
+    }
+  }
+
+  async function handleArchive(uid: string) {
+    try {
+      await apiRequest(`/api/v1/email-account/messages/${encodeURIComponent(uid)}/archive?folder=${encodeURIComponent(activeFolder)}`, {
+        method: "POST",
+      });
+      setMessages((prev) => prev.filter((m) => m.uid !== uid));
+      if (selectedUid === uid) { setSelectedUid(null); setSelectedMessage(null); }
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : "Failed to archive message.");
+    }
+  }
+
+  async function handleDelete(uid: string) {
+    try {
+      await apiRequest(`/api/v1/email-account/messages/${encodeURIComponent(uid)}?folder=${encodeURIComponent(activeFolder)}`, {
+        method: "DELETE",
+      });
+      setMessages((prev) => prev.filter((m) => m.uid !== uid));
+      if (selectedUid === uid) { setSelectedUid(null); setSelectedMessage(null); }
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : "Failed to delete message.");
+    }
+  }
 
   async function handleConnect(e: FormEvent) {
     e.preventDefault();
@@ -169,8 +242,21 @@ export default function EmailPage() {
     await apiRequest("/api/v1/email-account/send", { method: "POST", body: { to, subject, body } });
   }
 
+  function openCompose() {
+    setComposeState("open");
+  }
+
+  function closeCompose() {
+    setComposeState("closed");
+    setComposeDraft(EMPTY_DRAFT);
+  }
+
+  function updateComposeDraft(patch: Partial<ComposeDraft>) {
+    setComposeDraft((d) => ({ ...d, ...patch }));
+  }
+
   if (loadingAccount) {
-    return <div className="p-6 text-sm text-[#888]">Loading…</div>;
+    return <div className="p-6 text-sm text-slate-400">Loading…</div>;
   }
 
   if (!isConnected) {
@@ -178,7 +264,7 @@ export default function EmailPage() {
       <div className="mx-auto max-w-2xl space-y-6 p-6">
         <div>
           <h1 className="text-2xl font-semibold text-white">Email</h1>
-          <p className="mt-1 text-sm text-[#888]">Connect your own work mailbox to read and send email from here.</p>
+          <p className="mt-1 text-sm text-slate-400">Connect your own work mailbox to read and send email from here.</p>
         </div>
 
         <form onSubmit={handleConnect} className="space-y-6">
@@ -255,15 +341,29 @@ export default function EmailPage() {
     );
   }
 
+  const unreadCount = messages.filter((m) => !m.is_read).length;
+  const folders: EmailFolder[] = [
+    { key: "inbox", label: "Inbox", icon: "inbox", count: activeFolder === "inbox" ? unreadCount : undefined },
+    { key: "starred", label: "Starred", icon: "star" },
+    ...Object.entries(ROLE_DISPLAY)
+      .filter(([role]) => remoteFolders.some((f) => f.role === role))
+      .map(([role, disp]) => ({ key: role, label: disp.label, icon: disp.icon })),
+  ];
+  const activeLabel = folders.find((f) => f.key === activeFolder)?.label ?? "Inbox";
+
   return (
     <div className="flex h-[calc(100vh-6.5rem)] gap-4 p-6">
+      <EmailSidebar
+        folders={folders}
+        activeFolder={activeFolder}
+        onSelectFolder={selectFolder}
+        onCompose={openCompose}
+        onDisconnect={handleDisconnect}
+      />
+
       <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
-        <div className="flex items-center justify-between border-b border-outline-variant px-4 py-3">
-          <h2 className="text-sm font-semibold text-white">Inbox</h2>
-          <button type="button" onClick={() => setShowCompose(true)}
-            className="rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white">
-            Compose
-          </button>
+        <div className="border-b border-outline-variant px-4 py-3">
+          <h2 className="text-sm font-semibold text-white">{activeLabel}</h2>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loadingMessages && messages.length === 0 && (
@@ -273,30 +373,16 @@ export default function EmailPage() {
             <p className="p-4 text-sm text-slate-400">No messages.</p>
           )}
           {messages.map((m) => (
-            <button
+            <EmailMessageRow
               key={m.uid}
-              type="button"
-              onClick={() => setSelectedUid(m.uid)}
-              className={`block w-full border-b border-outline-variant/50 px-4 py-3 text-left hover:bg-white/5 ${
-                selectedUid === m.uid ? "bg-white/10" : ""
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <p className={`truncate text-sm ${m.is_read ? "text-slate-300" : "font-semibold text-white"}`}>
-                  {m.from_address}
-                </p>
-                <span className="shrink-0 text-[11px] text-slate-500">{formatDate(m.date)}</span>
-              </div>
-              <p className={`mt-0.5 truncate text-xs ${m.is_read ? "text-slate-500" : "text-slate-300"}`}>
-                {m.subject || "(no subject)"}
-              </p>
-            </button>
+              message={m}
+              selected={selectedUid === m.uid}
+              onSelect={setSelectedUid}
+              onToggleStar={handleToggleStar}
+              onArchive={handleArchive}
+              onDelete={handleDelete}
+            />
           ))}
-        </div>
-        <div className="border-t border-outline-variant px-4 py-3">
-          <button type="button" onClick={handleDisconnect} className="text-xs text-rose-400 hover:text-rose-300">
-            Disconnect mailbox
-          </button>
         </div>
       </div>
 
@@ -320,6 +406,20 @@ export default function EmailPage() {
             <p className="mt-1 text-sm text-slate-400">From: {selectedMessage.from_address}</p>
             <p className="text-sm text-slate-400">To: {selectedMessage.to_address}</p>
             <p className="text-xs text-slate-500">{formatDate(selectedMessage.date)}</p>
+            {selectedMessage.attachments.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {selectedMessage.attachments.map((a, i) => (
+                  <span
+                    key={i}
+                    className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-white/5 px-2.5 py-1 text-xs text-slate-300"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">attach_file</span>
+                    {a.filename}
+                    <span className="text-slate-500">({Math.max(1, Math.round(a.size / 1024))} KB)</span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="mt-4 border-t border-outline-variant/50 pt-4 text-sm text-slate-200">
               {selectedMessage.body_html ? (
                 <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedMessage.body_html) }} />
@@ -331,7 +431,17 @@ export default function EmailPage() {
         )}
       </div>
 
-      {showCompose && <ComposeModal onSend={handleSend} onClose={() => setShowCompose(false)} />}
+      {composeState !== "closed" && (
+        <ComposePanel
+          state={composeState}
+          draft={composeDraft}
+          onDraftChange={updateComposeDraft}
+          onMinimize={() => setComposeState("minimized")}
+          onExpand={() => setComposeState("open")}
+          onClose={closeCompose}
+          onSend={handleSend}
+        />
+      )}
     </div>
   );
 }

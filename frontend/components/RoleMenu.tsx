@@ -38,6 +38,13 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["owner", "manager", "staff", "it_admin"],
   },
   {
+    label: "Invite Team",
+    icon: "person_add",
+    href: "/organization/invites",
+    matches: ["/organization/invites"],
+    roles: ["owner", "manager"],
+  },
+  {
     label: "Calendar",
     icon: "calendar_month",
     href: "/calendar",

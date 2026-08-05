@@ -1025,6 +1025,13 @@ export interface EmailMessageSummary {
   subject: string;
   date: string | null;
   is_read: boolean;
+  is_starred: boolean;
+}
+
+export interface EmailAttachmentInfo {
+  filename: string;
+  size: number;
+  content_type: string;
 }
 
 export interface EmailMessageDetail {
@@ -1035,8 +1042,19 @@ export interface EmailMessageDetail {
   date: string | null;
   body_html: string | null;
   body_text: string | null;
+  attachment_count: number;
+  attachments: EmailAttachmentInfo[];
 }
 
 export interface EmailListResponse {
   items: EmailMessageSummary[];
+}
+
+export interface EmailFolderResponse {
+  name: string;
+  role: string | null;
+}
+
+export interface EmailFolderListResponse {
+  items: EmailFolderResponse[];
 }
