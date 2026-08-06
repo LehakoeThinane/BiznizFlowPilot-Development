@@ -9,12 +9,14 @@ import imaplib
 import pytest
 
 from app.integrations.imap_client import (
+    AttachmentNotFoundError,
     ImapAuthenticationError,
     ImapConnectionError,
     ImapError,
     NoArchiveFolderError,
     archive_message,
     delete_message,
+    get_attachment_content,
     get_message,
     list_folders,
     list_messages,
@@ -331,3 +333,45 @@ class TestAttachments:
         detail = get_message("imap.example.com", 993, "user", "pass", "8")
         assert detail.attachment_count == 0
         assert detail.attachments == []
+
+
+class TestGetAttachmentContent:
+    def test_returns_matching_part_bytes(self):
+        _FakeImap4.fetch_responses = {
+            "7": (
+                b"1 (UID 7 RFC822 {1})",
+                b'Content-Type: multipart/mixed; boundary="B"\r\n'
+                b"From: a@example.com\r\nTo: me@example.com\r\nSubject: Report\r\nDate: \r\n\r\n"
+                b"--B\r\n"
+                b"Content-Type: text/plain\r\n\r\n"
+                b"Body text.\r\n"
+                b"--B\r\n"
+                b'Content-Type: application/pdf\r\nContent-Disposition: attachment; filename="report.pdf"\r\n\r\n'
+                b"PDFDATA"
+                b"\r\n--B--\r\n",
+            )
+        }
+        filename, content_type, content = get_attachment_content("imap.example.com", 993, "user", "pass", "7", 0)
+        assert filename == "report.pdf"
+        assert content_type == "application/pdf"
+        assert content == b"PDFDATA"
+
+    def test_out_of_range_index_raises(self):
+        _FakeImap4.fetch_responses = {
+            "7": (
+                b"1 (UID 7 RFC822 {1})",
+                b'Content-Type: multipart/mixed; boundary="B"\r\n'
+                b"From: a@example.com\r\nTo: me@example.com\r\nSubject: Report\r\nDate: \r\n\r\n"
+                b"--B\r\n"
+                b'Content-Type: application/pdf\r\nContent-Disposition: attachment; filename="report.pdf"\r\n\r\n'
+                b"PDFDATA"
+                b"\r\n--B--\r\n",
+            )
+        }
+        with pytest.raises(AttachmentNotFoundError):
+            get_attachment_content("imap.example.com", 993, "user", "pass", "7", 3)
+
+    def test_missing_message_raises_imap_error(self):
+        _FakeImap4.fetch_responses = {}
+        with pytest.raises(ImapError):
+            get_attachment_content("imap.example.com", 993, "user", "pass", "999", 0)

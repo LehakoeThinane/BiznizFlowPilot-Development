@@ -72,13 +72,6 @@ class EmailListResponse(BaseModel):
     items: list[EmailMessageSummary]
 
 
-class EmailSendRequest(BaseModel):
-    to: EmailStr
-    subject: str = Field(..., min_length=1, max_length=500)
-    body: str = Field(..., min_length=1)
-    cc: list[EmailStr] = Field(default_factory=list)
-
-
 class EmailFolderResponse(BaseModel):
     name: str
     role: str | None

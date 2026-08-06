@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.crypto import decrypt_secret
 from app.core.security import create_access_token
 from app.integrations.imap_client import (
+    AttachmentNotFoundError,
     FolderInfo,
     ImapAuthenticationError,
     ImapConnectionError,
@@ -183,7 +184,7 @@ class TestSend:
     def test_send_requires_configured_account(self, client, owner_user):
         r = client.post(
             "/api/v1/email-account/send", headers=_auth_headers(owner_user),
-            json={"to": "to@example.com", "subject": "Hi", "body": "Body"},
+            data={"to": "to@example.com", "subject": "Hi", "body": "Body"},
         )
         assert r.status_code == 404
 
@@ -222,11 +223,70 @@ class TestSend:
 
         r = client.post(
             "/api/v1/email-account/send", headers=_auth_headers(owner_user),
-            json={"to": "to@example.com", "subject": "Hi", "body": "Body"},
+            data={"to": "to@example.com", "subject": "Hi", "body": "Body"},
         )
         assert r.status_code == 200
         assert r.json()["sent"] is True
         assert len(_FakeSMTP.sent_messages) == 1
+
+    def test_send_with_attachment(self, client, owner_user, monkeypatch):
+        class _FakeSMTP:
+            sent_messages: list = []
+
+            def __init__(self, host, port, timeout=None):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def ehlo(self):
+                pass
+
+            def starttls(self, context=None):
+                pass
+
+            def login(self, username, password):
+                pass
+
+            def send_message(self, message):
+                _FakeSMTP.sent_messages.append(message)
+                return {}
+
+        monkeypatch.setattr("smtplib.SMTP", _FakeSMTP)
+        monkeypatch.setattr(
+            "app.api.user_email.imap_client.list_messages",
+            lambda host, port, username, password, limit=1: [],
+        )
+        client.put("/api/v1/email-account", headers=_auth_headers(owner_user), json=_connect_body())
+
+        r = client.post(
+            "/api/v1/email-account/send", headers=_auth_headers(owner_user),
+            data={"to": "to@example.com", "subject": "Hi", "body": "Body"},
+            files={"attachments": ("note.txt", b"hello world", "text/plain")},
+        )
+        assert r.status_code == 200
+        sent = _FakeSMTP.sent_messages[0]
+        assert sent.is_multipart()
+        filenames = [part.get_filename() for part in sent.walk() if part.get_filename()]
+        assert "note.txt" in filenames
+
+    def test_send_rejects_oversized_attachment(self, client, owner_user, monkeypatch):
+        monkeypatch.setattr(
+            "app.api.user_email.imap_client.list_messages",
+            lambda host, port, username, password, limit=1: [],
+        )
+        client.put("/api/v1/email-account", headers=_auth_headers(owner_user), json=_connect_body())
+
+        oversized = b"x" * (20 * 1024 * 1024 + 1)
+        r = client.post(
+            "/api/v1/email-account/send", headers=_auth_headers(owner_user),
+            data={"to": "to@example.com", "subject": "Hi", "body": "Body"},
+            files={"attachments": ("big.bin", oversized, "application/octet-stream")},
+        )
+        assert r.status_code == 400
 
     def test_send_with_cc(self, client, owner_user, monkeypatch):
         class _FakeSMTP:
@@ -263,10 +323,46 @@ class TestSend:
 
         r = client.post(
             "/api/v1/email-account/send", headers=_auth_headers(owner_user),
-            json={"to": "to@example.com", "subject": "Hi", "body": "Body", "cc": ["cc@example.com"]},
+            data={"to": "to@example.com", "subject": "Hi", "body": "Body", "cc": ["cc@example.com"]},
         )
         assert r.status_code == 200
         assert _FakeSMTP.sent_messages[0]["Cc"] == "cc@example.com"
+
+
+class TestDownloadAttachment:
+    def test_requires_configured_account(self, client, owner_user):
+        r = client.get("/api/v1/email-account/messages/1/attachments/0/download", headers=_auth_headers(owner_user))
+        assert r.status_code == 404
+
+    def test_happy_path(self, client, owner_user, monkeypatch):
+        monkeypatch.setattr(
+            "app.api.user_email.imap_client.list_messages",
+            lambda host, port, username, password, limit=1: [],
+        )
+        client.put("/api/v1/email-account", headers=_auth_headers(owner_user), json=_connect_body())
+
+        monkeypatch.setattr(
+            "app.services.user_email.imap_client.get_attachment_content",
+            lambda host, port, username, password, uid, attachment_index, folder: ("note.txt", "text/plain", b"hello world"),
+        )
+        r = client.get("/api/v1/email-account/messages/1/attachments/0/download", headers=_auth_headers(owner_user))
+        assert r.status_code == 200
+        assert r.content == b"hello world"
+        assert 'filename="note.txt"' in r.headers["content-disposition"]
+
+    def test_missing_attachment_returns_404(self, client, owner_user, monkeypatch):
+        monkeypatch.setattr(
+            "app.api.user_email.imap_client.list_messages",
+            lambda host, port, username, password, limit=1: [],
+        )
+        client.put("/api/v1/email-account", headers=_auth_headers(owner_user), json=_connect_body())
+
+        def _raise(*args, **kwargs):
+            raise AttachmentNotFoundError("No attachment at index 3 on message '1'.")
+
+        monkeypatch.setattr("app.services.user_email.imap_client.get_attachment_content", _raise)
+        r = client.get("/api/v1/email-account/messages/1/attachments/3/download", headers=_auth_headers(owner_user))
+        assert r.status_code == 404
 
 
 def _connect(client, owner_user, monkeypatch):

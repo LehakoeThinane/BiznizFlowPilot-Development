@@ -20,6 +20,13 @@ export interface ComposeDraft {
   body: string;
 }
 
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function ComposePanel({
   state,
   draft,
@@ -36,11 +43,27 @@ export function ComposePanel({
   onMinimize: () => void;
   onExpand: () => void;
   onClose: () => void;
-  onSend: (to: string, subject: string, body: string, cc: string[]) => Promise<void>;
+  onSend: (to: string, subject: string, body: string, cc: string[], attachments: File[]) => Promise<void>;
   theme: EmailTheme;
 }) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+
+  function handleFilesChosen(e: React.ChangeEvent<HTMLInputElement>) {
+    const chosen = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    const oversized = chosen.find((f) => f.size > MAX_ATTACHMENT_BYTES);
+    if (oversized) {
+      setError(`'${oversized.name}' exceeds the 20MB attachment limit.`);
+      return;
+    }
+    setAttachments((prev) => [...prev, ...chosen]);
+  }
+
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, i) => i !== index));
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -52,7 +75,8 @@ export function ComposePanel({
     setError("");
     try {
       const cc = draft.cc.split(",").map((s) => s.trim()).filter(Boolean);
-      await onSend(draft.to.trim(), draft.subject.trim(), draft.body.trim(), cc);
+      await onSend(draft.to.trim(), draft.subject.trim(), draft.body.trim(), cc, attachments);
+      setAttachments([]);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send.");
@@ -126,15 +150,48 @@ export function ComposePanel({
               rows={7} placeholder="Write your message…" className={inputClass(theme)}
             />
           </div>
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {attachments.map((file, i) => (
+                <span
+                  key={`${file.name}-${i}`}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
+                    theme === "dark" ? "border-outline-variant bg-white/5 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[14px]">attach_file</span>
+                  <span className="max-w-[160px] truncate">{file.name}</span>
+                  <span className="text-slate-500">({formatBytes(file.size)})</span>
+                  <button
+                    type="button"
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() => removeAttachment(i)}
+                    className="ml-1 text-slate-400 hover:text-slate-200"
+                  >
+                    ×
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           {error && <p className="text-sm text-rose-400">{error}</p>}
         </div>
-        <div className={`flex justify-end gap-2 border-t px-4 py-3 ${borderClass(theme)}`}>
-          <button type="button" onClick={onClose} className={`rounded-md px-4 py-2 text-sm font-medium ${closeButtonClass(theme)}`}>
-            Discard
-          </button>
-          <button type="submit" disabled={sending} className="rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60">
-            {sending ? "Sending…" : "Send"}
-          </button>
+        <div className={`flex items-center justify-between gap-2 border-t px-4 py-3 ${borderClass(theme)}`}>
+          <label
+            className={`flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-medium ${closeButtonClass(theme)}`}
+            aria-label="Attach files"
+          >
+            <span className="material-symbols-outlined text-[18px]">attach_file</span>
+            <input type="file" multiple onChange={handleFilesChosen} className="hidden" />
+          </label>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className={`rounded-md px-4 py-2 text-sm font-medium ${closeButtonClass(theme)}`}>
+              Discard
+            </button>
+            <button type="submit" disabled={sending} className="rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-60">
+              {sending ? "Sending…" : "Send"}
+            </button>
+          </div>
         </div>
       </form>
     </div>

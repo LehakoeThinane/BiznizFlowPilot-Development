@@ -392,6 +392,32 @@ class TestDeleteMessageService:
         assert captured == {"uid": "5", "source_folder": "INBOX"}
 
 
+class TestGetAttachmentService:
+    def test_raises_when_not_configured(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        with pytest.raises(EmailAccountNotConfiguredError):
+            service.get_attachment(business.id, uuid4(), "5", 0)
+
+    def test_delegates_to_imap_client(self, test_db: Session, monkeypatch):
+        captured = {}
+
+        def _fake_get_attachment(host, port, username, password, uid, attachment_index, folder):
+            captured.update(uid=uid, attachment_index=attachment_index, folder=folder)
+            return "note.txt", "text/plain", b"hello world"
+
+        monkeypatch.setattr("app.services.user_email.imap_client.get_attachment_content", _fake_get_attachment)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        result = service.get_attachment(business.id, user_id, "5", 0)
+        assert result == ("note.txt", "text/plain", b"hello world")
+        assert captured == {"uid": "5", "attachment_index": 0, "folder": "INBOX"}
+
+
 class TestDisplayPrefs:
     def test_get_returns_defaults_with_no_account_row(self, test_db: Session):
         business = _make_business(test_db)

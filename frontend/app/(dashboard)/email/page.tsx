@@ -3,7 +3,7 @@
 import DOMPurify from "dompurify";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
-import { apiRequest } from "@/lib/api";
+import { apiRequest, downloadFile } from "@/lib/api";
 import { ComposeDraft, ComposePanel } from "@/components/email/ComposePanel";
 import { DisplaySettingsPopover } from "@/components/email/DisplaySettingsPopover";
 import { EmailFolder, EmailSidebar } from "@/components/email/EmailSidebar";
@@ -261,8 +261,27 @@ export default function EmailPage() {
     }
   }
 
-  async function handleSend(to: string, subject: string, body: string, cc: string[]) {
-    await apiRequest("/api/v1/email-account/send", { method: "POST", body: { to, subject, body, cc } });
+  async function handleSend(to: string, subject: string, body: string, cc: string[], attachments: File[]) {
+    const formData = new FormData();
+    formData.append("to", to);
+    formData.append("subject", subject);
+    formData.append("body", body);
+    cc.forEach((addr) => formData.append("cc", addr));
+    attachments.forEach((file) => formData.append("attachments", file));
+    await apiRequest("/api/v1/email-account/send", { method: "POST", body: formData });
+  }
+
+  async function handleDownloadAttachment(index: number, filename: string) {
+    if (!selectedUid) return;
+    try {
+      await downloadFile(
+        `/api/v1/email-account/messages/${encodeURIComponent(selectedUid)}/attachments/${index}/download`,
+        filename,
+        { folder: activeFolder },
+      );
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : "Failed to download attachment.");
+    }
   }
 
   function openCompose() {
@@ -467,16 +486,21 @@ export default function EmailPage() {
             {selectedMessage.attachments.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {selectedMessage.attachments.map((a, i) => (
-                  <span
+                  <button
                     key={i}
-                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
-                      displayTheme === "dark" ? "border-outline-variant bg-white/5 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
+                    type="button"
+                    onClick={() => handleDownloadAttachment(i, a.filename)}
+                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                      displayTheme === "dark"
+                        ? "border-outline-variant bg-white/5 text-slate-300 hover:bg-white/10"
+                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                     }`}
                   >
                     <span className="material-symbols-outlined text-[14px]">attach_file</span>
                     {a.filename}
                     <span className="text-slate-500">({Math.max(1, Math.round(a.size / 1024))} KB)</span>
-                  </span>
+                    <span className="material-symbols-outlined text-[14px]">download</span>
+                  </button>
                 ))}
               </div>
             )}

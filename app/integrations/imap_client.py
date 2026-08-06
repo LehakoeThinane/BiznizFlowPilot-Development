@@ -65,6 +65,10 @@ class NoArchiveFolderError(ImapError):
     """No folder with an archive-like role (\\Archive, \\All, or name fallback) was found."""
 
 
+class AttachmentNotFoundError(ImapError):
+    """No attachment exists at the requested index on this message."""
+
+
 @dataclass(slots=True)
 class MessageSummary:
     uid: str
@@ -362,6 +366,43 @@ def get_message(host: str, port: int, username: str, password: str, uid: str, fo
 
         _, raw_bytes = fetch_data[0]
         return parse_full_message(uid, raw_bytes)
+
+
+def get_attachment_content(
+    host: str, port: int, username: str, password: str, uid: str, attachment_index: int, folder: str = "INBOX",
+) -> tuple[str, str, bytes]:
+    """Fetch one message's raw content and return the (filename, content_type,
+    bytes) of the Nth attachment - 0-indexed, in the same walk order as
+    parse_full_message()'s attachments list, so an index taken from a prior
+    detail-view response lines up with the part returned here.
+
+    Re-fetches and re-walks the full message rather than caching payloads
+    from an earlier list/detail call - matches this client's "one
+    connection per request, no local cache" design (see module docstring).
+    """
+    with imap_connection(host, port, username, password, folder=folder) as conn:
+        try:
+            typ, fetch_data = conn.uid("fetch", uid, "(RFC822)")
+        except imaplib.IMAP4.error as e:
+            raise ImapConnectionError(f"Could not fetch message {uid!r} - {e}") from e
+
+        if typ != "OK" or not fetch_data or fetch_data[0] is None:
+            raise ImapError(f"Message {uid!r} not found.")
+
+        _, raw_bytes = fetch_data[0]
+
+    msg = message_from_bytes(raw_bytes)
+    index = 0
+    for part in msg.walk():
+        disposition = str(part.get("Content-Disposition") or "")
+        if "attachment" in disposition or part.get_filename():
+            if index == attachment_index:
+                payload = part.get_payload(decode=True) or b""
+                filename = decode_mime_header(part.get_filename()) or "attachment"
+                return filename, part.get_content_type(), payload
+            index += 1
+
+    raise AttachmentNotFoundError(f"No attachment at index {attachment_index} on message {uid!r}.")
 
 
 def set_message_flags(

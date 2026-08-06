@@ -169,6 +169,17 @@ class UserEmailAccountService:
             account.imap_host, account.imap_port, account.imap_username, password, uid, source_folder=real_folder
         )
 
+    def get_attachment(
+        self, business_id: UUID, user_id: UUID, uid: str, attachment_index: int, folder: str = "inbox"
+    ) -> tuple[str, str, bytes]:
+        account = self._require_account_with_imap(business_id, user_id)
+        password = decrypt_secret(account.imap_password_encrypted)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        return imap_client.get_attachment_content(
+            account.imap_host, account.imap_port, account.imap_username, password, uid, attachment_index,
+            folder=real_folder,
+        )
+
     def _resolve_folder_name(self, business_id: UUID, user_id: UUID, role_key: str) -> str:
         """Map a role key (sent/drafts/trash/...) to this account's real
         IMAP mailbox name. inbox/starred are handled by callers directly
