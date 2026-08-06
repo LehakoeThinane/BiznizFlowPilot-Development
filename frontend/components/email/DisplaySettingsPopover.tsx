@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
-import { EMAIL_BACKGROUNDS, backgroundGradient, borderClass, panelClass, textClass, type EmailTheme } from "./emailTheme";
+import { EMAIL_BACKGROUNDS, backgroundGradient, borderClass, closeButtonClass, panelClass, textClass, type EmailTheme } from "./emailTheme";
 
 export function DisplaySettingsPopover({
   theme,
@@ -14,24 +14,13 @@ export function DisplaySettingsPopover({
   onSave: (theme: EmailTheme, background: string | null) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handler(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
         type="button"
         aria-label="Display settings"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(true)}
         className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
           theme === "dark" ? "text-slate-400 hover:bg-white/10 hover:text-white" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
         }`}
@@ -41,52 +30,79 @@ export function DisplaySettingsPopover({
 
       {open && (
         <div
-          className={`absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-xl border p-4 shadow-2xl ${panelClass(theme)} ${borderClass(theme)}`}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setOpen(false)}
         >
-          <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${textClass(theme)}`}>Theme</p>
-          <div className="mb-4 flex gap-2">
-            {(["dark", "light"] as EmailTheme[]).map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => onSave(t, background)}
-                className={`flex-1 rounded-lg border px-3 py-1.5 text-sm capitalize transition-colors ${
-                  theme === t
-                    ? "border-brand bg-brand/20 font-medium text-brand"
-                    : `${borderClass(theme)} ${textClass(theme)}`
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
+          <div
+            className={`w-full max-w-sm overflow-hidden rounded-2xl border shadow-2xl ${panelClass(theme)} ${borderClass(theme)}`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={`flex items-center justify-between border-b px-5 py-4 ${borderClass(theme)}`}>
+              <h2 className={`text-base font-semibold ${textClass(theme)}`}>Display settings</h2>
+              <button type="button" aria-label="Close" onClick={() => setOpen(false)} className={closeButtonClass(theme)}>×</button>
+            </div>
 
-          <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${textClass(theme)}`}>Background</p>
-          <div className="grid grid-cols-4 gap-2">
-            <button
-              type="button"
-              aria-label="No background"
-              onClick={() => onSave(theme, null)}
-              className={`h-10 rounded-md border-2 ${
-                background === null ? "border-brand" : "border-transparent"
-              } bg-slate-500/20 text-[10px] ${textClass(theme)}`}
-            >
-              None
-            </button>
-            {EMAIL_BACKGROUNDS.map((b) => (
+            <div className="space-y-5 px-5 py-5">
+              <div>
+                <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${textClass(theme)}`}>Theme</p>
+                <div className="flex gap-2">
+                  {(["dark", "light"] as EmailTheme[]).map((t) => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => onSave(t, background)}
+                      className={`flex-1 rounded-lg border px-3 py-2 text-sm capitalize transition-colors ${
+                        theme === t
+                          ? "border-brand bg-brand/20 font-medium text-brand"
+                          : `${borderClass(theme)} ${textClass(theme)}`
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className={`mb-2 text-xs font-semibold uppercase tracking-wide ${textClass(theme)}`}>Background</p>
+                <div className="grid grid-cols-4 gap-2.5">
+                  <button
+                    type="button"
+                    aria-label="No background"
+                    onClick={() => onSave(theme, null)}
+                    className={`h-12 rounded-lg border-2 ${
+                      background === null ? "border-brand" : "border-transparent"
+                    } bg-slate-500/20 text-[10px] ${textClass(theme)}`}
+                  >
+                    None
+                  </button>
+                  {EMAIL_BACKGROUNDS.map((b) => (
+                    <button
+                      key={b.key}
+                      type="button"
+                      aria-label={b.label}
+                      title={b.label}
+                      onClick={() => onSave(theme, b.key)}
+                      className={`h-12 rounded-lg border-2 ${background === b.key ? "border-brand" : "border-transparent"}`}
+                      style={{ background: backgroundGradient(b.key) }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className={`flex justify-end border-t px-5 py-4 ${borderClass(theme)}`}>
               <button
-                key={b.key}
                 type="button"
-                aria-label={b.label}
-                title={b.label}
-                onClick={() => onSave(theme, b.key)}
-                className={`h-10 rounded-md border-2 ${background === b.key ? "border-brand" : "border-transparent"}`}
-                style={{ background: backgroundGradient(b.key) }}
-              />
-            ))}
+                onClick={() => setOpen(false)}
+                className="rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
