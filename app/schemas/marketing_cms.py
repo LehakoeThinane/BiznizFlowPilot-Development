@@ -73,6 +73,8 @@ class BlogPostResponse(BaseModel):
     status: str
     published_at: Optional[datetime]
     github_commit_sha: Optional[str]
+    auto_publish_ready: bool
+    pending_markdown_body: Optional[str]
     created_at: datetime
     updated_at: datetime
 
@@ -86,6 +88,7 @@ class BlogPostListItem(BaseModel):
     slug: str
     title: str
     status: str
+    auto_publish_ready: bool
     published_at: Optional[datetime]
     updated_at: datetime
 
@@ -117,3 +120,35 @@ class BlogPublishRequest(BaseModel):
 class BlogPublishResponse(BaseModel):
     published: bool
     github_commit_sha: Optional[str] = None
+
+
+# ── Autopublish (topic queue + schedule) ──────────────────────────────────────
+
+
+class BlogTopicCreate(BaseModel):
+    """Queue a topic for the daily autopublish task's AI-generation fallback."""
+
+    topic: str = Field(..., min_length=1, max_length=500)
+    tone: Optional[str] = Field(default=None, max_length=100)
+
+
+class BlogTopicResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    topic: str
+    tone: Optional[str]
+    used_at: Optional[datetime]
+    created_at: datetime
+
+
+class BlogTopicListResponse(BaseModel):
+    items: list[BlogTopicResponse]
+
+
+class BlogScheduleAutoPublishRequest(BaseModel):
+    """Same markdown_body shape as BlogPublishRequest - computed client-side
+    via editor.blocksToMarkdownLossy(), stored for the daily task to publish
+    later instead of publishing immediately."""
+
+    markdown_body: str = Field(..., min_length=1)

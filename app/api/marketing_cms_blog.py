@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.dependencies_marketing_cms import get_current_marketing_cms_admin
 from app.repositories.marketing_blog_post import MarketingBlogPostRepository
+from app.repositories.marketing_blog_topic import MarketingBlogTopicRepository
 from app.schemas.marketing_cms import (
     BlogGenerateRequest,
     BlogGenerateResponse,
@@ -22,6 +23,10 @@ from app.schemas.marketing_cms import (
     BlogPostUpdate,
     BlogPublishRequest,
     BlogPublishResponse,
+    BlogScheduleAutoPublishRequest,
+    BlogTopicCreate,
+    BlogTopicListResponse,
+    BlogTopicResponse,
     CurrentMarketingCmsAdmin,
 )
 from app.services import marketing_blog
@@ -58,6 +63,38 @@ def create_post(
         updated_by=current_admin.marketing_cms_admin_id,
     )
     return BlogPostResponse.model_validate(post)
+
+
+@router.get("/topics", response_model=BlogTopicListResponse)
+def list_blog_topics(
+    current_admin: Annotated[CurrentMarketingCmsAdmin, Depends(get_current_marketing_cms_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BlogTopicListResponse:
+    """The autopublish task's topic backlog - listed so the admin UI can
+    show what's queued and what's already been used."""
+    topics = MarketingBlogTopicRepository(db).list()
+    return BlogTopicListResponse(items=[BlogTopicResponse.model_validate(t) for t in topics])
+
+
+@router.post("/topics", response_model=BlogTopicResponse, status_code=201)
+def create_blog_topic(
+    body: BlogTopicCreate,
+    current_admin: Annotated[CurrentMarketingCmsAdmin, Depends(get_current_marketing_cms_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BlogTopicResponse:
+    topic = MarketingBlogTopicRepository(db).create(topic=body.topic, tone=body.tone)
+    return BlogTopicResponse.model_validate(topic)
+
+
+@router.delete("/topics/{topic_id}", status_code=204)
+def delete_blog_topic(
+    topic_id: UUID,
+    current_admin: Annotated[CurrentMarketingCmsAdmin, Depends(get_current_marketing_cms_admin)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    found = MarketingBlogTopicRepository(db).delete(topic_id)
+    if not found:
+        raise HTTPException(status_code=404, detail="Topic not found")
 
 
 @router.get("/{post_id}", response_model=BlogPostResponse)
@@ -155,3 +192,44 @@ def publish_post(
     db.commit()
 
     return BlogPublishResponse(published=True, github_commit_sha=commit_sha)
+
+
+@router.patch("/{post_id}/schedule-auto-publish", response_model=BlogPostResponse)
+def schedule_post_auto_publish(
+    post_id: UUID,
+    body: BlogScheduleAutoPublishRequest,
+    current_admin: Annotated[CurrentMarketingCmsAdmin, Depends(get_current_marketing_cms_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BlogPostResponse:
+    """Queue a draft for the daily autopublish task - stores the
+    client-computed markdown snapshot the task will publish, since it has
+    no browser/BlockNote available to compute it itself."""
+    post = MarketingBlogPostRepository(db).get_by_id(post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if not post.title or not post.description:
+        raise HTTPException(status_code=400, detail="Title and description are required before scheduling")
+
+    post.auto_publish_ready = True
+    post.pending_markdown_body = body.markdown_body
+    post.updated_by = current_admin.marketing_cms_admin_id
+    db.commit()
+    db.refresh(post)
+    return BlogPostResponse.model_validate(post)
+
+
+@router.post("/{post_id}/cancel-auto-publish", response_model=BlogPostResponse)
+def cancel_post_auto_publish(
+    post_id: UUID,
+    current_admin: Annotated[CurrentMarketingCmsAdmin, Depends(get_current_marketing_cms_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BlogPostResponse:
+    post = MarketingBlogPostRepository(db).get_by_id(post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
+    post.auto_publish_ready = False
+    post.updated_by = current_admin.marketing_cms_admin_id
+    db.commit()
+    db.refresh(post)
+    return BlogPostResponse.model_validate(post)

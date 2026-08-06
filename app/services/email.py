@@ -518,6 +518,22 @@ def send_marketing_guide_lead_email(
     _notify_staff(subject, html, plain)
 
 
+def send_blog_autopublish_notice(outcome: str, detail: str, post_id: str | None = None) -> None:
+    """Daily FYI/alert from the blog autopublish task (see
+    app/services/marketing_blog_autopublish.py) - fires on every run,
+    success or skip, so the automation is never silent. outcome is a short
+    label ("published", "skipped", "needs review", "failed"); detail is the
+    human-readable reason/title."""
+    subject = f"Blog autopublish: {outcome}"
+    review_url = f"{settings.marketing_site_admin_url}?id={post_id}" if settings.marketing_site_admin_url and post_id else None
+    plain = f"{detail}"
+    html = f"<p>{detail}</p>"
+    if review_url:
+        plain += f"\n\n{review_url}"
+        html += f'<p><a href="{review_url}">{review_url}</a></p>'
+    _notify_staff(subject, html, plain)
+
+
 def send_linkedin_lead_email(
     first_name: str,
     last_name: str,

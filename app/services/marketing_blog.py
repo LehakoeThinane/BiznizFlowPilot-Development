@@ -11,20 +11,19 @@ no changes are needed to the site's own rendering or deploy pipeline.
 from __future__ import annotations
 
 import base64
+import re
+from dataclasses import dataclass
 from datetime import date
 
 import httpx
+from sqlalchemy.orm import Session
 
 from app.ai.engine import get_engine
 from app.core.config import settings
 from app.models.marketing_blog_post import MarketingBlogPost
+from app.repositories.marketing_blog_post import MarketingBlogPostRepository
 
-_SYSTEM_PROMPT = """You are a senior digital marketing copywriter for MM Nexus, a \
-systems engineering consultancy. Write a complete, ready-to-publish blog post \
-body in Markdown (do not include frontmatter or a title heading - the title \
-is handled separately). Use ## and ### for section headings.
-
-MM Nexus's actual active services, to draw on and stay grounded in - never \
+_MM_NEXUS_GROUNDING = """MM Nexus's actual active services, to draw on and stay grounded in - never \
 invent services that aren't listed here:
 
 Divisions:
@@ -56,6 +55,36 @@ Tone: direct, honest, a little conversational - like a knowledgeable person \
 talking to a business owner, not corporate marketing-speak. Ground claims in \
 concrete, relatable operational pain points rather than vague benefits."""
 
+_SYSTEM_PROMPT = f"""You are a senior digital marketing copywriter for MM Nexus, a \
+systems engineering consultancy. Write a complete, ready-to-publish blog post \
+body in Markdown (do not include frontmatter or a title heading - the title \
+is handled separately). Use ## and ### for section headings.
+
+{_MM_NEXUS_GROUNDING}"""
+
+_FULL_POST_SYSTEM_PROMPT = f"""You are a senior digital marketing copywriter for MM Nexus, a \
+systems engineering consultancy, writing a complete blog post with no human editor involved \
+before publishing - the title and description you write are what actually ships.
+
+Respond in EXACTLY this format, nothing before or after it:
+
+TITLE: <a concise, compelling title, no quotes around it>
+DESCRIPTION: <a one-sentence meta description, under 160 characters>
+
+<the full post body in Markdown, using ## and ### for section headings - do not repeat the \
+title as a heading, it's already handled above>
+
+{_MM_NEXUS_GROUNDING}"""
+
+
+@dataclass(slots=True)
+class FullPostDraft:
+    """A complete AI-generated post: title, description, and Markdown body."""
+
+    title: str
+    description: str
+    markdown_body: str
+
 
 def generate_content(topic: str, tone: str | None = None) -> str:
     """Generate a Markdown blog post body for a topic. Returns raw Markdown -
@@ -66,6 +95,70 @@ def generate_content(topic: str, tone: str | None = None) -> str:
         user_message += f"\nTone: {tone}"
     response = engine.chat(messages=[{"role": "user", "content": user_message}], system_prompt=_SYSTEM_PROMPT)
     return response.reply
+
+
+_TITLE_LINE_RE = re.compile(r"^TITLE:\s*(.+)$", re.MULTILINE)
+_DESCRIPTION_LINE_RE = re.compile(r"^DESCRIPTION:\s*(.+)$", re.MULTILINE)
+
+
+def _parse_full_post(raw: str, topic_fallback: str) -> FullPostDraft:
+    """Parse the TITLE:/DESCRIPTION:-prefixed format _FULL_POST_SYSTEM_PROMPT
+    asks for. Falls back to the topic text as the title and a truncated
+    excerpt of the body as the description if the model didn't follow the
+    format exactly - not every engine backend supports structured output
+    reliably (see app/ai/engine.py's docstring: only Groq has tool-calling),
+    so this always produces a usable post rather than raising."""
+    title_match = _TITLE_LINE_RE.search(raw)
+    description_match = _DESCRIPTION_LINE_RE.search(raw)
+
+    # Strip the TITLE:/DESCRIPTION: lines themselves out of the body, however
+    # many of them matched, then trim leading blank lines left behind.
+    body = _TITLE_LINE_RE.sub("", raw, count=1)
+    body = _DESCRIPTION_LINE_RE.sub("", body, count=1)
+    body = body.lstrip("\n ")
+
+    title = title_match.group(1).strip() if title_match else topic_fallback
+    if description_match:
+        description = description_match.group(1).strip()
+    else:
+        excerpt = re.sub(r"\s+", " ", body).strip()
+        description = (excerpt[:157] + "...") if len(excerpt) > 160 else excerpt
+
+    return FullPostDraft(title=title, description=description, markdown_body=body.strip())
+
+
+def generate_full_post(topic: str, tone: str | None = None) -> FullPostDraft:
+    """Generate a complete post (title + description + Markdown body) for the
+    daily autopublish task - unlike generate_content(), no human picks a
+    title afterward, so the model has to produce one."""
+    engine = get_engine()
+    user_message = f"Topic: {topic}"
+    if tone:
+        user_message += f"\nTone: {tone}"
+    response = engine.chat(messages=[{"role": "user", "content": user_message}], system_prompt=_FULL_POST_SYSTEM_PROMPT)
+    return _parse_full_post(response.reply, topic_fallback=topic)
+
+
+def _slugify(title: str) -> str:
+    """Python port of MM-Nexus-Website's BlogAdminList.tsx slugify() - lowercase,
+    collapse runs of non-alphanumeric characters into a single hyphen, trim
+    edge hyphens."""
+    lowered = title.lower().strip()
+    slug = re.sub(r"[^a-z0-9]+", "-", lowered)
+    return slug.strip("-")
+
+
+def unique_slug(db: Session, title: str) -> str:
+    """A slug guaranteed free in marketing_blog_posts - appends -2, -3, ...
+    if the plain slugified title is already taken."""
+    repo = MarketingBlogPostRepository(db)
+    base = _slugify(title) or "post"
+    slug = base
+    suffix = 2
+    while repo.get_by_slug(slug):
+        slug = f"{base}-{suffix}"
+        suffix += 1
+    return slug
 
 
 def _yaml_quote(value: str) -> str:

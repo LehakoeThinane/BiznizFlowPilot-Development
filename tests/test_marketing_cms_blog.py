@@ -310,3 +310,114 @@ class TestPublishPost:
             headers=headers,
         )
         assert r.status_code == 502
+
+
+class TestBlogTopics:
+    def test_list_starts_empty(self, client, marketing_cms_admin):
+        r = client.get("/api/v1/marketing/cms/blog/topics", headers=auth(client, marketing_cms_admin))
+        assert r.status_code == 200
+        assert r.json()["items"] == []
+
+    def test_create_and_list_topic(self, client, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        r = client.post(
+            "/api/v1/marketing/cms/blog/topics",
+            json={"topic": "Why manual invoicing is costing you", "tone": "direct"},
+            headers=headers,
+        )
+        assert r.status_code == 201
+        body = r.json()
+        assert body["topic"] == "Why manual invoicing is costing you"
+        assert body["tone"] == "direct"
+        assert body["used_at"] is None
+
+        listed = client.get("/api/v1/marketing/cms/blog/topics", headers=headers).json()
+        assert len(listed["items"]) == 1
+
+    def test_delete_topic(self, client, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog/topics", json={"topic": "Delete me"}, headers=headers
+        ).json()
+        r = client.delete(f"/api/v1/marketing/cms/blog/topics/{created['id']}", headers=headers)
+        assert r.status_code == 204
+        listed = client.get("/api/v1/marketing/cms/blog/topics", headers=headers).json()
+        assert listed["items"] == []
+
+    def test_delete_missing_topic_404s(self, client, marketing_cms_admin):
+        r = client.delete(
+            f"/api/v1/marketing/cms/blog/topics/{uuid4()}", headers=auth(client, marketing_cms_admin)
+        )
+        assert r.status_code == 404
+
+    def test_requires_auth(self, client):
+        r = client.get("/api/v1/marketing/cms/blog/topics")
+        assert r.status_code == 401
+
+    def test_topics_route_not_shadowed_by_post_id_route(self, client, marketing_cms_admin):
+        """Regression guard: /blog/topics must resolve to the topics list,
+        not be swallowed by GET /blog/{post_id} trying (and failing) to
+        parse "topics" as a UUID."""
+        r = client.get("/api/v1/marketing/cms/blog/topics", headers=auth(client, marketing_cms_admin))
+        assert r.status_code == 200
+
+
+class TestScheduleAndCancelAutoPublish:
+    def test_schedule_sets_ready_and_stores_markdown(self, client, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog", json={"title": "Ready Post", "slug": "ready-post"}, headers=headers
+        ).json()
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}", json={"description": "Desc."}, headers=headers
+        )
+
+        r = client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}/schedule-auto-publish",
+            json={"markdown_body": "Snapshot body."},
+            headers=headers,
+        )
+        assert r.status_code == 200
+        body = r.json()
+        assert body["auto_publish_ready"] is True
+        assert body["pending_markdown_body"] == "Snapshot body."
+
+    def test_schedule_requires_title_and_description(self, client, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog", json={"title": "No Desc", "slug": "no-desc-schedule"}, headers=headers
+        ).json()
+        r = client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}/schedule-auto-publish",
+            json={"markdown_body": "Body."},
+            headers=headers,
+        )
+        assert r.status_code == 400
+
+    def test_cancel_clears_ready_flag(self, client, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog", json={"title": "Cancel Post", "slug": "cancel-post"}, headers=headers
+        ).json()
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}", json={"description": "Desc."}, headers=headers
+        )
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}/schedule-auto-publish",
+            json={"markdown_body": "Body."},
+            headers=headers,
+        )
+
+        r = client.post(
+            f"/api/v1/marketing/cms/blog/{created['id']}/cancel-auto-publish", headers=headers
+        )
+        assert r.status_code == 200
+        assert r.json()["auto_publish_ready"] is False
+
+    def test_schedule_404_for_missing_post(self, client, marketing_cms_admin):
+        r = client.patch(
+            f"/api/v1/marketing/cms/blog/{uuid4()}/schedule-auto-publish",
+            json={"markdown_body": "Body."},
+            headers=auth(client, marketing_cms_admin),
+        )
+        assert r.status_code == 404
