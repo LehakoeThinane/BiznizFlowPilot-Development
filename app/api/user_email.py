@@ -7,29 +7,37 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from pydantic import EmailStr
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.entitlements import require_feature
 from app.dependencies import get_current_user
 from app.integrations import imap_client
-from app.integrations.imap_client import ImapAuthenticationError, ImapConnectionError, ImapError
+from app.integrations.imap_client import AttachmentNotFoundError, ImapAuthenticationError, ImapConnectionError, ImapError
 from app.models.user_email import UserEmailAccount
 from app.schemas.auth import CurrentUser
 from app.schemas.user_email import (
+    EmailDisplayPrefsResponse,
+    EmailDisplayPrefsUpdate,
     EmailFolderListResponse,
     EmailFolderResponse,
     EmailListResponse,
     EmailMessageDetail,
     EmailMessageFlagsUpdate,
     EmailMessageSummary,
-    EmailSendRequest,
     UserEmailAccountResponse,
     UserEmailAccountUpdate,
 )
 from app.services.user_email import EmailAccountNotConfiguredError, FolderNotFoundError, UserEmailAccountService
-from app.workflow_engine.email_provider import RetryableEmailProviderError, TerminalEmailProviderError
+from app.workflow_engine.email_provider import EmailAttachment, RetryableEmailProviderError, TerminalEmailProviderError
+
+# Matches the per-file/combined ceiling used for chat attachments
+# (app/services/message_attachments.py) - same reasoning: keep a single
+# request bounded on the app's shared-vCPU production VM.
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+MAX_TOTAL_ATTACHMENT_BYTES = 25 * 1024 * 1024
 
 router = APIRouter(
     prefix="/api/v1/email-account", tags=["email"], dependencies=[Depends(require_feature("email"))]
@@ -118,6 +126,31 @@ def delete_email_account(
 ):
     service = UserEmailAccountService(db)
     service.delete_account(current_user.business_id, current_user.user_id)
+
+
+@router.get("/display-prefs", response_model=EmailDisplayPrefsResponse)
+def get_email_display_prefs(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmailDisplayPrefsResponse:
+    """Email-page-scoped theme/background - available even before a mailbox
+    is connected, unlike the main account GET/PUT above."""
+    service = UserEmailAccountService(db)
+    theme, background = service.get_display_prefs(current_user.business_id, current_user.user_id)
+    return EmailDisplayPrefsResponse(theme=theme, background=background)
+
+
+@router.put("/display-prefs", response_model=EmailDisplayPrefsResponse)
+def set_email_display_prefs(
+    body: EmailDisplayPrefsUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmailDisplayPrefsResponse:
+    service = UserEmailAccountService(db)
+    theme, background = service.set_display_prefs(
+        current_user.business_id, current_user.user_id, body.theme, body.background
+    )
+    return EmailDisplayPrefsResponse(theme=theme, background=background)
 
 
 @router.get("/folders", response_model=EmailFolderListResponse)
@@ -260,14 +293,44 @@ def delete_email_message(
 
 
 @router.post("/send")
-def send_email_message(
-    body: EmailSendRequest,
+async def send_email_message(
     current_user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
+    to: EmailStr = Form(...),
+    subject: str = Form(..., min_length=1, max_length=500),
+    body: str = Form(..., min_length=1),
+    cc: list[str] = Form(default=[]),
+    attachments: list[UploadFile] = File(default=[]),
 ) -> dict:
+    cc_addresses = [addr.strip() for addr in cc if addr and addr.strip()]
+
+    email_attachments: list[EmailAttachment] = []
+    total_bytes = 0
+    for upload in attachments:
+        if not upload.filename:
+            continue
+        content = await upload.read()
+        if len(content) > MAX_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{upload.filename}' exceeds the {MAX_ATTACHMENT_BYTES // (1024 * 1024)}MB attachment limit.",
+            )
+        total_bytes += len(content)
+        if total_bytes > MAX_TOTAL_ATTACHMENT_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Attachments exceed the {MAX_TOTAL_ATTACHMENT_BYTES // (1024 * 1024)}MB combined limit.",
+            )
+        email_attachments.append(
+            EmailAttachment(filename=upload.filename, content=content, mime_type=upload.content_type or "application/octet-stream")
+        )
+
     service = UserEmailAccountService(db)
     try:
-        service.send_message(current_user.business_id, current_user.user_id, body.to, body.subject, body.body)
+        service.send_message(
+            current_user.business_id, current_user.user_id, str(to), subject, body,
+            cc=cc_addresses, attachments=email_attachments or None,
+        )
     except EmailAccountNotConfiguredError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except TerminalEmailProviderError as e:
@@ -275,3 +338,35 @@ def send_email_message(
     except RetryableEmailProviderError as e:
         raise HTTPException(status_code=503, detail=str(e))
     return {"sent": True}
+
+
+@router.get("/messages/{uid}/attachments/{attachment_index}/download")
+def download_email_attachment(
+    uid: str,
+    attachment_index: int,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+    folder: str = Query("inbox"),
+) -> Response:
+    service = UserEmailAccountService(db)
+    try:
+        filename, content_type, content = service.get_attachment(
+            current_user.business_id, current_user.user_id, uid, attachment_index, folder=folder
+        )
+    except EmailAccountNotConfiguredError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except FolderNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except AttachmentNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except (ImapAuthenticationError, ImapConnectionError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ImapError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+    safe_filename = filename.replace('"', "").replace("\r", "").replace("\n", "")
+    return Response(
+        content=content,
+        media_type=content_type or "application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+    )

@@ -60,6 +60,7 @@ class EmailProvider(ABC):
         recipient: str,
         subject: str,
         body: str,
+        cc: list[str] | None = None,
         from_email: str | None = None,
         from_name: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -115,6 +116,7 @@ class SMTPEmailProvider(EmailProvider):
         recipient: str,
         subject: str,
         body: str,
+        cc: list[str] | None = None,
         from_email: str | None = None,
         from_name: str | None = None,
         metadata: dict[str, Any] | None = None,
@@ -132,6 +134,11 @@ class SMTPEmailProvider(EmailProvider):
         message = EmailMessage()
         message["From"] = from_header
         message["To"] = recipient
+        if cc:
+            # smtplib.send_message() derives its envelope recipients from
+            # the To/Cc/Bcc headers automatically - setting this header is
+            # sufficient for Cc'd addresses to actually receive the mail.
+            message["Cc"] = ", ".join(cc)
         message["Subject"] = subject
         message["Date"] = formatdate(localtime=True)
         domain = sender_email.split("@")[-1]

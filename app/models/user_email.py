@@ -39,6 +39,14 @@ class UserEmailAccount(BaseModel):
     smtp_from_email = Column(String(255), nullable=True)
     smtp_from_name = Column(String(255), nullable=True)
 
+    email_theme = Column(
+        String(10), nullable=False, server_default="dark",
+        doc="Email-page-scoped display preference, independent of IMAP/SMTP config - 'light' or 'dark'.",
+    )
+    email_background = Column(
+        String(50), nullable=True, doc="Preset background key for the Email page, or NULL for none.",
+    )
+
     user = relationship("User", foreign_keys=[user_id])
 
     def __repr__(self) -> str:

@@ -88,6 +88,35 @@ class UserEmailAccountService:
             return False
         return self.repo.delete(business_id, account.id)
 
+    def get_display_prefs(self, business_id: UUID, user_id: UUID) -> tuple[str, str | None]:
+        """Email-page-scoped display prefs (theme, background) - independent
+        of whether a mailbox is actually connected. Returns the default
+        ("dark", None) if no account row exists at all yet."""
+        account = self.get_account(business_id, user_id)
+        if account is None:
+            return "dark", None
+        return account.email_theme, account.email_background
+
+    def set_display_prefs(
+        self, business_id: UUID, user_id: UUID, theme: str, background: str | None,
+    ) -> tuple[str, str | None]:
+        """Full-replace the display-pref columns - creates a bare prefs-only
+        row if none exists yet, and never touches IMAP/SMTP fields on an
+        existing row. background=None unambiguously means "no background"
+        (this is PUT semantics, not a partial patch)."""
+        account = self.get_account(business_id, user_id)
+        if account is None:
+            account = self.repo.create(
+                business_id=business_id, user_id=user_id,
+                email_theme=theme, email_background=background,
+            )
+        else:
+            account.email_theme = theme
+            account.email_background = background
+            self.db.commit()
+            self.db.refresh(account)
+        return account.email_theme, account.email_background
+
     def list_folders(self, business_id: UUID, user_id: UUID) -> list[imap_client.FolderInfo]:
         account = self._require_account_with_imap(business_id, user_id)
         password = decrypt_secret(account.imap_password_encrypted)
@@ -140,6 +169,17 @@ class UserEmailAccountService:
             account.imap_host, account.imap_port, account.imap_username, password, uid, source_folder=real_folder
         )
 
+    def get_attachment(
+        self, business_id: UUID, user_id: UUID, uid: str, attachment_index: int, folder: str = "inbox"
+    ) -> tuple[str, str, bytes]:
+        account = self._require_account_with_imap(business_id, user_id)
+        password = decrypt_secret(account.imap_password_encrypted)
+        real_folder = "INBOX" if folder in ("inbox", "starred") else self._resolve_folder_name(business_id, user_id, folder)
+        return imap_client.get_attachment_content(
+            account.imap_host, account.imap_port, account.imap_username, password, uid, attachment_index,
+            folder=real_folder,
+        )
+
     def _resolve_folder_name(self, business_id: UUID, user_id: UUID, role_key: str) -> str:
         """Map a role key (sent/drafts/trash/...) to this account's real
         IMAP mailbox name. inbox/starred are handled by callers directly
@@ -158,6 +198,7 @@ class UserEmailAccountService:
         to: str,
         subject: str,
         body: str,
+        cc: list[str] | None = None,
         attachments: list[EmailAttachment] | None = None,
     ) -> None:
         account = self.get_account(business_id, user_id)
@@ -177,7 +218,7 @@ class UserEmailAccountService:
             default_from_email=account.smtp_from_email,
             default_from_name=account.smtp_from_name,
         )
-        provider.send(recipient=to, subject=subject, body=body, attachments=attachments)
+        provider.send(recipient=to, subject=subject, body=body, cc=cc, attachments=attachments)
 
     def _require_account_with_imap(self, business_id: UUID, user_id: UUID) -> UserEmailAccount:
         account = self.get_account(business_id, user_id)

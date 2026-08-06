@@ -3,11 +3,14 @@
 import DOMPurify from "dompurify";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 
-import { apiRequest } from "@/lib/api";
+import { apiRequest, downloadFile } from "@/lib/api";
 import { ComposeDraft, ComposePanel } from "@/components/email/ComposePanel";
+import { DisplaySettingsPopover } from "@/components/email/DisplaySettingsPopover";
 import { EmailFolder, EmailSidebar } from "@/components/email/EmailSidebar";
 import { EmailMessageRow } from "@/components/email/EmailMessageRow";
+import { backgroundGradient, inputClass, mutedClass, panelClass, textClass, type EmailTheme } from "@/components/email/emailTheme";
 import type {
+  EmailDisplayPrefsResponse,
   EmailFolderListResponse,
   EmailListResponse,
   EmailMessageDetail,
@@ -15,7 +18,7 @@ import type {
   UserEmailAccount,
 } from "@/types/api";
 
-const EMPTY_DRAFT: ComposeDraft = { to: "", subject: "", body: "" };
+const EMPTY_DRAFT: ComposeDraft = { to: "", cc: "", subject: "", body: "" };
 
 const ROLE_DISPLAY: Record<string, { label: string; icon: string }> = {
   sent: { label: "Sent", icon: "send" },
@@ -23,21 +26,19 @@ const ROLE_DISPLAY: Record<string, { label: string; icon: string }> = {
   trash: { label: "Trash", icon: "delete" },
 };
 
-const INPUT = "erp-input w-full px-3 py-2 text-sm";
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, theme, children }: { title: string; theme: EmailTheme; children: React.ReactNode }) {
   return (
-    <div className="erp-panel p-6">
-      <h2 className="mb-5 text-base font-semibold text-white">{title}</h2>
+    <div className={`p-6 ${panelClass(theme)}`}>
+      <h2 className={`mb-5 text-base font-semibold ${textClass(theme)}`}>{title}</h2>
       {children}
     </div>
   );
 }
 
-function Field({ label, id, children }: { label: string; id: string; children: React.ReactNode }) {
+function Field({ label, id, theme, children }: { label: string; id: string; theme: EmailTheme; children: React.ReactNode }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-400">{label}</label>
+      <label htmlFor={id} className={`mb-1.5 block text-sm font-medium ${mutedClass(theme)}`}>{label}</label>
       {children}
     </div>
   );
@@ -89,7 +90,29 @@ export default function EmailPage() {
   const [composeState, setComposeState] = useState<"closed" | "open" | "minimized">("closed");
   const [composeDraft, setComposeDraft] = useState<ComposeDraft>(EMPTY_DRAFT);
 
+  const [displayTheme, setDisplayTheme] = useState<EmailTheme>("dark");
+  const [displayBackground, setDisplayBackground] = useState<string | null>(null);
+
   const isConnected = !!account?.imap_host;
+
+  useEffect(() => {
+    apiRequest<EmailDisplayPrefsResponse>("/api/v1/email-account/display-prefs")
+      .then((data) => {
+        setDisplayTheme(data.theme === "light" ? "light" : "dark");
+        setDisplayBackground(data.background);
+      })
+      .catch(console.error);
+  }, []);
+
+  async function handleSaveDisplayPrefs(theme: EmailTheme, background: string | null) {
+    setDisplayTheme(theme);
+    setDisplayBackground(background);
+    try {
+      await apiRequest("/api/v1/email-account/display-prefs", { method: "PUT", body: { theme, background } });
+    } catch (err) {
+      console.error(err);
+    }
+  }
 
   const loadAccount = useCallback(() => {
     return apiRequest<UserEmailAccount>("/api/v1/email-account")
@@ -238,11 +261,40 @@ export default function EmailPage() {
     }
   }
 
-  async function handleSend(to: string, subject: string, body: string) {
-    await apiRequest("/api/v1/email-account/send", { method: "POST", body: { to, subject, body } });
+  async function handleSend(to: string, subject: string, body: string, cc: string[], attachments: File[]) {
+    const formData = new FormData();
+    formData.append("to", to);
+    formData.append("subject", subject);
+    formData.append("body", body);
+    cc.forEach((addr) => formData.append("cc", addr));
+    attachments.forEach((file) => formData.append("attachments", file));
+    await apiRequest("/api/v1/email-account/send", { method: "POST", body: formData });
+  }
+
+  async function handleDownloadAttachment(index: number, filename: string) {
+    if (!selectedUid) return;
+    try {
+      await downloadFile(
+        `/api/v1/email-account/messages/${encodeURIComponent(selectedUid)}/attachments/${index}/download`,
+        filename,
+        { folder: activeFolder },
+      );
+    } catch (err) {
+      setInboxError(err instanceof Error ? err.message : "Failed to download attachment.");
+    }
   }
 
   function openCompose() {
+    // Only reset the draft when starting fresh - if a draft is already
+    // minimized in progress, just bring it back rather than discarding it.
+    if (composeState === "closed") setComposeDraft(EMPTY_DRAFT);
+    setComposeState("open");
+  }
+
+  function startReply() {
+    if (!selectedMessage) return;
+    const subject = /^re:/i.test(selectedMessage.subject) ? selectedMessage.subject : `Re: ${selectedMessage.subject}`;
+    setComposeDraft({ to: selectedMessage.from_address, cc: "", subject, body: "" });
     setComposeState("open");
   }
 
@@ -260,69 +312,76 @@ export default function EmailPage() {
   }
 
   if (!isConnected) {
+    const gradient = backgroundGradient(displayBackground);
     return (
-      <div className="mx-auto max-w-2xl space-y-6 p-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Email</h1>
-          <p className="mt-1 text-sm text-slate-400">Connect your own work mailbox to read and send email from here.</p>
+      <div
+        className="mx-auto max-w-2xl space-y-6 rounded-2xl p-6"
+        style={gradient ? { backgroundImage: gradient } : undefined}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className={`text-2xl font-semibold ${textClass(displayTheme)}`}>Email</h1>
+            <p className={`mt-1 text-sm ${mutedClass(displayTheme)}`}>Connect your own work mailbox to read and send email from here.</p>
+          </div>
+          <DisplaySettingsPopover theme={displayTheme} background={displayBackground} onSave={handleSaveDisplayPrefs} />
         </div>
 
         <form onSubmit={handleConnect} className="space-y-6">
-          <Section title="Incoming mail (IMAP)">
+          <Section title="Incoming mail (IMAP)" theme={displayTheme}>
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
-                  <Field label="IMAP host" id="e-imap-host">
+                  <Field label="IMAP host" id="e-imap-host" theme={displayTheme}>
                     <input id="e-imap-host" required value={imapHost} onChange={(e) => setImapHost(e.target.value)}
-                      className={INPUT} placeholder="imap.example.com" />
+                      className={inputClass(displayTheme)} placeholder="imap.example.com" />
                   </Field>
                 </div>
-                <Field label="Port" id="e-imap-port">
+                <Field label="Port" id="e-imap-port" theme={displayTheme}>
                   <input id="e-imap-port" type="number" required value={imapPort} onChange={(e) => setImapPort(e.target.value)}
-                    className={INPUT} placeholder="993" />
+                    className={inputClass(displayTheme)} placeholder="993" />
                 </Field>
               </div>
-              <Field label="Username" id="e-imap-username">
+              <Field label="Username" id="e-imap-username" theme={displayTheme}>
                 <input id="e-imap-username" required value={imapUsername} onChange={(e) => setImapUsername(e.target.value)}
-                  className={INPUT} placeholder="you@example.com" />
+                  className={inputClass(displayTheme)} placeholder="you@example.com" />
               </Field>
-              <Field label="Password" id="e-imap-password">
+              <Field label="Password" id="e-imap-password" theme={displayTheme}>
                 <input id="e-imap-password" type="password" value={imapPassword} onChange={(e) => setImapPassword(e.target.value)}
-                  className={INPUT} placeholder="Required to connect" autoComplete="new-password" />
+                  className={inputClass(displayTheme)} placeholder="Required to connect" autoComplete="new-password" />
               </Field>
             </div>
           </Section>
 
-          <Section title="Outgoing mail (SMTP)">
+          <Section title="Outgoing mail (SMTP)" theme={displayTheme}>
             <div className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div className="col-span-2">
-                  <Field label="SMTP host" id="e-smtp-host">
+                  <Field label="SMTP host" id="e-smtp-host" theme={displayTheme}>
                     <input id="e-smtp-host" required value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)}
-                      className={INPUT} placeholder="smtp.example.com" />
+                      className={inputClass(displayTheme)} placeholder="smtp.example.com" />
                   </Field>
                 </div>
-                <Field label="Port" id="e-smtp-port">
+                <Field label="Port" id="e-smtp-port" theme={displayTheme}>
                   <input id="e-smtp-port" type="number" required value={smtpPort} onChange={(e) => setSmtpPort(e.target.value)}
-                    className={INPUT} placeholder="587" />
+                    className={inputClass(displayTheme)} placeholder="587" />
                 </Field>
               </div>
-              <Field label="Username" id="e-smtp-username">
+              <Field label="Username" id="e-smtp-username" theme={displayTheme}>
                 <input id="e-smtp-username" required value={smtpUsername} onChange={(e) => setSmtpUsername(e.target.value)}
-                  className={INPUT} placeholder="you@example.com" />
+                  className={inputClass(displayTheme)} placeholder="you@example.com" />
               </Field>
-              <Field label="Password" id="e-smtp-password">
+              <Field label="Password" id="e-smtp-password" theme={displayTheme}>
                 <input id="e-smtp-password" type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)}
-                  className={INPUT} placeholder="Required to connect" autoComplete="new-password" />
+                  className={inputClass(displayTheme)} placeholder="Required to connect" autoComplete="new-password" />
               </Field>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="From email" id="e-smtp-from-email">
+                <Field label="From email" id="e-smtp-from-email" theme={displayTheme}>
                   <input id="e-smtp-from-email" type="email" required value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)}
-                    className={INPUT} placeholder="you@example.com" />
+                    className={inputClass(displayTheme)} placeholder="you@example.com" />
                 </Field>
-                <Field label="From name" id="e-smtp-from-name">
+                <Field label="From name" id="e-smtp-from-name" theme={displayTheme}>
                   <input id="e-smtp-from-name" required value={smtpFromName} onChange={(e) => setSmtpFromName(e.target.value)}
-                    className={INPUT} placeholder="Your name" />
+                    className={inputClass(displayTheme)} placeholder="Your name" />
                 </Field>
               </div>
             </div>
@@ -350,27 +409,34 @@ export default function EmailPage() {
       .map(([role, disp]) => ({ key: role, label: disp.label, icon: disp.icon })),
   ];
   const activeLabel = folders.find((f) => f.key === activeFolder)?.label ?? "Inbox";
+  const gradient = backgroundGradient(displayBackground);
 
   return (
-    <div className="flex h-[calc(100vh-6.5rem)] gap-4 p-6">
+    <div
+      className="flex h-[calc(100vh-6.5rem)] gap-4 rounded-2xl p-6"
+      style={gradient ? { backgroundImage: gradient } : undefined}
+    >
       <EmailSidebar
         folders={folders}
         activeFolder={activeFolder}
         onSelectFolder={selectFolder}
         onCompose={openCompose}
         onDisconnect={handleDisconnect}
+        theme={displayTheme}
+        background={displayBackground}
+        onSaveDisplayPrefs={handleSaveDisplayPrefs}
       />
 
-      <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
-        <div className="border-b border-outline-variant px-4 py-3">
-          <h2 className="text-sm font-semibold text-white">{activeLabel}</h2>
+      <div className={`flex w-80 shrink-0 flex-col overflow-hidden ${panelClass(displayTheme)}`}>
+        <div className={`border-b px-4 py-3 ${displayTheme === "dark" ? "border-outline-variant" : "border-slate-200"}`}>
+          <h2 className={`text-sm font-semibold ${textClass(displayTheme)}`}>{activeLabel}</h2>
         </div>
         <div className="flex-1 overflow-y-auto">
           {loadingMessages && messages.length === 0 && (
-            <p className="p-4 text-sm text-slate-400">Loading…</p>
+            <p className={`p-4 text-sm ${mutedClass(displayTheme)}`}>Loading…</p>
           )}
           {!loadingMessages && messages.length === 0 && !inboxError && (
-            <p className="p-4 text-sm text-slate-400">No messages.</p>
+            <p className={`p-4 text-sm ${mutedClass(displayTheme)}`}>No messages.</p>
           )}
           {messages.map((m) => (
             <EmailMessageRow
@@ -381,12 +447,13 @@ export default function EmailPage() {
               onToggleStar={handleToggleStar}
               onArchive={handleArchive}
               onDelete={handleDelete}
+              theme={displayTheme}
             />
           ))}
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
+      <div className={`flex flex-1 flex-col overflow-hidden ${panelClass(displayTheme)}`}>
         {inboxError && (
           <div className="p-4">
             <Alert ok={false} text={inboxError} />
@@ -402,25 +469,42 @@ export default function EmailPage() {
         )}
         {selectedUid && selectedMessage && !loadingDetail && (
           <div className="flex-1 overflow-y-auto p-6">
-            <h3 className="text-lg font-semibold text-white">{selectedMessage.subject || "(no subject)"}</h3>
-            <p className="mt-1 text-sm text-slate-400">From: {selectedMessage.from_address}</p>
-            <p className="text-sm text-slate-400">To: {selectedMessage.to_address}</p>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className={`text-lg font-semibold ${textClass(displayTheme)}`}>{selectedMessage.subject || "(no subject)"}</h3>
+              <button
+                type="button"
+                onClick={startReply}
+                className="flex shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <span className="material-symbols-outlined text-[16px]">reply</span>
+                Reply
+              </button>
+            </div>
+            <p className={`mt-1 text-sm ${mutedClass(displayTheme)}`}>From: {selectedMessage.from_address}</p>
+            <p className={`text-sm ${mutedClass(displayTheme)}`}>To: {selectedMessage.to_address}</p>
             <p className="text-xs text-slate-500">{formatDate(selectedMessage.date)}</p>
             {selectedMessage.attachments.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {selectedMessage.attachments.map((a, i) => (
-                  <span
+                  <button
                     key={i}
-                    className="flex items-center gap-1.5 rounded-md border border-outline-variant bg-white/5 px-2.5 py-1 text-xs text-slate-300"
+                    type="button"
+                    onClick={() => handleDownloadAttachment(i, a.filename)}
+                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                      displayTheme === "dark"
+                        ? "border-outline-variant bg-white/5 text-slate-300 hover:bg-white/10"
+                        : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
+                    }`}
                   >
                     <span className="material-symbols-outlined text-[14px]">attach_file</span>
                     {a.filename}
                     <span className="text-slate-500">({Math.max(1, Math.round(a.size / 1024))} KB)</span>
-                  </span>
+                    <span className="material-symbols-outlined text-[14px]">download</span>
+                  </button>
                 ))}
               </div>
             )}
-            <div className="mt-4 border-t border-outline-variant/50 pt-4 text-sm text-slate-200">
+            <div className={`mt-4 border-t pt-4 text-sm ${displayTheme === "dark" ? "border-outline-variant/50 text-slate-200" : "border-slate-200/70 text-slate-700"}`}>
               {selectedMessage.body_html ? (
                 <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(selectedMessage.body_html) }} />
               ) : (
@@ -440,6 +524,7 @@ export default function EmailPage() {
           onExpand={() => setComposeState("open")}
           onClose={closeCompose}
           onSend={handleSend}
+          theme={displayTheme}
         />
       )}
     </div>

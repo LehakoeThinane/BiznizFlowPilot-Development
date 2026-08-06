@@ -139,6 +139,56 @@ class TestSendMessage:
 
         assert len(_FakeSMTP.sent_messages) == 1
         sent = _FakeSMTP.sent_messages[0]
+        assert "Cc" not in sent
+
+    def test_cc_recipients_included_in_message(self, test_db: Session, monkeypatch):
+        class _FakeSMTP:
+            sent_messages: list = []
+
+            def __init__(self, host, port, timeout=None):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def ehlo(self):
+                pass
+
+            def starttls(self, context=None):
+                pass
+
+            def login(self, username, password):
+                pass
+
+            def send_message(self, message):
+                _FakeSMTP.sent_messages.append(message)
+                return {}
+
+        monkeypatch.setattr("smtplib.SMTP", _FakeSMTP)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        service.set_account(
+            business.id, user_id,
+            imap_host="imap.example.com", imap_port=993, imap_username="me@example.com",
+            imap_password="secret",
+            smtp_host="smtp.example.com", smtp_port=587, smtp_username="me@example.com",
+            smtp_password="smtp-secret", smtp_from_email="me@example.com", smtp_from_name="Me",
+        )
+
+        service.send_message(
+            business.id, user_id, "to@example.com", "Hello", "Body text",
+            cc=["cc1@example.com", "cc2@example.com"],
+        )
+
+        assert len(_FakeSMTP.sent_messages) == 1
+        sent = _FakeSMTP.sent_messages[0]
+        assert sent["Cc"] == "cc1@example.com, cc2@example.com"
+        sent = _FakeSMTP.sent_messages[0]
         assert sent["To"] == "to@example.com"
         assert sent["Subject"] == "Hello"
 
@@ -340,3 +390,71 @@ class TestDeleteMessageService:
 
         service.delete_message(business.id, user_id, "5")
         assert captured == {"uid": "5", "source_folder": "INBOX"}
+
+
+class TestGetAttachmentService:
+    def test_raises_when_not_configured(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        with pytest.raises(EmailAccountNotConfiguredError):
+            service.get_attachment(business.id, uuid4(), "5", 0)
+
+    def test_delegates_to_imap_client(self, test_db: Session, monkeypatch):
+        captured = {}
+
+        def _fake_get_attachment(host, port, username, password, uid, attachment_index, folder):
+            captured.update(uid=uid, attachment_index=attachment_index, folder=folder)
+            return "note.txt", "text/plain", b"hello world"
+
+        monkeypatch.setattr("app.services.user_email.imap_client.get_attachment_content", _fake_get_attachment)
+
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        result = service.get_attachment(business.id, user_id, "5", 0)
+        assert result == ("note.txt", "text/plain", b"hello world")
+        assert captured == {"uid": "5", "attachment_index": 0, "folder": "INBOX"}
+
+
+class TestDisplayPrefs:
+    def test_get_returns_defaults_with_no_account_row(self, test_db: Session):
+        business = _make_business(test_db)
+        service = UserEmailAccountService(test_db)
+        theme, background = service.get_display_prefs(business.id, uuid4())
+        assert (theme, background) == ("dark", None)
+
+    def test_set_creates_bare_prefs_only_row(self, test_db: Session):
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+
+        theme, background = service.set_display_prefs(business.id, user_id, "light", "sunset")
+        assert (theme, background) == ("light", "sunset")
+
+        account = service.get_account(business.id, user_id)
+        assert account is not None
+        assert account.imap_host is None  # prefs-only row, no mailbox configured
+
+    def test_set_on_configured_account_leaves_imap_fields_untouched(self, test_db: Session):
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+        _connect_account(service, business.id, user_id)
+
+        service.set_display_prefs(business.id, user_id, "light", None)
+
+        account = service.get_account(business.id, user_id)
+        assert account.email_theme == "light"
+        assert account.email_background is None
+        assert account.imap_host == "imap.example.com"
+
+    def test_set_background_none_clears_it(self, test_db: Session):
+        business = _make_business(test_db)
+        user_id = uuid4()
+        service = UserEmailAccountService(test_db)
+
+        service.set_display_prefs(business.id, user_id, "dark", "sunset")
+        theme, background = service.set_display_prefs(business.id, user_id, "dark", None)
+        assert (theme, background) == ("dark", None)
