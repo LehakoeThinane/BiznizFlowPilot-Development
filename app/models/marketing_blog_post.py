@@ -6,7 +6,7 @@ checkout-based inference) because there's no "checked out by" concept here -
 any marketing_cms_admin can pick up any draft.
 """
 
-from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, String, Text, Uuid
+from sqlalchemy import Boolean, CheckConstraint, Column, DateTime, ForeignKey, String, Text, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 
 from app.models.base import BaseModel
@@ -47,6 +47,23 @@ class MarketingBlogPost(BaseModel):
         String(40),
         nullable=True,
         doc="Commit SHA of the last successful publish - drives publish idempotency",
+    )
+
+    auto_publish_ready = Column(
+        Boolean,
+        nullable=False,
+        server_default="false",
+        doc="Human has explicitly queued this draft for the daily autopublish task to pick up",
+    )
+    pending_markdown_body = Column(
+        Text,
+        nullable=True,
+        doc=(
+            "Markdown snapshot computed client-side (same blocksToMarkdownLossy() the manual "
+            "Publish button uses) at the moment a draft was scheduled or AI-generated - the "
+            "daily autopublish task has no browser/BlockNote available, so it publishes this "
+            "stored snapshot directly rather than deriving markdown server-side."
+        ),
     )
 
     created_by = Column(Uuid, ForeignKey("marketing_cms_admins.id", ondelete="SET NULL"), nullable=True)

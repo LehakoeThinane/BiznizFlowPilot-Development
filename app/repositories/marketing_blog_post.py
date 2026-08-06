@@ -31,6 +31,25 @@ class MarketingBlogPostRepository:
         """Look up a post by slug."""
         return self.db.query(MarketingBlogPost).filter(MarketingBlogPost.slug == slug).first()
 
+    def get_next_auto_publish_ready(self) -> Optional[MarketingBlogPost]:
+        """The oldest human-queued draft waiting for the daily autopublish task."""
+        return (
+            self.db.query(MarketingBlogPost)
+            .filter(MarketingBlogPost.status == "draft", MarketingBlogPost.auto_publish_ready.is_(True))
+            .order_by(MarketingBlogPost.created_at.asc())
+            .first()
+        )
+
+    def get_last_published(self) -> Optional[MarketingBlogPost]:
+        """The most recently published post, for the autopublish task's
+        once-per-day idempotency check."""
+        return (
+            self.db.query(MarketingBlogPost)
+            .filter(MarketingBlogPost.status == "published")
+            .order_by(MarketingBlogPost.published_at.desc())
+            .first()
+        )
+
     def create(self, **fields) -> MarketingBlogPost:
         """Create a new draft post."""
         post = MarketingBlogPost(**fields)

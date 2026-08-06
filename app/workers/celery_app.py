@@ -3,6 +3,7 @@
 from datetime import timedelta
 
 from celery import Celery
+from celery.schedules import crontab
 
 from app.core.config import settings
 
@@ -45,6 +46,11 @@ celery_app.conf.update(
         "poll-linkedin-leads": {
             "task": "ops.poll_linkedin_leads",
             "schedule": timedelta(seconds=settings.linkedin_lead_poll_interval_seconds),
+        },
+        "daily-blog-autopublish": {
+            "task": "ops.daily_blog_autopublish",
+            # 04:00 UTC = 06:00 SAST - South Africa has no DST, fixed offset.
+            "schedule": crontab(hour=4, minute=0),
         },
     },
 )

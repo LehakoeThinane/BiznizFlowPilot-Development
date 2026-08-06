@@ -86,6 +86,20 @@ class Settings(BaseSettings):
     marketing_cms_github_repo: str = "LehakoeThinane/MM-Nexus-Website"
     marketing_cms_github_branch: str = "main"
 
+    # Daily blog autopublish (see app/services/marketing_blog_autopublish.py).
+    # Master switch defaults off so shipping this code doesn't immediately
+    # start publishing to the live marketing site unannounced.
+    marketing_blog_autopublish_enabled: bool = False
+    # When True, AI-generated posts are held for manual review instead of
+    # publishing immediately - human-scheduled drafts always publish since
+    # the human already approved them by scheduling.
+    marketing_blog_autopublish_requires_approval: bool = False
+    # Base admin URL used to build a clickable review link in autopublish
+    # notification emails (e.g. "https://mmnexus.co.za/admin/blog/edit").
+    # Empty means the notification just names the post instead of linking it -
+    # same "empty = disabled" convention as staff_notification_email.
+    marketing_site_admin_url: str = ""
+
     @property
     def effective_marketing_cms_secret_key(self) -> str:
         """The signing key actually used for marketing CMS tokens."""
