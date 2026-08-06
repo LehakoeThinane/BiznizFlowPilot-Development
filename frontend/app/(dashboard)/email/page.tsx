@@ -18,7 +18,7 @@ import type {
   UserEmailAccount,
 } from "@/types/api";
 
-const EMPTY_DRAFT: ComposeDraft = { to: "", subject: "", body: "" };
+const EMPTY_DRAFT: ComposeDraft = { to: "", cc: "", subject: "", body: "" };
 
 const ROLE_DISPLAY: Record<string, { label: string; icon: string }> = {
   sent: { label: "Sent", icon: "send" },
@@ -261,11 +261,21 @@ export default function EmailPage() {
     }
   }
 
-  async function handleSend(to: string, subject: string, body: string) {
-    await apiRequest("/api/v1/email-account/send", { method: "POST", body: { to, subject, body } });
+  async function handleSend(to: string, subject: string, body: string, cc: string[]) {
+    await apiRequest("/api/v1/email-account/send", { method: "POST", body: { to, subject, body, cc } });
   }
 
   function openCompose() {
+    // Only reset the draft when starting fresh - if a draft is already
+    // minimized in progress, just bring it back rather than discarding it.
+    if (composeState === "closed") setComposeDraft(EMPTY_DRAFT);
+    setComposeState("open");
+  }
+
+  function startReply() {
+    if (!selectedMessage) return;
+    const subject = /^re:/i.test(selectedMessage.subject) ? selectedMessage.subject : `Re: ${selectedMessage.subject}`;
+    setComposeDraft({ to: selectedMessage.from_address, cc: "", subject, body: "" });
     setComposeState("open");
   }
 
@@ -440,7 +450,17 @@ export default function EmailPage() {
         )}
         {selectedUid && selectedMessage && !loadingDetail && (
           <div className="flex-1 overflow-y-auto p-6">
-            <h3 className={`text-lg font-semibold ${textClass(displayTheme)}`}>{selectedMessage.subject || "(no subject)"}</h3>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className={`text-lg font-semibold ${textClass(displayTheme)}`}>{selectedMessage.subject || "(no subject)"}</h3>
+              <button
+                type="button"
+                onClick={startReply}
+                className="flex shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-opacity hover:opacity-90"
+              >
+                <span className="material-symbols-outlined text-[16px]">reply</span>
+                Reply
+              </button>
+            </div>
             <p className={`mt-1 text-sm ${mutedClass(displayTheme)}`}>From: {selectedMessage.from_address}</p>
             <p className={`text-sm ${mutedClass(displayTheme)}`}>To: {selectedMessage.to_address}</p>
             <p className="text-xs text-slate-500">{formatDate(selectedMessage.date)}</p>

@@ -228,6 +228,46 @@ class TestSend:
         assert r.json()["sent"] is True
         assert len(_FakeSMTP.sent_messages) == 1
 
+    def test_send_with_cc(self, client, owner_user, monkeypatch):
+        class _FakeSMTP:
+            sent_messages: list = []
+
+            def __init__(self, host, port, timeout=None):
+                pass
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def ehlo(self):
+                pass
+
+            def starttls(self, context=None):
+                pass
+
+            def login(self, username, password):
+                pass
+
+            def send_message(self, message):
+                _FakeSMTP.sent_messages.append(message)
+                return {}
+
+        monkeypatch.setattr("smtplib.SMTP", _FakeSMTP)
+        monkeypatch.setattr(
+            "app.api.user_email.imap_client.list_messages",
+            lambda host, port, username, password, limit=1: [],
+        )
+        client.put("/api/v1/email-account", headers=_auth_headers(owner_user), json=_connect_body())
+
+        r = client.post(
+            "/api/v1/email-account/send", headers=_auth_headers(owner_user),
+            json={"to": "to@example.com", "subject": "Hi", "body": "Body", "cc": ["cc@example.com"]},
+        )
+        assert r.status_code == 200
+        assert _FakeSMTP.sent_messages[0]["Cc"] == "cc@example.com"
+
 
 def _connect(client, owner_user, monkeypatch):
     monkeypatch.setattr(

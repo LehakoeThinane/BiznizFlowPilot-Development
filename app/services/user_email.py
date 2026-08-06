@@ -187,6 +187,7 @@ class UserEmailAccountService:
         to: str,
         subject: str,
         body: str,
+        cc: list[str] | None = None,
         attachments: list[EmailAttachment] | None = None,
     ) -> None:
         account = self.get_account(business_id, user_id)
@@ -206,7 +207,7 @@ class UserEmailAccountService:
             default_from_email=account.smtp_from_email,
             default_from_name=account.smtp_from_name,
         )
-        provider.send(recipient=to, subject=subject, body=body, attachments=attachments)
+        provider.send(recipient=to, subject=subject, body=body, cc=cc, attachments=attachments)
 
     def _require_account_with_imap(self, business_id: UUID, user_id: UUID) -> UserEmailAccount:
         account = self.get_account(business_id, user_id)

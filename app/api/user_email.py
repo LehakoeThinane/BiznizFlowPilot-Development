@@ -294,7 +294,7 @@ def send_email_message(
 ) -> dict:
     service = UserEmailAccountService(db)
     try:
-        service.send_message(current_user.business_id, current_user.user_id, body.to, body.subject, body.body)
+        service.send_message(current_user.business_id, current_user.user_id, body.to, body.subject, body.body, cc=body.cc)
     except EmailAccountNotConfiguredError as e:
         raise HTTPException(status_code=404, detail=str(e))
     except TerminalEmailProviderError as e:

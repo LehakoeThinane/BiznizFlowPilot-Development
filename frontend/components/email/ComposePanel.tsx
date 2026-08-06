@@ -15,6 +15,7 @@ import {
 
 export interface ComposeDraft {
   to: string;
+  cc: string;
   subject: string;
   body: string;
 }
@@ -35,7 +36,7 @@ export function ComposePanel({
   onMinimize: () => void;
   onExpand: () => void;
   onClose: () => void;
-  onSend: (to: string, subject: string, body: string) => Promise<void>;
+  onSend: (to: string, subject: string, body: string, cc: string[]) => Promise<void>;
   theme: EmailTheme;
 }) {
   const [sending, setSending] = useState(false);
@@ -50,7 +51,8 @@ export function ComposePanel({
     setSending(true);
     setError("");
     try {
-      await onSend(draft.to.trim(), draft.subject.trim(), draft.body.trim());
+      const cc = draft.cc.split(",").map((s) => s.trim()).filter(Boolean);
+      await onSend(draft.to.trim(), draft.subject.trim(), draft.body.trim(), cc);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to send.");
@@ -101,6 +103,13 @@ export function ComposePanel({
             <input
               autoFocus type="email" value={draft.to} onChange={(e) => onDraftChange({ to: e.target.value })}
               placeholder="recipient@example.com" className={inputClass(theme)}
+            />
+          </div>
+          <div>
+            <label className={`mb-1 block text-xs font-medium ${mutedClass(theme)}`}>Cc</label>
+            <input
+              type="text" value={draft.cc} onChange={(e) => onDraftChange({ cc: e.target.value })}
+              placeholder="cc@example.com, another@example.com" className={inputClass(theme)}
             />
           </div>
           <div>
