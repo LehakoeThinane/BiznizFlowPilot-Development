@@ -132,8 +132,15 @@ class MessagingService:
         return self.repo.list_messages(conversation_id, since=since, limit=limit)
 
     def send_message(self, business_id: UUID, current_user: CurrentUser, conversation_id: UUID, content: str) -> Message:
-        self._require_participant(business_id, current_user, conversation_id)
+        conversation = self._require_participant(business_id, current_user, conversation_id)
         message = self.repo.add_message(conversation_id, current_user.user_id, content)
+        if conversation.source == "website_widget" and conversation.ai_active:
+            # A real staff member just replied - see app/services/website_chat.py.
+            # The visitor-side system user has no password and can never
+            # authenticate here, so any authenticated sender on one of these
+            # conversations is by definition a human taking over. This flag
+            # flip IS the entire takeover mechanism - no new endpoint needed.
+            conversation.ai_active = False
         self.db.commit()
         self.db.refresh(message)
         return message

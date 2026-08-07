@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.integrations.image_gen import ImageGenError
 from app.models.marketing_blog_post import MarketingBlogPost
 from app.models.marketing_blog_topic import MarketingBlogTopic
 from app.repositories.marketing_blog_post import MarketingBlogPostRepository
@@ -67,7 +68,7 @@ def _publish_scheduled_post(db: Session, post: MarketingBlogPost) -> dict[str, s
     markdown_body = post.pending_markdown_body or ""
     post.published_at = datetime.now(timezone.utc)
     try:
-        commit_sha = marketing_blog.publish(post, markdown_body)
+        commit_sha, linkedin_status = marketing_blog.publish_and_cross_post(post, markdown_body)
     except marketing_blog.MarketingBlogPublishError as e:
         db.rollback()
         email.send_blog_autopublish_notice(
@@ -80,7 +81,9 @@ def _publish_scheduled_post(db: Session, post: MarketingBlogPost) -> dict[str, s
     post.auto_publish_ready = False
     post.pending_markdown_body = None
     db.commit()
-    email.send_blog_autopublish_notice("published", f"Published scheduled post: {post.title}", post_id=str(post.id))
+    email.send_blog_autopublish_notice(
+        "published", f"Published scheduled post: {post.title} (LinkedIn: {linkedin_status})", post_id=str(post.id)
+    )
     return {"outcome": "published", "post_id": str(post.id)}
 
 
@@ -100,6 +103,18 @@ def _generate_and_publish_from_topic(
     )
     topic_repo.mark_used(topic)
 
+    # Best-effort, non-blocking - a broken/unconfigured image API must never
+    # stop the actual article from publishing, same "secondary action"
+    # reasoning as the LinkedIn cross-post below.
+    cover_image_status = "not configured"
+    try:
+        marketing_blog.generate_and_attach_cover_image(post)
+        cover_image_status = "generated"
+    except ImageGenError:
+        pass
+    except marketing_blog.MarketingBlogPublishError as e:
+        cover_image_status = f"failed: {e}"
+
     if settings.marketing_blog_autopublish_requires_approval:
         email.send_blog_autopublish_notice(
             "needs review", f"AI-generated post ready for review: {draft.title}", post_id=str(post.id)
@@ -108,7 +123,7 @@ def _generate_and_publish_from_topic(
 
     post.published_at = datetime.now(timezone.utc)
     try:
-        commit_sha = marketing_blog.publish(post, draft.markdown_body)
+        commit_sha, linkedin_status = marketing_blog.publish_and_cross_post(post, draft.markdown_body)
     except marketing_blog.MarketingBlogPublishError as e:
         db.rollback()
         email.send_blog_autopublish_notice(
@@ -120,6 +135,8 @@ def _generate_and_publish_from_topic(
     post.github_commit_sha = commit_sha
     db.commit()
     email.send_blog_autopublish_notice(
-        "published", f"Published AI-generated post: {draft.title}", post_id=str(post.id)
+        "published",
+        f"Published AI-generated post: {draft.title} (LinkedIn: {linkedin_status}, cover image: {cover_image_status})",
+        post_id=str(post.id),
     )
     return {"outcome": "published", "post_id": str(post.id)}

@@ -120,6 +120,7 @@ class BlogPublishRequest(BaseModel):
 class BlogPublishResponse(BaseModel):
     published: bool
     github_commit_sha: Optional[str] = None
+    linkedin_status: str = "not configured"
 
 
 # ── Autopublish (topic queue + schedule) ──────────────────────────────────────

@@ -1,6 +1,6 @@
 """Messaging model - direct (1:1) chat between colleagues in a business."""
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, String, Text, Uuid
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, String, Text, Uuid
 from sqlalchemy.orm import relationship
 
 from app.models.base import BaseModel
@@ -12,6 +12,14 @@ class Conversation(BaseModel):
     __tablename__ = "conversations"
 
     business_id = Column(Uuid, ForeignKey("businesses.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    # "internal" (default) is a normal colleague-to-colleague chat. "website_widget"
+    # is a website visitor's conversation (see app/services/website_chat.py) - the
+    # visitor+AI side is a shared system User, the other participant is the
+    # configured staff assignee. ai_active flips false the first time a real
+    # staff member replies, which is the entire "human takeover" mechanism.
+    source = Column(String(20), nullable=False, default="internal", server_default="internal")
+    ai_active = Column(Boolean, nullable=False, default=True, server_default="true")
 
     participants = relationship("ConversationParticipant", back_populates="conversation", cascade="all, delete-orphan")
     messages     = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
@@ -66,6 +74,13 @@ class Message(BaseModel):
     shared_meeting_id  = Column(Uuid, ForeignKey("meetings.id", ondelete="SET NULL"), nullable=True)
     poll_id            = Column(Uuid, ForeignKey("polls.id", ondelete="SET NULL"), nullable=True)
     sticker_key        = Column(String(50), nullable=True)
+
+    # True for the website chat widget's AI-generated replies (see
+    # app/services/website_chat.py) - the visitor and the AI share one
+    # system User as sender_id, so this is what tells an AI reply apart
+    # from the visitor's own words, e.g. when rebuilding LLM history.
+    # False/unused for every other conversation.
+    is_ai_reply = Column(Boolean, nullable=False, default=False, server_default="false")
 
     conversation = relationship("Conversation", back_populates="messages")
     sender       = relationship("User", foreign_keys=[sender_id])

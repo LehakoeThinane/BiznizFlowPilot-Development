@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.dependencies_marketing_cms import get_current_marketing_cms_admin
+from app.integrations.image_gen import ImageGenError
 from app.repositories.marketing_blog_post import MarketingBlogPostRepository
 from app.repositories.marketing_blog_topic import MarketingBlogTopicRepository
 from app.schemas.marketing_cms import (
@@ -163,6 +164,34 @@ def generate_post_content(
     return BlogGenerateResponse(markdown=markdown)
 
 
+@router.post("/{post_id}/generate-cover-image", response_model=BlogPostResponse)
+def generate_post_cover_image(
+    post_id: UUID,
+    current_admin: Annotated[CurrentMarketingCmsAdmin, Depends(get_current_marketing_cms_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BlogPostResponse:
+    """AI-generate a cover image from the post's title/description, commit
+    it to MM-Nexus-Website, and save cover_image_url. Overwrites any
+    existing cover image at the same slug-based path."""
+    post = MarketingBlogPostRepository(db).get_by_id(post_id)
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if not post.title or not post.description:
+        raise HTTPException(status_code=400, detail="Title and description are required before generating a cover image")
+
+    try:
+        marketing_blog.generate_and_attach_cover_image(post)
+    except ImageGenError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except marketing_blog.MarketingBlogPublishError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+    post.updated_by = current_admin.marketing_cms_admin_id
+    db.commit()
+    db.refresh(post)
+    return BlogPostResponse.model_validate(post)
+
+
 @router.post("/{post_id}/publish", response_model=BlogPublishResponse)
 def publish_post(
     post_id: UUID,
@@ -182,7 +211,7 @@ def publish_post(
         post.published_at = datetime.now(timezone.utc)
 
     try:
-        commit_sha = marketing_blog.publish(post, body.markdown_body)
+        commit_sha, linkedin_status = marketing_blog.publish_and_cross_post(post, body.markdown_body)
     except marketing_blog.MarketingBlogPublishError as e:
         raise HTTPException(status_code=502, detail=str(e)) from e
 
@@ -191,7 +220,7 @@ def publish_post(
     post.updated_by = current_admin.marketing_cms_admin_id
     db.commit()
 
-    return BlogPublishResponse(published=True, github_commit_sha=commit_sha)
+    return BlogPublishResponse(published=True, github_commit_sha=commit_sha, linkedin_status=linkedin_status)
 
 
 @router.patch("/{post_id}/schedule-auto-publish", response_model=BlogPostResponse)

@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.ai.engine import get_engine
 from app.core.config import settings
+from app.integrations import image_gen, linkedin
 from app.models.marketing_blog_post import MarketingBlogPost
 from app.repositories.marketing_blog_post import MarketingBlogPostRepository
 
@@ -187,12 +188,14 @@ class MarketingBlogPublishError(Exception):
     """Raised when the GitHub Contents API publish step fails."""
 
 
-def publish(post: MarketingBlogPost, markdown_body: str) -> str:
-    """Commit the post's Markdown to MM-Nexus-Website's `main` branch,
-    creating or updating src/content/blog/{slug}.md. Returns the resulting
-    commit SHA. No-ops (returns the existing SHA unchanged) if the computed
-    file content is byte-identical to what's already committed - the guard
-    against double-click duplicate deploys.
+def _commit_file_to_github(path: str, content_bytes: bytes, commit_message: str) -> str:
+    """Commit a file to MM-Nexus-Website's `main` branch via GitHub's
+    Contents API, creating or updating `path`. Returns the resulting
+    commit SHA. No-ops (returns the existing SHA unchanged) if the content
+    is byte-identical to what's already committed - the guard against
+    double-click duplicate deploys. Shared by publish() (the post's
+    Markdown) and publish_cover_image() (its generated cover PNG) - same
+    commit mechanics, different path/content.
 
     Raises:
         MarketingBlogPublishError: if the GitHub PAT isn't configured, or
@@ -203,9 +206,7 @@ def publish(post: MarketingBlogPost, markdown_body: str) -> str:
             "MARKETING_CMS_GITHUB_PAT is not configured - cannot publish."
         )
 
-    file_content = _build_markdown_file(post, markdown_body)
-    encoded_content = base64.b64encode(file_content.encode("utf-8")).decode("ascii")
-    path = f"src/content/blog/{post.slug}.md"
+    encoded_content = base64.b64encode(content_bytes).decode("ascii")
     api_url = f"https://api.github.com/repos/{settings.marketing_cms_github_repo}/contents/{path}"
     headers = {
         "Authorization": f"Bearer {settings.marketing_cms_github_pat}",
@@ -230,7 +231,7 @@ def publish(post: MarketingBlogPost, markdown_body: str) -> str:
                 get_resp.raise_for_status()
 
             put_body = {
-                "message": f"Publish blog post: {post.title}",
+                "message": commit_message,
                 "content": encoded_content,
                 "branch": settings.marketing_cms_github_branch,
             }
@@ -242,3 +243,78 @@ def publish(post: MarketingBlogPost, markdown_body: str) -> str:
             return put_resp.json()["commit"]["sha"]
     except httpx.HTTPError as exc:
         raise MarketingBlogPublishError(f"Failed to publish to GitHub: {exc}") from exc
+
+
+def publish(post: MarketingBlogPost, markdown_body: str) -> str:
+    """Commit the post's Markdown to MM-Nexus-Website's `main` branch,
+    creating or updating src/content/blog/{slug}.md. Returns the resulting
+    commit SHA - see _commit_file_to_github() for the no-op/error behavior.
+    """
+    file_content = _build_markdown_file(post, markdown_body)
+    return _commit_file_to_github(
+        f"src/content/blog/{post.slug}.md",
+        file_content.encode("utf-8"),
+        f"Publish blog post: {post.title}",
+    )
+
+
+_COVER_IMAGE_PROMPT_TEMPLATE = """A professional, abstract editorial illustration for a B2B technology \
+and business consulting blog article titled "{title}" ({description}). Modern, clean, conceptual style - \
+abstract geometric shapes, symbolic imagery, or subtle tech-adjacent visual metaphors representing the \
+idea. Do not include any literal photos of people, screens, or interfaces. Do not include any text, \
+words, letters, or numbers anywhere in the image. Wide, cinematic framing suitable as a blog hero \
+banner, MM Nexus's brand tone: direct, professional, not corporate-stock-photo generic."""
+
+
+def _cover_image_prompt(title: str, description: str) -> str:
+    return _COVER_IMAGE_PROMPT_TEMPLATE.format(title=title, description=description)
+
+
+def publish_cover_image(post: MarketingBlogPost, image_bytes: bytes) -> str:
+    """Commit a generated cover image to MM-Nexus-Website's own repo at
+    public/blog/covers/{slug}.png - deliberately not R2 (BFP's normal
+    object storage): R2 access here is exclusively short-lived presigned
+    URLs, the wrong shape for something embedded in a live page
+    indefinitely. A committed static asset in the site's own repo has no
+    expiry and needs no new infrastructure."""
+    return _commit_file_to_github(
+        f"public/blog/covers/{post.slug}.png",
+        image_bytes,
+        f"Add cover image: {post.title}",
+    )
+
+
+def generate_and_attach_cover_image(post: MarketingBlogPost) -> None:
+    """Generate a cover image from the post's title/description and commit
+    it, setting post.cover_image_url. Does not commit the DB session -
+    callers own their own transaction boundary, matching this file's
+    other orchestration functions.
+
+    Raises:
+        image_gen.ImageGenError: if OpenAI isn't configured or the call fails.
+        MarketingBlogPublishError: if the GitHub commit fails.
+    """
+    prompt = _cover_image_prompt(post.title, post.description)
+    image_bytes = image_gen.generate_cover_image(prompt)
+    publish_cover_image(post, image_bytes)
+    post.cover_image_url = f"/blog/covers/{post.slug}.png"
+
+
+def publish_and_cross_post(post: MarketingBlogPost, markdown_body: str) -> tuple[str, str]:
+    """Publish to the website, then best-effort share it on the LinkedIn
+    company page. Returns (commit_sha, linkedin_status) where
+    linkedin_status is one of "posted", "not configured", or
+    "failed: <reason>" - never raises for a LinkedIn failure, since the
+    website publish (already committed by this point) is the primary
+    action and must not be undone by a secondary integration failing.
+    """
+    commit_sha = publish(post, markdown_body)
+
+    article_url = f"{settings.marketing_site_public_url}/blog/{post.slug}"
+    try:
+        post_id = linkedin.post_company_update(f"{post.title}\n\n{post.description}", article_url)
+        linkedin_status = "posted" if post_id else "not configured"
+    except linkedin.LinkedInPostError as e:
+        linkedin_status = f"failed: {e}"
+
+    return commit_sha, linkedin_status

@@ -108,6 +108,7 @@ class TestScheduledDraftPriority:
         assert post.github_commit_sha == "new-sha"
         notify.assert_called_once()
         assert notify.call_args[0][0] == "published"
+        assert "LinkedIn: not configured" in notify.call_args[0][1]
 
         # The topic queue was never touched.
         assert MarketingBlogTopicRepository(test_db).get_next_unused() is not None
@@ -147,6 +148,37 @@ class TestTopicFallback:
         assert post.status == "published"
         assert post.github_commit_sha == "new-sha"
         assert MarketingBlogTopicRepository(test_db).get_next_unused() is None
+
+    def test_cover_image_generated_and_included_when_configured(self, test_db: Session, notify, monkeypatch):
+        monkeypatch.setattr("app.services.marketing_blog.settings.openai_api_key", "fake-key")
+        MarketingBlogTopicRepository(test_db).create(topic="Why manual reconciliation is costing you")
+
+        reply = "TITLE: Generated Title\nDESCRIPTION: Generated description.\n\nGenerated body."
+        with patch("app.services.marketing_blog.get_engine", lambda: _fake_engine(reply)), patch(
+            "app.services.marketing_blog.image_gen.generate_cover_image", return_value=b"fake-png"
+        ), patch("app.services.marketing_blog.httpx.Client", return_value=_fake_github_client()):
+            result = marketing_blog_autopublish.run_daily_autopublish(test_db)
+
+        assert result["outcome"] == "published"
+        post = MarketingBlogPostRepository(test_db).get_by_id(UUID(result["post_id"]))
+        assert post.cover_image_url == "/blog/covers/generated-title.png"
+        assert "cover image: generated" in notify.call_args[0][1]
+
+    def test_cover_image_failure_does_not_block_publish(self, test_db: Session, notify):
+        """openai_api_key is unset by default in tests - image generation
+        should fail cleanly and the article should still publish."""
+        MarketingBlogTopicRepository(test_db).create(topic="Why manual reconciliation is costing you")
+
+        reply = "TITLE: Generated Title\nDESCRIPTION: Generated description.\n\nGenerated body."
+        with patch("app.services.marketing_blog.get_engine", lambda: _fake_engine(reply)), patch(
+            "app.services.marketing_blog.httpx.Client", return_value=_fake_github_client()
+        ):
+            result = marketing_blog_autopublish.run_daily_autopublish(test_db)
+
+        assert result["outcome"] == "published"
+        post = MarketingBlogPostRepository(test_db).get_by_id(UUID(result["post_id"]))
+        assert post.cover_image_url is None
+        assert "cover image: not configured" in notify.call_args[0][1]
 
     def test_skips_when_no_topics_and_no_scheduled_drafts(self, test_db: Session, notify):
         result = marketing_blog_autopublish.run_daily_autopublish(test_db)

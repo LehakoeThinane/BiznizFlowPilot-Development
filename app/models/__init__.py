@@ -25,6 +25,7 @@ from app.models.payroll import BenefitType, DeductionType, EmployeeBenefit, Empl
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.messaging import Conversation, ConversationParticipant, Message
 from app.models.message_attachment import MessageAttachment
+from app.models.website_chat_session import WebsiteChatSession
 from app.models.poll import Poll, PollOption, PollVote
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
