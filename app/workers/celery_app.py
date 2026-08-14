@@ -57,6 +57,10 @@ celery_app.conf.update(
             # 05:00 UTC = 07:00 SAST, Mon/Wed/Thu.
             "schedule": crontab(hour=5, minute=0, day_of_week="mon,wed,thu"),
         },
+        "check-lead-replies": {
+            "task": "ops.check_lead_replies",
+            "schedule": timedelta(seconds=settings.lead_reply_watch_interval_seconds),
+        },
     },
 )
 

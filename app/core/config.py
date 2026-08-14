@@ -300,6 +300,13 @@ class Settings(BaseSettings):
     # start spending Google Places API calls unannounced.
     lead_gen_schedule_enabled: bool = False
 
+    # Lead-reply escalation (see app/workers/lead_reply_watcher.py) - polls
+    # every connected mailbox for a reply from a lead-gen-sourced lead and
+    # flips it to "contacted" + notifies staff to take over personally.
+    # Off by default until at least one mailbox is actually connected.
+    lead_reply_watch_enabled: bool = False
+    lead_reply_watch_interval_seconds: int = 1800  # 30 minutes
+
     # Staff inbox for marketing-lead and onboarding-help notifications -
     # empty means those emails are logged only, not sent, same convention
     # as sentry_dsn/google_places_api_key above.
