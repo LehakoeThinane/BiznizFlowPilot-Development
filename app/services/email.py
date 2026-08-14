@@ -15,6 +15,7 @@ which Resend (sending from the platform's verified domain) can't do.
 """
 
 import base64
+import html
 import smtplib
 from dataclasses import dataclass
 from email.mime.application import MIMEApplication
@@ -501,6 +502,30 @@ def _notify_staff(subject: str, html: str, plain: str) -> None:
         logger.info("email.staff_notification.skipped_not_configured", extra={"subject": subject})
         return
     _send(settings.staff_notification_email, subject, html, plain)
+
+
+def send_lead_followup_email(
+    to_email: str,
+    subject: str,
+    plain_body: str,
+    business_name: str,
+    db: Session | None = None,
+    organization_id: UUID | None = None,
+) -> None:
+    """Automated first-touch outreach to a lead-gen-sourced prospect (see
+    app/services/lead_followup.py). Passes organization_id through so it
+    sends using that business's own configured sender identity/domain when
+    one is set, not the platform default - this has to look like it's from
+    business_name, not from BiznizFlowPilot. Deliberately plain (no branded
+    button/box chrome like the other templates here) - it's meant to read
+    as a real, personal email, not a marketing blast."""
+    paragraphs = [p.strip() for p in plain_body.split("\n\n") if p.strip()]
+    html_body = "".join(
+        f'<p style="margin:0 0 14px;font-family:sans-serif;font-size:14px;'
+        f'line-height:1.6;color:#1a1a1a">{html.escape(p)}</p>'
+        for p in paragraphs
+    )
+    _send(to_email, subject, html_body, plain_body, db=db, organization_id=organization_id)
 
 
 def send_marketing_guide_lead_email(

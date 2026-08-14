@@ -294,6 +294,12 @@ class Settings(BaseSettings):
     # than erroring, same convention as sentry_dsn above.
     google_places_api_key: str = ""
 
+    # Scheduled lead-gen (Mon/Wed/Thu - see app/workers/lead_gen_schedule.py).
+    # Master switch defaults off, same reasoning as
+    # marketing_blog_autopublish_enabled - shipping this code shouldn't
+    # start spending Google Places API calls unannounced.
+    lead_gen_schedule_enabled: bool = False
+
     # Staff inbox for marketing-lead and onboarding-help notifications -
     # empty means those emails are logged only, not sent, same convention
     # as sentry_dsn/google_places_api_key above.

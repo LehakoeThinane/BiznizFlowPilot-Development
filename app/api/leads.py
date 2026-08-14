@@ -11,9 +11,16 @@ from app.dependencies import get_current_user
 from app.schemas.auth import CurrentUser
 from app.schemas.lead import LeadCreate, LeadListResponse, LeadResponse, LeadUpdate
 from app.schemas.lead_gen import LeadGenSearchRequest, LeadGenSearchResponse
+from app.schemas.lead_gen_schedule import (
+    LeadGenScheduleCreate,
+    LeadGenScheduleListResponse,
+    LeadGenScheduleResponse,
+    LeadGenScheduleUpdate,
+)
 from app.services.event import EventService
 from app.services.lead import LeadService
 from app.services.lead_gen import LeadGenService
+from app.services.lead_gen_schedule import LeadGenScheduleService
 
 router = APIRouter(
     prefix="/api/v1/leads",
@@ -110,6 +117,88 @@ def find_leads(
         raise HTTPException(status_code=403, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/schedules", response_model=LeadGenScheduleResponse, status_code=201)
+def create_lead_gen_schedule(
+    data: LeadGenScheduleCreate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Save a Google Places search to run automatically (Mon/Wed/Thu).
+
+    🧨 RBAC: Only owner/manager - enforced inside the service.
+    """
+    try:
+        schedule = LeadGenScheduleService(db).create(current_user.business_id, current_user, data)
+        db.commit()
+        return schedule
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.get("/schedules", response_model=LeadGenScheduleListResponse)
+def list_lead_gen_schedules(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """List saved lead-gen searches for this business.
+
+    🧨 RBAC: Only owner/manager.
+    """
+    try:
+        schedules = LeadGenScheduleService(db).list(current_user.business_id, current_user)
+        return LeadGenScheduleListResponse(
+            items=[LeadGenScheduleResponse.model_validate(s) for s in schedules],
+            total=len(schedules),
+        )
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.patch("/schedules/{schedule_id}", response_model=LeadGenScheduleResponse)
+def update_lead_gen_schedule(
+    schedule_id: UUID,
+    data: LeadGenScheduleUpdate,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Update a saved lead-gen search (e.g. flip `active` off to pause it).
+
+    🧨 RBAC: Only owner/manager.
+    """
+    try:
+        schedule = LeadGenScheduleService(db).update(current_user.business_id, current_user, schedule_id, data)
+        if not schedule:
+            raise HTTPException(status_code=404, detail="Lead-gen schedule not found")
+        db.commit()
+        return schedule
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
+
+
+@router.delete("/schedules/{schedule_id}", response_model=dict)
+def delete_lead_gen_schedule(
+    schedule_id: UUID,
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Delete a saved lead-gen search.
+
+    🧨 RBAC: Only owner/manager.
+    """
+    try:
+        deleted = LeadGenScheduleService(db).delete(current_user.business_id, current_user, schedule_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Lead-gen schedule not found")
+        db.commit()
+        return {"message": "Lead-gen schedule deleted successfully"}
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
 
 
 @router.get("/{lead_id}", response_model=LeadResponse)
