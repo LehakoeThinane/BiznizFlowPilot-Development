@@ -401,6 +401,73 @@ class TestTaskFiltering:
         assert any(t.id == task1.id for t in tasks)
 
 
+class TestTaskResponseOverdue:
+    """TaskResponse recomputes status="overdue" at read time from due_date.
+
+    The DB column only ever holds pending/in_progress/completed - nothing
+    writes "overdue" onto the row. Every response (board, list, get-by-id)
+    goes through TaskResponse, so this is the single place that has to get
+    it right for the whole app to agree.
+    """
+
+    def test_past_due_pending_task_reports_overdue(self, test_db: Session, owner_user: CurrentUser):
+        from app.schemas.task import TaskResponse
+
+        service = TaskService(test_db)
+        past = datetime.now(tz=None) - timedelta(days=1)
+        task = service.repo.create(
+            business_id=owner_user.business_id, title="Late", due_date=past, status="pending",
+        )
+        test_db.commit()
+
+        assert TaskResponse.model_validate(task).status == "overdue"
+
+    def test_past_due_completed_task_stays_completed(self, test_db: Session, owner_user: CurrentUser):
+        from app.schemas.task import TaskResponse
+
+        service = TaskService(test_db)
+        past = datetime.now(tz=None) - timedelta(days=1)
+        task = service.repo.create(
+            business_id=owner_user.business_id, title="Done late", due_date=past, status="completed",
+        )
+        test_db.commit()
+
+        assert TaskResponse.model_validate(task).status == "completed"
+
+    def test_future_due_task_not_overdue(self, test_db: Session, owner_user: CurrentUser):
+        from app.schemas.task import TaskResponse
+
+        service = TaskService(test_db)
+        future = datetime.now(tz=None) + timedelta(days=1)
+        task = service.repo.create(
+            business_id=owner_user.business_id, title="Not yet", due_date=future, status="pending",
+        )
+        test_db.commit()
+
+        assert TaskResponse.model_validate(task).status == "pending"
+
+    def test_api_status_filter_overdue_returns_past_due_tasks(
+        self, client, test_db: Session, registered_user,
+    ):
+        """The "Overdue" option in the status filter dropdown queries by
+        due_date under the hood now, not a literal (never-written) DB value.
+        """
+        headers = {"Authorization": f"Bearer {registered_user['access_token']}"}
+        past = (datetime.now(tz=None) - timedelta(days=1)).isoformat()
+
+        create_resp = client.post(
+            "/api/v1/tasks",
+            json={"title": "Overdue via API", "due_date": past, "status": "pending"},
+            headers=headers,
+        )
+        assert create_resp.status_code == 200, create_resp.text
+
+        list_resp = client.get("/api/v1/tasks?status=overdue", headers=headers)
+        assert list_resp.status_code == 200
+        body = list_resp.json()
+        assert any(t["title"] == "Overdue via API" and t["status"] == "overdue" for t in body["items"])
+
+
 class TestTaskMultiTenancy:
     """Test multi-tenant isolation."""
 
