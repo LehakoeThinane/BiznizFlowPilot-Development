@@ -1,0 +1,8 @@
+# MCP server (local stdio tool connecting Claude Desktop/Code to this
+# backend's REST API). Only needed on a machine running that integration -
+# not part of the deployed backend's requirements.txt.
+mcp>=1.9.0,<2.0.0
+# Installed and tested against 1.29.0 during development of this package.
+
+# Already pinned in requirements.txt and reused as-is by mcp_server/:
+# httpx==0.25.1, pydantic-settings==2.1.0, python-dotenv==1.0.0

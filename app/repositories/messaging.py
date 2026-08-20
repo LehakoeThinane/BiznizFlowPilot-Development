@@ -83,8 +83,8 @@ class ConversationRepository(BaseRepository[Conversation]):
             .first()
         )
 
-    def add_message(self, conversation_id: UUID, sender_id: UUID, content: str) -> Message:
-        message = Message(conversation_id=conversation_id, sender_id=sender_id, content=content)
+    def add_message(self, conversation_id: UUID, sender_id: UUID, content: str, is_ai_reply: bool = False) -> Message:
+        message = Message(conversation_id=conversation_id, sender_id=sender_id, content=content, is_ai_reply=is_ai_reply)
         self.db.add(message)
         return message
 

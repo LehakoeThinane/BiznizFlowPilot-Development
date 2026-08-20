@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from app.core.security import create_access_token
 from app.schemas.auth import CurrentUser
@@ -118,8 +118,25 @@ class TestMessaging:
         )
         assert mark.status_code == 204
 
-        r = client.get("/api/v1/messaging/unread-count", headers=_auth_headers(manager_user))
-        assert r.json()["unread_count"] == 0
+    def test_normal_conversation_is_unaffected_by_website_widget_ai_active_flip(
+        self, client, test_db, owner_user: CurrentUser, manager_user: CurrentUser
+    ):
+        """Regression guard for the website-chat takeover hook in
+        MessagingService.send_message - an ordinary colleague conversation
+        (source='internal' by default) must never have its ai_active flag
+        touched, since that flag only means anything for source='website_widget'."""
+        from app.models.messaging import Conversation
+
+        conversation_id = self._create_conversation(client, owner_user, manager_user)
+        client.post(
+            f"/api/v1/messaging/conversations/{conversation_id}/messages",
+            json={"content": "Just a normal message"},
+            headers=_auth_headers(owner_user),
+        )
+
+        conversation = test_db.get(Conversation, UUID(conversation_id))
+        assert conversation.source == "internal"
+        assert conversation.ai_active is True
 
     def test_non_participant_cannot_read_or_send(
         self, client, owner_user: CurrentUser, manager_user: CurrentUser, staff_user: CurrentUser

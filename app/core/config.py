@@ -99,6 +99,34 @@ class Settings(BaseSettings):
     # Empty means the notification just names the post instead of linking it -
     # same "empty = disabled" convention as staff_notification_email.
     marketing_site_admin_url: str = ""
+    # Base public URL of the live marketing site, used to build the article
+    # link a LinkedIn cross-post shares (e.g. "https://mmnexus.co.za/blog/{slug}").
+    marketing_site_public_url: str = "https://mmnexus.co.za"
+
+    # LinkedIn company-page cross-posting (see app/integrations/linkedin.py) -
+    # a different LinkedIn product/scope than linkedin_access_token above
+    # (that one is Lead Sync API; this is organic company-page posting, which
+    # needs the Community Management API product + w_organization_social
+    # scope, its own separate app-review approval). Both empty means every
+    # publish just skips the cross-post - same "empty = disabled" convention
+    # used throughout this file.
+    linkedin_organization_access_token: str = ""
+    linkedin_organization_urn: str = ""
+
+    # MM Nexus website chat widget (see app/services/website_chat.py) - both
+    # empty means the public endpoints 404 rather than erroring, same
+    # "empty = disabled" convention as everything else here. MM Nexus runs
+    # as a real business/tenant inside BFP itself, so this is which business
+    # widget conversations belong to, and which staff member is seated as
+    # the second conversation participant (and therefore sees them).
+    mm_nexus_business_id: str = ""
+    mm_nexus_chat_assignee_user_id: str = ""
+
+    # AI-generated blog cover images (see app/integrations/image_gen.py) -
+    # empty means the feature raises a clean "not configured" error rather
+    # than calling OpenAI, same convention as every other optional
+    # integration here.
+    openai_api_key: str = ""
 
     @property
     def effective_marketing_cms_secret_key(self) -> str:
@@ -265,6 +293,19 @@ class Settings(BaseSettings):
     # Lead-gen automation - empty means the feature 404s / no-ops rather
     # than erroring, same convention as sentry_dsn above.
     google_places_api_key: str = ""
+
+    # Scheduled lead-gen (Mon/Wed/Thu - see app/workers/lead_gen_schedule.py).
+    # Master switch defaults off, same reasoning as
+    # marketing_blog_autopublish_enabled - shipping this code shouldn't
+    # start spending Google Places API calls unannounced.
+    lead_gen_schedule_enabled: bool = False
+
+    # Lead-reply escalation (see app/workers/lead_reply_watcher.py) - polls
+    # every connected mailbox for a reply from a lead-gen-sourced lead and
+    # flips it to "contacted" + notifies staff to take over personally.
+    # Off by default until at least one mailbox is actually connected.
+    lead_reply_watch_enabled: bool = False
+    lead_reply_watch_interval_seconds: int = 1800  # 30 minutes
 
     # Staff inbox for marketing-lead and onboarding-help notifications -
     # empty means those emails are logged only, not sent, same convention

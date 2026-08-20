@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models.business import Business
 from app.models.lead import Lead
+from app.models.notification import Notification
 from app.models.task import Task
 from app.models.event import Event
 from app.core.enums import EventStatus, EventType
@@ -138,7 +139,7 @@ class TestProcessIdleLeads:
 # ── mark_overdue_tasks ────────────────────────────────────────────────────────
 
 class TestMarkOverdueTasks:
-    def _make_overdue_task(self, db: Session, business_id, status="pending"):
+    def _make_overdue_task(self, db: Session, business_id, status="pending", assigned_to=None):
         task = Task(
             id=uuid4(),
             business_id=business_id,
@@ -146,6 +147,7 @@ class TestMarkOverdueTasks:
             status=status,
             priority="medium",
             due_date=datetime.now(timezone.utc) - timedelta(hours=2),
+            assigned_to=assigned_to,
         )
         db.add(task)
         db.flush()
@@ -218,6 +220,31 @@ class TestMarkOverdueTasks:
             .first()
         )
         assert event is not None
+
+    def test_notifies_the_assignee(self, test_db: Session, owner_business: Business):
+        assignee_id = uuid4()
+        task = self._make_overdue_task(test_db, owner_business.id, assigned_to=assignee_id)
+        service = FollowUpService(test_db)
+
+        service.mark_overdue_tasks(owner_business.id)
+        test_db.commit()  # mark_overdue_tasks doesn't commit - caller does, same as elsewhere in this file
+
+        notif = (
+            test_db.query(Notification)
+            .filter(Notification.related_id == task.id, Notification.user_id == assignee_id)
+            .first()
+        )
+        assert notif is not None
+        assert notif.type == "overdue_task"
+
+    def test_unassigned_task_creates_no_notification(self, test_db: Session, owner_business: Business):
+        task = self._make_overdue_task(test_db, owner_business.id)  # assigned_to=None
+        service = FollowUpService(test_db)
+
+        service.mark_overdue_tasks(owner_business.id)
+
+        notif = test_db.query(Notification).filter(Notification.related_id == task.id).first()
+        assert notif is None
 
     def test_other_business_tasks_unaffected(self, test_db: Session, owner_business: Business, other_business: Business):
         self._make_overdue_task(test_db, other_business.id)

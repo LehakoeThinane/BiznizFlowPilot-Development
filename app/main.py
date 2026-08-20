@@ -53,6 +53,7 @@ from app.api import (
     tasks,
     user_email,
     users,
+    website_chat,
     workflow_definitions,
     workflows,
 )
@@ -169,6 +170,9 @@ app.include_router(customer_portal.public_router)
 
 # Meeting RSVP (no auth required — see app/api/meeting_rsvp.py docstring)
 app.include_router(meeting_rsvp.public_router)
+
+# MM Nexus website chat widget (no auth required — see app/api/website_chat.py docstring)
+app.include_router(website_chat.public_router)
 
 # CRM routes (auth required)
 # require_active_trial: a no-op for every tier except an expired trial,

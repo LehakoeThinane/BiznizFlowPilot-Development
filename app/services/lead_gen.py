@@ -70,6 +70,7 @@ class LeadGenService:
                 continue
 
             email = find_email(place.website) if place.website else None
+            has_website = bool(place.website)
 
             customer = self.customer_repo.create(
                 business_id=business_id,
@@ -85,7 +86,21 @@ class LeadGenService:
             result = score_place(place, query)
             if result.qualified:
                 qualified_count += 1
-            notes = f'Auto-found via Google Places search: "{query}"'
+
+            # Service-fit angle, not a quality signal: no website at all is
+            # the cleanest "they need a site built" signal Places gives us
+            # for free; having one just means the pitch is different
+            # (systems/automation), not that the lead is worse. Encoded on
+            # `source` (not the qualification score) so both the follow-up
+            # emailer and staff reviewing the lead know which pitch to use.
+            if has_website:
+                source = "google_places_has_website"
+                angle_note = "Has a website - candidate for a systems/automation review."
+            else:
+                source = "google_places_no_website"
+                angle_note = "No website found - candidate for a new site build."
+
+            notes = f'{angle_note} Auto-found via Google Places search: "{query}"'
             if result.reasons:
                 notes += f" - {'; '.join(result.reasons)} (score {result.score}/{MAX_SCORE})."
             else:
@@ -96,7 +111,7 @@ class LeadGenService:
                 LeadCreate(
                     customer_id=customer.id,
                     status="qualified" if result.qualified else "new",
-                    source="google_places",
+                    source=source,
                     assigned_to=assign_to,
                     notes=notes,
                 ),

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.core.enums import EventStatus, EventType
 from app.models.event import Event
 from app.models.lead import Lead
+from app.utils.notify import notify_user
 from app.models.task import Task
 
 
@@ -194,6 +195,25 @@ class FollowUpService:
                 status=EventStatus.PENDING,
             )
             self.db.add(overdue_event)
+
+            # The Event above only feeds the Activity Timeline / workflow
+            # engine - it's not seen unless a workflow rule happens to watch
+            # for it. The assignee needs an actual alert, using the
+            # "overdue_task" Notification type that already existed for
+            # exactly this but was never fired by this job.
+            if task.assigned_to:
+                notify_user(
+                    self.db,
+                    business_id,
+                    task.assigned_to,
+                    "overdue_task",
+                    f"Task overdue: {task.title}",
+                    f"'{task.title}' passed its due date and needs attention.",
+                    action_url="/tasks",
+                    related_type="task",
+                    related_id=task.id,
+                )
+
             marked += 1
         
         if marked > 0:

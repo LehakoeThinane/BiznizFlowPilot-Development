@@ -46,7 +46,7 @@ class TestLeadGenGooglePlaces:
         assert len(result.leads) == 2
         assert result.skipped_duplicates == 0
         for lead in result.leads:
-            assert lead.source == "google_places"
+            assert lead.source == "google_places_has_website"
             assert lead.status == "new"
 
     def test_creates_a_customer_with_external_ref_per_result(self, test_db: Session, owner_user: CurrentUser):
@@ -94,6 +94,40 @@ class TestLeadGenGooglePlaces:
             .first()
         )
         assert notif is not None
+
+
+class TestLeadGenServiceAngle:
+    """`source` encodes which pitch fits - "no website" is the cleanest,
+    free signal Places gives for "they need a site built"; having one
+    means a different pitch (systems/automation), not a worse lead."""
+
+    def test_no_website_result_tagged_for_website_pitch(self, test_db: Session, owner_user: CurrentUser):
+        no_website = PlaceResult(
+            place_id="place_no_site", name="No Website Co", address="1 Main St",
+            phone="011 0000000", website=None,
+        )
+
+        with patch("app.services.lead_gen.search_text", return_value=[no_website]):
+            result = LeadGenService(test_db).find_via_google_places(
+                owner_user.business_id, owner_user, query="hardware stores"
+            )
+
+        assert result.leads[0].source == "google_places_no_website"
+        assert "new site build" in result.leads[0].notes
+
+    def test_has_website_result_tagged_for_systems_pitch(self, test_db: Session, owner_user: CurrentUser):
+        has_website = PlaceResult(
+            place_id="place_has_site", name="Has Website Co", address="1 Main St",
+            phone="011 0000000", website="https://example.co.za",
+        )
+
+        with patch("app.services.lead_gen.search_text", return_value=[has_website]):
+            result = LeadGenService(test_db).find_via_google_places(
+                owner_user.business_id, owner_user, query="hardware stores"
+            )
+
+        assert result.leads[0].source == "google_places_has_website"
+        assert "systems/automation review" in result.leads[0].notes
 
 
 class TestLeadGenQualificationScoring:

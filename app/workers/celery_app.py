@@ -52,6 +52,15 @@ celery_app.conf.update(
             # 04:00 UTC = 06:00 SAST - South Africa has no DST, fixed offset.
             "schedule": crontab(hour=4, minute=0),
         },
+        "scheduled-lead-gen": {
+            "task": "ops.run_lead_gen_schedules",
+            # 05:00 UTC = 07:00 SAST, Mon/Wed/Thu.
+            "schedule": crontab(hour=5, minute=0, day_of_week="mon,wed,thu"),
+        },
+        "check-lead-replies": {
+            "task": "ops.check_lead_replies",
+            "schedule": timedelta(seconds=settings.lead_reply_watch_interval_seconds),
+        },
     },
 )
 

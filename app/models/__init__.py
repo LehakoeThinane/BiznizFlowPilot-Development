@@ -10,6 +10,7 @@ from app.models.business import Business
 from app.models.user import User
 from app.models.customer import Customer
 from app.models.lead import Lead
+from app.models.lead_gen_schedule import LeadGenSchedule
 from app.models.task import Task, TaskAssignee
 from app.models.event import Event
 from app.models.workflow import Workflow, WorkflowAction, WorkflowDefinition, WorkflowRun
@@ -25,6 +26,7 @@ from app.models.payroll import BenefitType, DeductionType, EmployeeBenefit, Empl
 from app.models.meeting import Meeting, MeetingParticipant
 from app.models.messaging import Conversation, ConversationParticipant, Message
 from app.models.message_attachment import MessageAttachment
+from app.models.website_chat_session import WebsiteChatSession
 from app.models.poll import Poll, PollOption, PollVote
 from app.models.invoice import Invoice, InvoiceLineItem
 from app.models.notification import Notification
@@ -53,6 +55,7 @@ __all__ = [
     "User",
     "Customer",
     "Lead",
+    "LeadGenSchedule",
     "Task",
     "TaskAssignee",
     "Event",
@@ -89,6 +92,7 @@ __all__ = [
     "ConversationParticipant",
     "Message",
     "MessageAttachment",
+    "WebsiteChatSession",
     "Poll",
     "PollOption",
     "PollVote",

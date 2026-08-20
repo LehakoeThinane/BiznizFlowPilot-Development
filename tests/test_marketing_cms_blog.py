@@ -185,6 +185,7 @@ class TestPublishPost:
         body = r.json()
         assert body["published"] is True
         assert body["github_commit_sha"] == "new-sha"
+        assert body["linkedin_status"] == "not configured"
         mock_client.put.assert_called_once()
 
         detail = client.get(f"/api/v1/marketing/cms/blog/{created['id']}", headers=headers).json()
@@ -309,6 +310,65 @@ class TestPublishPost:
             json={"markdown_body": "Body."},
             headers=headers,
         )
+        assert r.status_code == 502
+
+
+class TestGenerateCoverImage:
+    def test_happy_path_sets_cover_image_url(self, client, marketing_cms_admin, monkeypatch):
+        monkeypatch.setattr("app.core.config.settings.marketing_cms_github_pat", "fake-pat")
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog",
+            json={"title": "Cover Image Post", "slug": "cover-image-post"},
+            headers=headers,
+        ).json()
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}", json={"description": "A test post."}, headers=headers
+        )
+
+        context_manager, mock_client = _fake_github_client(existing_content_b64=None)
+        with patch("app.services.marketing_blog.image_gen.generate_cover_image", return_value=b"fake-png"), \
+             patch("app.services.marketing_blog.httpx.Client", return_value=context_manager):
+            r = client.post(
+                f"/api/v1/marketing/cms/blog/{created['id']}/generate-cover-image", headers=headers
+            )
+
+        assert r.status_code == 200
+        assert r.json()["cover_image_url"] == "/blog/covers/cover-image-post.png"
+        mock_client.put.assert_called_once()
+
+    def test_requires_title_and_description(self, client, marketing_cms_admin):
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog", json={"title": "No Desc", "slug": "no-desc-cover"}, headers=headers
+        ).json()
+        r = client.post(f"/api/v1/marketing/cms/blog/{created['id']}/generate-cover-image", headers=headers)
+        assert r.status_code == 400
+
+    def test_404_for_missing_post(self, client, marketing_cms_admin):
+        r = client.post(
+            f"/api/v1/marketing/cms/blog/{uuid4()}/generate-cover-image", headers=auth(client, marketing_cms_admin)
+        )
+        assert r.status_code == 404
+
+    def test_502_when_image_gen_fails(self, client, marketing_cms_admin, monkeypatch):
+        from app.integrations.image_gen import ImageGenError
+
+        headers = auth(client, marketing_cms_admin)
+        created = client.post(
+            "/api/v1/marketing/cms/blog", json={"title": "Fail Post", "slug": "fail-cover"}, headers=headers
+        ).json()
+        client.patch(
+            f"/api/v1/marketing/cms/blog/{created['id']}", json={"description": "Desc."}, headers=headers
+        )
+
+        with patch(
+            "app.services.marketing_blog.image_gen.generate_cover_image",
+            side_effect=ImageGenError("OPENAI_API_KEY is not configured."),
+        ):
+            r = client.post(
+                f"/api/v1/marketing/cms/blog/{created['id']}/generate-cover-image", headers=headers
+            )
         assert r.status_code == 502
 
 

@@ -66,7 +66,7 @@ def list_tasks(
     """
     service = _task_service(db)
 
-    if overdue_only:
+    if overdue_only or status == "overdue":
         tasks, total = service.list_overdue(current_user.business_id, current_user, skip=skip, limit=limit)
     elif status:
         tasks, total = service.list_by_status(current_user.business_id, current_user, status, skip=skip, limit=limit)
