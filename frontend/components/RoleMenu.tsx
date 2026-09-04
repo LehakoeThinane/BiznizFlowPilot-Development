@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { UserRole } from "@/types/api";
 import { apiRequest } from "@/lib/api";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 
 interface NavItem {
   label: string;
@@ -176,13 +177,20 @@ const NAV_GROUP_ORDER = [
 export function RoleMenu({ role }: { role: UserRole }) {
   const pathname = usePathname();
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const previousUnreadMessagesRef = useRef<number | null>(null);
   const visibleItems = NAV_ITEMS
     .filter((item) => item.roles.includes(role))
     .sort((left, right) => NAV_GROUP_ORDER.indexOf(navGroup(left.label)) - NAV_GROUP_ORDER.indexOf(navGroup(right.label)));
 
   const fetchUnread = useCallback(() => {
     apiRequest<{ unread_count: number }>("/api/v1/messaging/unread-count", { _skipRefresh: true })
-      .then((d) => setUnreadMessages(d.unread_count))
+      .then((d) => {
+        if (previousUnreadMessagesRef.current !== null && d.unread_count > previousUnreadMessagesRef.current) {
+          playNotificationSound();
+        }
+        previousUnreadMessagesRef.current = d.unread_count;
+        setUnreadMessages(d.unread_count);
+      })
       .catch(() => null);
   }, []);
 
@@ -193,7 +201,7 @@ export function RoleMenu({ role }: { role: UserRole }) {
   }, [fetchUnread]);
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-1" onClick={unlockNotificationSound}>
       {visibleItems.map((item, index) => {
         const isActive = item.matches.some(
           (m) => pathname === m || pathname.startsWith(`${m}/`)

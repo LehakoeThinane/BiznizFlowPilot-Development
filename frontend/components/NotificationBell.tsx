@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 
 interface NotificationItem {
   id: string;
@@ -75,12 +76,19 @@ export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const previousUnreadRef = useRef<number | null>(null);
 
   const fetchCount = useCallback(() => {
     apiRequest<NotificationCount>("/api/v1/notifications/count", {
       _skipRefresh: true,
     })
-      .then((d) => setUnread(d.unread))
+      .then((d) => {
+        if (previousUnreadRef.current !== null && d.unread > previousUnreadRef.current) {
+          playNotificationSound();
+        }
+        previousUnreadRef.current = d.unread;
+        setUnread(d.unread);
+      })
       .catch(() => null);
   }, []);
 
@@ -91,6 +99,7 @@ export function NotificationBell() {
     })
       .then((d) => {
         setItems(d.items);
+        previousUnreadRef.current = d.unread;
         setUnread(d.unread);
       })
       .catch(() => null)
@@ -150,7 +159,10 @@ export function NotificationBell() {
       <button
         type="button"
         aria-label="Notifications"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          unlockNotificationSound();
+          setOpen((o) => !o);
+        }}
         className="relative flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant transition-colors hover:bg-surface-container-high hover:text-white"
       >
         <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round">
