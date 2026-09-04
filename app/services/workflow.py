@@ -9,7 +9,12 @@ from sqlalchemy.orm import Session
 
 from app.core.enums import WorkflowRunStatus
 from app.models import Workflow, WorkflowAction, WorkflowDefinition, WorkflowRun
-from app.repositories.workflow import WorkflowActionRepository, WorkflowRepository, WorkflowRunRepository
+from app.repositories.workflow import (
+    WorkflowActionRepository,
+    WorkflowDefinitionRepository,
+    WorkflowRepository,
+    WorkflowRunRepository,
+)
 from app.schemas.auth import CurrentUser
 from app.schemas.workflow import WorkflowCreate, WorkflowUpdate
 from app.workflow_engine.definition_validation import validate_and_normalize_definition_config
@@ -21,6 +26,7 @@ class WorkflowService:
     def __init__(self, db: Session | None = None):
         self.db = db
         self.repository: WorkflowRepository | None = None
+        self.definition_repository: WorkflowDefinitionRepository | None = None
         self.action_repository: WorkflowActionRepository | None = None
         self.run_repository: WorkflowRunRepository | None = None
 
@@ -35,6 +41,7 @@ class WorkflowService:
         if self.db is not active_db or self.repository is None:
             self.db = active_db
             self.repository = WorkflowRepository(active_db)
+            self.definition_repository = WorkflowDefinitionRepository(active_db)
             self.action_repository = WorkflowActionRepository(active_db)
             self.run_repository = WorkflowRunRepository(active_db)
 
@@ -156,11 +163,9 @@ class WorkflowService:
         for field, value in update_data.items():
             setattr(workflow, field, value)
 
-        definitions = session.query(WorkflowDefinition).filter(
-            WorkflowDefinition.workflow_id == workflow.id,
-            WorkflowDefinition.business_id == business_id,
-            WorkflowDefinition.deleted_at.is_(None),
-        ).all()
+        definitions = self.definition_repository.list_by_workflow(  # type: ignore[union-attr]
+            session, business_id, workflow.id
+        )
         for definition in definitions:
             if "name" in update_data:
                 definition.name = update_data["name"]
@@ -187,11 +192,11 @@ class WorkflowService:
         if workflow is None:
             return False
 
-        session.query(WorkflowDefinition).filter(
-            WorkflowDefinition.workflow_id == workflow.id,
-            WorkflowDefinition.business_id == business_id,
-            WorkflowDefinition.deleted_at.is_(None),
-        ).update({"is_active": False})
+        definitions = self.definition_repository.list_by_workflow(  # type: ignore[union-attr]
+            session, business_id, workflow.id
+        )
+        for definition in definitions:
+            definition.is_active = False
         session.delete(workflow)
         session.commit()
         return True
@@ -209,11 +214,11 @@ class WorkflowService:
         workflow = self.repository.toggle_enabled(db, business_id, workflow_id, enabled)  # type: ignore[union-attr]
         if workflow is None:
             return None
-        self.db.query(WorkflowDefinition).filter(
-            WorkflowDefinition.workflow_id == workflow.id,
-            WorkflowDefinition.business_id == business_id,
-            WorkflowDefinition.deleted_at.is_(None),
-        ).update({"is_active": enabled})
+        definitions = self.definition_repository.list_by_workflow(  # type: ignore[union-attr]
+            self.db, business_id, workflow.id
+        )
+        for definition in definitions:
+            definition.is_active = enabled
         self.db.commit()
         self.db.refresh(workflow)
         return workflow
