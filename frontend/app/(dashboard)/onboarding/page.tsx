@@ -169,16 +169,18 @@ export default function OnboardingPage() {
                 <h2 className="text-lg font-semibold text-surface-bright">New starters</h2>
                 <div className="mt-4 space-y-3">
                     {starterList.map((person) => (
+                        <div key={person.name} className="flex items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container p-3">
+                            <div>
                                 <p className="font-medium text-surface-bright">{person.name}</p>
                                 <p className="text-xs text-on-surface-variant">{person.team} • Start: {person.start}</p>
                             </div>
-                <span className="rounded-full bg-brand/15 px-2 py-1 text-[10px] font-medium text-brand">
-                    {person.status}
-                </span>
-            </div>
+                            <span className="rounded-full bg-brand/15 px-2 py-1 text-[10px] font-medium text-brand">
+                                {person.status}
+                            </span>
+                        </div>
                     ))}
+                </div>
+            </div>
         </div>
-            </div >
-        </div >
     );
 }
