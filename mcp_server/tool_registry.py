@@ -55,6 +55,7 @@ class ToolEntry:
     external_side_effect: bool
     force_standalone: bool
     tier: Tier
+    body_encoding: str = "json"  # "json" or "form" (application/x-www-form-urlencoded)
     force_field_values: dict[str, Any] = field(default_factory=dict)
     annotations: dict[str, bool] = field(default_factory=dict)
 
@@ -162,20 +163,37 @@ def _build_tool_entry(method: str, path: str, op: dict, components: dict, list_t
         properties[pname] = {**pschema, "description": pschema.get("description", f"{param.get('in')} parameter")}
 
     body_properties: list[str] = []
-    body_schema = (
-        op.get("requestBody", {})
-        .get("content", {})
-        .get("application/json", {})
-        .get("schema")
-    )
+    skipped_file_fields: list[str] = []
+    request_body_content = op.get("requestBody", {}).get("content", {})
+    body_encoding = "json"
+    body_schema = request_body_content.get("application/json", {}).get("schema")
+    if body_schema is None and "multipart/form-data" in request_body_content:
+        # Endpoints that accept file uploads (Upload Document, Send Email
+        # Message's attachments, etc.) declare a multipart body instead of
+        # JSON - a form-only field set (no files) still submits fine as
+        # application/x-www-form-urlencoded, which FastAPI's Form(...)
+        # parses identically to multipart. File-shaped fields themselves
+        # are skipped below since there's no way to pass binary content
+        # through JSON tool arguments here.
+        body_schema = request_body_content["multipart/form-data"].get("schema")
+        body_encoding = "form"
     if body_schema:
         resolved_body = _resolve_schema(body_schema, components)
         for prop_name, prop_schema in resolved_body.get("properties", {}).items():
             if prop_name in properties:
                 continue  # a path/query param already claimed this name - keep that one
+            if _is_file_field(prop_schema):
+                skipped_file_fields.append(prop_name)
+                continue
             body_properties.append(prop_name)
             properties[prop_name] = prop_schema
-        required.extend(r for r in resolved_body.get("required", []) if r not in required)
+        required.extend(
+            r for r in resolved_body.get("required", []) if r not in required and r not in skipped_file_fields
+        )
+
+    if skipped_file_fields:
+        note = f" (NOTE: this operation also accepts file field(s) {skipped_file_fields} not supported through this interface)"
+        description = description + note
 
     is_list_operation = method.upper() == "GET" and str(summary).lower().startswith("list ")
     if is_list_operation:
@@ -200,6 +218,7 @@ def _build_tool_entry(method: str, path: str, op: dict, components: dict, list_t
         path_params=path_params,
         query_params=query_params,
         body_properties=body_properties,
+        body_encoding=body_encoding,
         is_list_operation=is_list_operation,
         external_side_effect=policy.external_side_effect,
         force_standalone=policy.force_standalone,
@@ -207,6 +226,17 @@ def _build_tool_entry(method: str, path: str, op: dict, components: dict, list_t
         force_field_values=dict(policy.force_field_values),
         annotations=annotations,
     )
+
+
+def _is_file_field(prop_schema: dict) -> bool:
+    """Whether a resolved property schema represents a file/binary upload -
+    these can't be passed through JSON-typed MCP tool arguments."""
+    if prop_schema.get("format") == "binary" or "contentMediaType" in prop_schema:
+        return True
+    items = prop_schema.get("items")
+    if isinstance(items, dict) and (items.get("format") == "binary" or "contentMediaType" in items):
+        return True
+    return False
 
 
 def _cap_page_size(properties: dict, query_params: list[str], cap: int) -> None:
