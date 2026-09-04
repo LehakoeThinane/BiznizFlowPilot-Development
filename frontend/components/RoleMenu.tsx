@@ -34,7 +34,7 @@ const NAV_ITEMS: NavItem[] = [
     label: "HR",
     icon: "groups",
     href: "/employees",
-    matches: ["/employees", "/leave", "/recruitment", "/performance", "/compensation", "/engagement"],
+    matches: ["/employees", "/leave", "/recruitment", "/onboarding", "/performance", "/compensation", "/engagement"],
     roles: ["owner", "manager", "staff", "it_admin"],
   },
   {
@@ -98,6 +98,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: "task_alt",
     href: "/tasks",
     matches: ["/tasks"],
+    roles: ["owner", "manager", "staff", "it_admin"],
+  },
+  {
+    label: "Marketing",
+    icon: "campaign",
+    href: "/marketing",
+    matches: ["/marketing", "/marketing/calendar", "/marketing/social", "/marketing/blog", "/marketing/campaigns"],
     roles: ["owner", "manager", "staff", "it_admin"],
   },
   {
