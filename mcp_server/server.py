@@ -123,7 +123,10 @@ def _execute_entry(
             logger.info("Idempotency hit for %s %s - returning cached result", entry.method, entry.path)
             return cached
 
-    result = client.request(entry.method, resolved_path, params=query, json_body=body)
+    if entry.body_encoding == "form":
+        result = client.request(entry.method, resolved_path, params=query, form_body=body)
+    else:
+        result = client.request(entry.method, resolved_path, params=query, json_body=body)
 
     if idempotency.is_deduped(entry.method, entry.path):
         idempotency.put(entry.method, entry.path, {"query": query, "body": body}, result)

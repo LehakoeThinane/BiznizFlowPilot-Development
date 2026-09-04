@@ -45,15 +45,25 @@ class BFPClient:
         self._tokens = token_store
         self._http = httpx.Client(base_url=self._base_url, timeout=timeout)
 
-    def request(self, method: str, path: str, *, params: dict | None = None, json_body: Any = None) -> Any:
-        """Issue one authenticated request. Returns parsed JSON. Raises ToolError on failure."""
+    def request(
+        self, method: str, path: str, *, params: dict | None = None, json_body: Any = None, form_body: dict | None = None
+    ) -> Any:
+        """Issue one authenticated request. Returns parsed JSON. Raises ToolError on failure.
+
+        json_body and form_body are mutually exclusive - form_body sends
+        application/x-www-form-urlencoded (FastAPI's Form(...) parses this
+        identically to multipart/form-data for non-file fields), used for
+        endpoints whose OpenAPI schema declares a multipart body instead of
+        JSON. See tool_registry.py's ToolEntry.body_encoding.
+        """
         token = self._tokens.get_valid_access_token()
         try:
             resp = self._http.request(
                 method,
                 path,
                 params=_drop_none(params),
-                json=json_body,
+                json=json_body if form_body is None else None,
+                data=form_body,
                 headers={"Authorization": f"Bearer {token}"},
             )
         except httpx.RequestError as exc:
