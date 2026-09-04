@@ -9,7 +9,6 @@ const TABS = [
   { label: "Timesheets", href: "/timesheets" },
   { label: "Recruitment", href: "/recruitment" },
   { label: "Onboarding", href: "/onboarding" },
-  { label: "Performance & Productivity", href: "/performance" },
   { label: "Compensation & Benefits", href: "/compensation" },
   { label: "Engagement & Development", href: "/engagement" },
 ];
@@ -29,8 +28,8 @@ export function HRSubNav() {
             key={tab.href}
             href={tab.href}
             className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${isActive
-                ? "bg-brand text-on-primary"
-                : "text-on-surface-variant hover:bg-surface-container-high"
+              ? "bg-brand text-on-primary"
+              : "text-on-surface-variant hover:bg-surface-container-high"
               }`}
           >
             {tab.label}

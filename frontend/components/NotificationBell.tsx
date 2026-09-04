@@ -10,6 +10,8 @@ interface NotificationItem {
   message: string;
   is_read: boolean;
   action_url: string | null;
+  related_type: string | null;
+  related_id: string | null;
   created_at: string;
 }
 
@@ -32,12 +34,39 @@ function timeAgo(iso: string) {
 }
 
 function typeColor(type: string) {
-  if (type === "leave")       return "bg-blue-500";
-  if (type === "payroll")     return "bg-violet-500";
+  if (type === "leave") return "bg-blue-500";
+  if (type === "payroll") return "bg-violet-500";
   if (type === "order_status") return "bg-emerald-500";
-  if (type === "low_stock")   return "bg-orange-500";
-  if (type === "onboarding")  return "bg-teal-500";
+  if (type === "low_stock") return "bg-orange-500";
+  if (type === "onboarding") return "bg-teal-500";
   return "bg-slate-500";
+}
+
+function notificationHref(notification: NotificationItem): string | null {
+  if (notification.action_url) return notification.action_url;
+  if (!notification.related_type) return null;
+
+  const id = notification.related_id;
+  switch (notification.related_type) {
+    case "lead":
+      return id ? `/leads/${id}` : "/leads";
+    case "task":
+      return id ? `/tasks/${id}` : "/tasks";
+    case "customer":
+      return id ? `/customers/${id}` : "/customers";
+    case "employee":
+      return id ? `/employees/${id}` : "/employees";
+    case "invoice":
+      return id ? `/invoices/${id}` : "/invoices";
+    case "meeting":
+      return id ? `/calendar?meeting=${encodeURIComponent(id)}` : "/calendar";
+    case "purchase_order":
+      return id ? `/purchase-orders/${id}` : "/purchase-orders";
+    case "sales_order":
+      return id ? `/sales-orders/${id}` : "/sales-orders";
+    default:
+      return null;
+  }
 }
 
 export function NotificationBell() {
@@ -160,9 +189,10 @@ export function NotificationBell() {
                   key={n.id}
                   onClick={() => {
                     if (!n.is_read) markOne(n.id);
-                    if (n.action_url) window.location.href = n.action_url;
+                    const href = notificationHref(n);
+                    if (href) window.location.href = href;
                   }}
-                  className={`flex cursor-pointer gap-3 border-b border-outline-variant/60 px-4 py-3 transition-colors hover:bg-surface-container-high ${n.is_read ? "opacity-60" : ""}`}
+                  className={`flex gap-3 border-b border-outline-variant/60 px-4 py-3 transition-colors hover:bg-surface-container-high ${notificationHref(n) ? "cursor-pointer" : "cursor-default"} ${n.is_read ? "opacity-60" : ""}`}
                 >
                   <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${typeColor(n.type)}`} />
                   <div className="min-w-0 flex-1">

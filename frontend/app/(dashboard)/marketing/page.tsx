@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
@@ -24,24 +25,28 @@ const cards = [
         description: "Queue content, drafts, and publishing windows across channels.",
         icon: "calendar_month",
         accent: "bg-blue-500/15 text-blue-300",
+        href: "/marketing/social",
     },
     {
         title: "Blog & Article Templates",
         description: "Generate editorial outlines, article briefs, and reusable content blocks.",
         icon: "article",
         accent: "bg-violet-500/15 text-violet-300",
+        href: "/marketing/blog",
     },
     {
         title: "Campaign Builder",
         description: "Track launches, audience segments, funnel stages, and campaign performance.",
         icon: "rocket_launch",
         accent: "bg-emerald-500/15 text-emerald-300",
+        href: "/marketing/campaigns",
     },
     {
         title: "AI Content Studio",
         description: "Draft social captions, blog headings, and marketing copy from campaign goals.",
         icon: "auto_awesome",
         accent: "bg-amber-500/15 text-amber-300",
+        href: "/chat",
     },
 ];
 
@@ -94,15 +99,16 @@ export default function MarketingPage() {
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 {cards.map((card) => (
-                    <div key={card.title} className="erp-panel flex flex-col gap-4 p-5">
+                    <Link key={card.title} href={card.href} className="erp-panel group flex flex-col gap-4 p-5 transition-colors hover:border-tertiary-fixed-dim/50">
                         <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${card.accent}`}>
                             <span className="material-symbols-outlined text-xl">{card.icon}</span>
                         </div>
                         <div>
-                            <h3 className="text-base font-semibold text-surface-bright">{card.title}</h3>
+                            <h3 className="text-base font-semibold text-surface-bright group-hover:text-tertiary-fixed-dim">{card.title}</h3>
                             <p className="mt-2 text-sm text-on-surface-variant">{card.description}</p>
                         </div>
-                    </div>
+                        <span className="text-xs font-semibold text-brand">Open workspace →</span>
+                    </Link>
                 ))}
             </div>
 
@@ -116,40 +122,20 @@ export default function MarketingPage() {
                 ))}
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                <div className="erp-panel p-5">
-                    <h2 className="text-lg font-semibold text-surface-bright">Publishing queue</h2>
-                    <div className="mt-4 space-y-3">
-                        {queue.map((entry) => (
-                            <div key={`${entry.channel}-${entry.item}`} className="flex items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container p-3">
-                                <div>
-                                    <p className="font-medium text-surface-bright">{entry.channel}</p>
-                                    <p className="text-xs text-on-surface-variant">{entry.item}</p>
-                                </div>
-                                <span className="rounded-full bg-brand/15 px-2 py-1 text-[10px] font-medium text-brand">
-                                    {entry.status}
-                                </span>
+            <div className="erp-panel p-5">
+                <h2 className="text-lg font-semibold text-surface-bright">Publishing queue</h2>
+                <div className="mt-4 space-y-3">
+                    {queue.map((entry) => (
+                        <div key={`${entry.channel}-${entry.item}`} className="flex items-center justify-between gap-3 rounded-xl border border-outline-variant bg-surface-container p-3">
+                            <div>
+                                <p className="font-medium text-surface-bright">{entry.channel}</p>
+                                <p className="text-xs text-on-surface-variant">{entry.item}</p>
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="erp-panel p-5">
-                    <h3 className="text-base font-semibold text-surface-bright">Marketing roadmap</h3>
-                    <div className="mt-4 grid gap-3">
-                        <div className="rounded-xl border border-outline-variant bg-surface-container p-3">
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-on-surface-variant">Phase 1</p>
-                            <p className="mt-2 text-sm text-surface-bright">Marketing dashboard</p>
+                            <span className="rounded-full bg-brand/15 px-2 py-1 text-[10px] font-medium text-brand">
+                                {entry.status}
+                            </span>
                         </div>
-                        <div className="rounded-xl border border-outline-variant bg-surface-container p-3">
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-on-surface-variant">Phase 2</p>
-                            <p className="mt-2 text-sm text-surface-bright">Content calendar + scheduling</p>
-                        </div>
-                        <div className="rounded-xl border border-outline-variant bg-surface-container p-3">
-                            <p className="text-[11px] uppercase tracking-[0.12em] text-on-surface-variant">Phase 3</p>
-                            <p className="mt-2 text-sm text-surface-bright">AI blog and social automation</p>
-                        </div>
-                    </div>
+                    ))}
                 </div>
             </div>
         </div>

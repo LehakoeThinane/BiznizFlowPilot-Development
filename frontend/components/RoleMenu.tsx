@@ -80,6 +80,13 @@ const NAV_ITEMS: NavItem[] = [
     roles: ["owner", "manager", "staff", "it_admin"],
   },
   {
+    label: "Support",
+    icon: "support_agent",
+    href: "/support",
+    matches: ["/support"],
+    roles: ["owner", "manager", "staff", "it_admin"],
+  },
+  {
     label: "Purchasing",
     icon: "shopping_cart",
     href: "/purchase-orders",
@@ -146,9 +153,32 @@ function UnreadBadge({ count }: { count: number }) {
   );
 }
 
+function navGroup(label: string): string {
+  if (["Dashboard", "Finance", "Purchasing", "Inventory", "Tasks"].includes(label)) return "Operations";
+  if (["HR", "Invite Team"].includes(label)) return "People";
+  if (["Calendar", "Email", "Messages"].includes(label)) return "Collaboration";
+  if (["Sales & CRM", "Customers", "Support"].includes(label)) return "Customer Operations";
+  if (["Marketing"].includes(label)) return "Growth";
+  if (["Reports", "Activity"].includes(label)) return "Automation & Reporting";
+  return "Administration";
+}
+
+const NAV_GROUP_ORDER = [
+  "Operations",
+  "People",
+  "Customer Operations",
+  "Collaboration",
+  "Growth",
+  "Automation & Reporting",
+  "Administration",
+];
+
 export function RoleMenu({ role }: { role: UserRole }) {
   const pathname = usePathname();
   const [unreadMessages, setUnreadMessages] = useState(0);
+  const visibleItems = NAV_ITEMS
+    .filter((item) => item.roles.includes(role))
+    .sort((left, right) => NAV_GROUP_ORDER.indexOf(navGroup(left.label)) - NAV_GROUP_ORDER.indexOf(navGroup(right.label)));
 
   const fetchUnread = useCallback(() => {
     apiRequest<{ unread_count: number }>("/api/v1/messaging/unread-count", { _skipRefresh: true })
@@ -164,36 +194,39 @@ export function RoleMenu({ role }: { role: UserRole }) {
 
   return (
     <div className="flex flex-col gap-1">
-      {NAV_ITEMS.filter((item) => item.roles.includes(role)).map((item) => {
+      {visibleItems.map((item, index) => {
         const isActive = item.matches.some(
           (m) => pathname === m || pathname.startsWith(`${m}/`)
         );
         const badge = item.href === "/messages" ? <UnreadBadge count={unreadMessages} /> : null;
+        const group = navGroup(item.label);
+        const previousGroup = index > 0 ? navGroup(visibleItems[index - 1].label) : null;
+        const groupHeading = group !== previousGroup ? (
+          <p className="mb-1 mt-4 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-on-surface-variant first:mt-0">{group}</p>
+        ) : null;
 
         if (isActive) {
           return (
-            <Link
-              key={item.href}
+            <div key={item.href}>{groupHeading}<Link
               href={item.href}
-              className="group flex items-center gap-3 rounded-xl border border-tertiary-fixed-dim/50 bg-primary-container/70 px-4 py-3 text-sm text-on-primary-container shadow-[0_0_0_1px_rgba(45,212,191,0.15),0_0_20px_rgba(45,212,191,0.25)] transition-shadow"
+              className="group flex items-center gap-3 rounded-xl border border-tertiary-fixed-dim/50 bg-primary-container/70 px-4 py-3 text-sm text-on-primary-container shadow-[0_0_0_1px_rgba(45,212,190,0.15),0_0_20px_rgba(45,212,190,0.25)] transition-shadow"
             >
-              <span className="material-symbols-outlined text-tertiary-fixed-dim drop-shadow-[0_0_6px_rgba(45,212,191,0.7)]">{item.icon}</span>
+              <span className="material-symbols-outlined text-tertiary-fixed-dim drop-shadow-[0_0_6px_rgba(45,212,190,0.7)]">{item.icon}</span>
               <span className="font-medium">{item.label}</span>
               {badge}
-            </Link>
+            </Link></div>
           );
         }
 
         return (
-          <Link
-            key={item.href}
+          <div key={item.href}>{groupHeading}<Link
             href={item.href}
             className="group flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm text-surface-variant transition-colors hover:border-tertiary-fixed-dim/20 hover:bg-white/5 hover:text-surface-bright"
           >
             <span className="material-symbols-outlined text-primary-fixed-dim/90 transition-transform group-hover:scale-105 group-hover:text-tertiary-fixed-dim">{item.icon}</span>
             <span className="font-medium">{item.label}</span>
             {badge}
-          </Link>
+          </Link></div>
         );
       })}
     </div>

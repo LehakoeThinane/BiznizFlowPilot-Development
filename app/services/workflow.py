@@ -8,10 +8,11 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.core.enums import WorkflowRunStatus
-from app.models import Workflow, WorkflowAction, WorkflowRun
+from app.models import Workflow, WorkflowAction, WorkflowDefinition, WorkflowRun
 from app.repositories.workflow import WorkflowActionRepository, WorkflowRepository, WorkflowRunRepository
 from app.schemas.auth import CurrentUser
 from app.schemas.workflow import WorkflowCreate, WorkflowUpdate
+from app.workflow_engine.definition_validation import validate_and_normalize_definition_config
 
 
 class WorkflowService:
@@ -89,6 +90,30 @@ class WorkflowService:
             )
             session.add(action)
 
+        if data.actions:
+            definition_config = {
+                "actions": [
+                    {"action_type": action_data.action_type, **action_data.parameters}
+                    for action_data in data.actions
+                ]
+            }
+            try:
+                normalized_config = validate_and_normalize_definition_config(definition_config)
+            except ValueError:
+                normalized_config = None
+            if normalized_config is not None:
+                session.add(
+                    WorkflowDefinition(
+                        business_id=business_id,
+                        event_type=data.trigger_event_type,
+                        is_active=data.enabled,
+                        name=data.name,
+                        conditions={},
+                        config=normalized_config,
+                        workflow_id=workflow.id,
+                    )
+                )
+
         session.commit()
         session.refresh(workflow)
         return workflow
@@ -131,6 +156,19 @@ class WorkflowService:
         for field, value in update_data.items():
             setattr(workflow, field, value)
 
+        definitions = session.query(WorkflowDefinition).filter(
+            WorkflowDefinition.workflow_id == workflow.id,
+            WorkflowDefinition.business_id == business_id,
+            WorkflowDefinition.deleted_at.is_(None),
+        ).all()
+        for definition in definitions:
+            if "name" in update_data:
+                definition.name = update_data["name"]
+            if "trigger_event_type" in update_data:
+                definition.event_type = update_data["trigger_event_type"]
+            if "enabled" in update_data:
+                definition.is_active = update_data["enabled"]
+
         session.commit()
         session.refresh(workflow)
         return workflow
@@ -149,6 +187,11 @@ class WorkflowService:
         if workflow is None:
             return False
 
+        session.query(WorkflowDefinition).filter(
+            WorkflowDefinition.workflow_id == workflow.id,
+            WorkflowDefinition.business_id == business_id,
+            WorkflowDefinition.deleted_at.is_(None),
+        ).update({"is_active": False})
         session.delete(workflow)
         session.commit()
         return True
@@ -163,7 +206,17 @@ class WorkflowService:
     ) -> Optional[Workflow]:
         self._bind_repositories(db)
         self._check_role(current_user, ["owner", "manager"])
-        return self.repository.toggle_enabled(db, business_id, workflow_id, enabled)  # type: ignore[union-attr]
+        workflow = self.repository.toggle_enabled(db, business_id, workflow_id, enabled)  # type: ignore[union-attr]
+        if workflow is None:
+            return None
+        self.db.query(WorkflowDefinition).filter(
+            WorkflowDefinition.workflow_id == workflow.id,
+            WorkflowDefinition.business_id == business_id,
+            WorkflowDefinition.deleted_at.is_(None),
+        ).update({"is_active": enabled})
+        self.db.commit()
+        self.db.refresh(workflow)
+        return workflow
 
     def get_workflows_for_event(self, db: Session, business_id: UUID, event_type: str) -> List[Workflow]:
         self._bind_repositories(db)
