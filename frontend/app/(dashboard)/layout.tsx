@@ -214,14 +214,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* ── Main content ─────────────────────────────────────────────── */}
           <div className="flex flex-1 flex-col overflow-hidden">
-            <header className="relative z-20 flex h-18 shrink-0 items-center justify-between border-b border-outline-variant bg-[#0d1628]/90 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.25)] backdrop-blur md:px-6">
+            <header className="relative z-20 flex h-18 min-w-0 shrink-0 items-center justify-between border-b border-outline-variant bg-[#0d1628]/90 px-3 shadow-[0_2px_8px_rgba(0,0,0,0.25)] backdrop-blur sm:px-4 md:px-6">
 
               {/* Left: hamburger (mobile) + search */}
               <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(true)}
-                  className="md:hidden flex h-8 w-8 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-on-surface-variant hover:bg-surface-container-high md:hidden"
                   aria-label="Open sidebar"
                 >
                   <span className="material-symbols-outlined">menu</span>
@@ -229,8 +229,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                 {/* Search bar */}
                 <div ref={searchRef} className="relative min-w-0 flex-1">
-                  <div className="flex w-full max-w-96 items-center gap-2 rounded-xl border border-outline-variant bg-[#0a1528]/80 px-3 py-2">
-                    <span className="material-symbols-outlined ms-16 text-on-surface-variant">
+                  <div className="flex w-full max-w-96 items-center gap-1.5 rounded-xl border border-outline-variant bg-[#0a1528]/80 px-2.5 py-2 sm:gap-2 sm:px-3">
+                    <span className="material-symbols-outlined shrink-0 text-on-surface-variant">
                       {searchLoading ? "hourglass_empty" : "search"}
                     </span>
                     <input
@@ -238,8 +238,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       onFocus={() => { if (searchResults && totalHits > 0) setShowSearchDrop(true); }}
-                      placeholder="Search operations, files, or tasks..."
-                      className="flex-1 bg-transparent text-xs text-white placeholder:text-on-surface-variant outline-none"
+                      placeholder="Search..."
+                      className="min-w-0 flex-1 truncate bg-transparent text-xs text-white placeholder:text-on-surface-variant outline-none"
                     />
                     {search && (
                       <button
@@ -291,14 +291,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               {/* Right actions */}
-              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <div className="flex shrink-0 items-center gap-1 sm:gap-3">
                 <NotificationBell />
-                <div className="h-6 w-px bg-outline-variant" />
+                <div className="hidden h-6 w-px bg-outline-variant sm:block" />
                 <div ref={profileRef} className="relative">
                   <button
                     type="button"
                     onClick={() => setShowProfile((v) => !v)}
-                    className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-surface-container-high"
+                    className="flex cursor-pointer items-center gap-1 rounded-lg px-1 py-1 transition-colors hover:bg-surface-container-high sm:gap-2 sm:px-2"
                   >
                     <div className="hidden text-right sm:block">
                       <p className="text-sm font-semibold leading-tight text-primary-fixed-dim">{firstName}</p>
@@ -326,7 +326,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   </button>
 
                   {showProfile && (
-                    <div className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-xl border border-outline-variant bg-[#0f1c33] shadow-xl">
+                    <div className="absolute right-0 top-full z-50 mt-2 w-[min(14rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-outline-variant bg-[#0f1c33] shadow-xl">
                       <div className="border-b border-outline-variant px-4 py-3">
                         <p className="text-sm font-semibold text-white">{user?.full_name ?? "—"}</p>
                         <p className="truncate text-xs text-on-surface-variant">{user?.email ?? ""}</p>

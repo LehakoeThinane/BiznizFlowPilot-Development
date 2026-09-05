@@ -25,11 +25,10 @@ interface MentionState {
 function MentionBadge({ mention }: { mention: ResolvedMention }) {
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
-        mention.found
+      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${mention.found
           ? "bg-brand/10 text-brand"
           : "bg-red-50 text-red-600"
-      }`}
+        }`}
     >
       @{mention.type}:{mention.display_name}
       {!mention.found && " ✗"}
@@ -55,11 +54,10 @@ function MessageBubble({
         </div>
       )}
       <div
-        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${
-          isUser
+        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${isUser
             ? "bg-brand text-white rounded-tr-sm"
             : "bg-slate-100 text-slate-900 rounded-tl-sm"
-        }`}
+          }`}
       >
         {msg.content}
       </div>
@@ -313,7 +311,7 @@ export function ChatPanel() {
       {/* Floating button */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg hover:bg-brand/90 transition-all"
+        className="fixed bottom-24 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg transition-all hover:bg-brand/90 md:bottom-6 md:right-6"
         aria-label="Open AI chat"
       >
         {open ? (
@@ -329,8 +327,8 @@ export function ChatPanel() {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 flex w-96 flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl"
-          style={{ height: "520px" }}>
+        <div className="fixed bottom-40 right-4 z-50 flex h-[min(520px,calc(100vh-11rem))] w-[calc(100vw-2rem)] max-w-96 flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl md:bottom-24 md:right-6 md:h-[520px]"
+        >
 
           {/* Header */}
           <div className="flex items-center justify-between rounded-t-2xl border-b border-slate-200 bg-slate-50 px-4 py-3">
