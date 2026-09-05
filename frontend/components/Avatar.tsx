@@ -20,12 +20,28 @@ interface AvatarProps {
   avatarUrl?: string | null;
   presence?: Presence | null;
   size?: keyof typeof SIZE_CLASSES;
+  onClick?: () => void;
 }
 
-export function Avatar({ name, avatarUrl, presence, size = "md" }: AvatarProps) {
+export function Avatar({ name, avatarUrl, presence, size = "md", onClick }: AvatarProps) {
   const { circle, dot } = SIZE_CLASSES[size];
   return (
-    <div className="relative shrink-0">
+    <div
+      className={`relative shrink-0 ${onClick ? "cursor-pointer rounded-full transition-opacity hover:opacity-80" : ""}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        onClick?.();
+      }}
+      onKeyDown={(event) => {
+        if (onClick && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          onClick();
+        }
+      }}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      aria-label={onClick ? `Open ${name}'s profile` : undefined}
+    >
       {avatarUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={avatarUrl} alt={name} className={`${circle} rounded-full object-cover`} />

@@ -6,7 +6,7 @@ import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 import { useUser } from "@/contexts/UserContext";
-import type { BusinessUser, Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, Poll } from "@/types/api";
+import type { BusinessUser, Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, OtherUser, Poll } from "@/types/api";
 import { Avatar } from "@/components/Avatar";
 import { AttachmentMenu, type AttachmentAction } from "@/components/messages/AttachmentMenu";
 import { AudioAttachModal } from "@/components/messages/AudioAttachModal";
@@ -42,6 +42,7 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [profileUser, setProfileUser] = useState<OtherUser | null>(null);
 
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -341,7 +342,7 @@ export default function MessagesPage() {
   return (
     <div className="flex h-[calc(100vh-6.5rem)] min-h-0 flex-col gap-3 p-3 sm:p-4 md:flex-row md:gap-4 md:p-6">
       {/* ── Conversation list ─────────────────────────────────────────────── */}
-      <div className="flex h-48 min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33] md:h-auto md:w-80">
+      <div className={`${selected ? "hidden md:flex" : "flex"} h-48 min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33] md:h-auto md:w-80`}>
         <div className="flex items-center justify-between border-b border-outline-variant px-4 py-3.5">
           <p className="text-sm font-semibold text-white">Messages</p>
           <button
@@ -368,7 +369,12 @@ export default function MessagesPage() {
                 className={`flex w-full items-center gap-3 border-b border-outline-variant/60 px-4 py-3 text-left transition-colors hover:bg-white/5 ${selectedId === c.id ? "bg-white/8" : ""
                   }`}
               >
-                <Avatar name={c.other_user.full_name} avatarUrl={c.other_user.avatar_url} presence={c.other_user.presence} />
+                <Avatar
+                  name={c.other_user.full_name}
+                  avatarUrl={c.other_user.avatar_url}
+                  presence={c.other_user.presence}
+                  onClick={() => setProfileUser(c.other_user)}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-white">{c.other_user.full_name}</p>
                   <p className="truncate text-xs text-slate-500">
@@ -390,7 +396,7 @@ export default function MessagesPage() {
       </div>
 
       {/* ── Thread ───────────────────────────────────────────────────────── */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
+      <div className={`${selected ? "flex" : "hidden md:flex"} min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]`}>
         {!selected ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
             <span className="material-symbols-outlined text-4xl opacity-30">chat</span>
@@ -399,11 +405,20 @@ export default function MessagesPage() {
         ) : (
           <>
             <div className="flex min-w-0 items-center gap-3 border-b border-outline-variant px-4 py-3.5 sm:px-5">
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-white/10 hover:text-white md:hidden"
+                aria-label="Back to conversations"
+              >
+                <span className="material-symbols-outlined">arrow_back</span>
+              </button>
               <Avatar
                 name={selected.other_user.full_name}
                 avatarUrl={selected.other_user.avatar_url}
                 presence={selected.other_user.presence}
                 size="sm"
+                onClick={() => setProfileUser(selected.other_user)}
               />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">{selected.other_user.full_name}</p>
@@ -540,6 +555,42 @@ export default function MessagesPage() {
                 ))
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {profileUser && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 sm:items-center sm:p-4" onClick={() => setProfileUser(null)}>
+          <div
+            className="w-full max-w-sm rounded-2xl border border-outline-variant bg-[#0f1c33] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-dialog-title"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar name={profileUser.full_name} avatarUrl={profileUser.avatar_url} presence={profileUser.presence} size="md" />
+                <div className="min-w-0">
+                  <h2 id="profile-dialog-title" className="truncate text-base font-semibold text-white">{profileUser.full_name}</h2>
+                  <p className="truncate text-xs text-slate-400">{profileUser.email}</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setProfileUser(null)} className="text-slate-400 hover:text-white" aria-label="Close profile">
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="mt-5 rounded-xl border border-outline-variant/70 bg-white/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">Availability</p>
+              <p className="mt-2 text-sm text-white">
+                {profileUser.presence.status === "custom" && profileUser.presence.status_text
+                  ? profileUser.presence.status_text
+                  : profileUser.presence.status}
+              </p>
+            </div>
+            <button type="button" onClick={() => { setProfileUser(null); setSelectedId(profileUser.id); }} className="mt-4 w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">
+              Open conversation
+            </button>
           </div>
         </div>
       )}
