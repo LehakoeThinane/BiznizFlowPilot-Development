@@ -31,7 +31,7 @@ export function EmailSidebar({
   onSaveDisplayPrefs: (theme: EmailTheme, background: string | null) => void;
 }) {
   return (
-    <div className={`flex w-64 shrink-0 flex-col overflow-hidden ${panelClass(theme)}`}>
+    <div className={`flex max-h-44 w-full shrink-0 flex-col overflow-hidden ${panelClass(theme)} md:max-h-none md:w-64`}>
       <div className={`flex items-center gap-2 border-b p-3 ${borderClass(theme)}`}>
         <button
           type="button"
@@ -51,13 +51,12 @@ export function EmailSidebar({
             type="button"
             disabled={folder.disabled}
             onClick={() => onSelectFolder(folder.key)}
-            className={`mb-0.5 flex w-full items-center gap-3 rounded-full px-4 py-2 text-sm transition-colors ${
-              folder.disabled
+            className={`mb-0.5 flex w-full items-center gap-3 rounded-full px-4 py-2 text-sm transition-colors ${folder.disabled
                 ? "cursor-not-allowed text-slate-500"
                 : activeFolder === folder.key
                   ? "bg-brand/20 font-medium text-brand"
                   : `${mutedClass(theme)} ${hoverBgClass(theme)}`
-            }`}
+              }`}
           >
             <span className="material-symbols-outlined text-[18px]">{folder.icon}</span>
             <span className="flex-1 truncate text-left">{folder.label}</span>

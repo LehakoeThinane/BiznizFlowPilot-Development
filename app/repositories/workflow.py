@@ -197,6 +197,23 @@ class WorkflowDefinitionRepository(BaseRepository[WorkflowDefinition]):
             .all()
         )
 
+    def list_by_workflow(
+        self,
+        db: Session | None,
+        business_id: UUID,
+        workflow_id: UUID,
+        *,
+        include_deleted: bool = False,
+    ) -> List[WorkflowDefinition]:
+        """List definitions linked to a tenant-scoped legacy workflow."""
+        session = self._session(db)
+        return (
+            self._base_query(session, business_id, include_deleted=include_deleted)
+            .filter(WorkflowDefinition.workflow_id == workflow_id)
+            .order_by(WorkflowDefinition.created_at.asc())
+            .all()
+        )
+
     def create_definition(
         self,
         db: Session | None,

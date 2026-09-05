@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import EmojiPicker, { EmojiStyle, Theme } from "emoji-picker-react";
 import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 import { useUser } from "@/contexts/UserContext";
 import type { BusinessUser, Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, Poll } from "@/types/api";
 import { Avatar } from "@/components/Avatar";
@@ -107,7 +108,7 @@ export default function MessagesPage() {
     setMessages([]);
     lastMessageTimeRef.current = null;
     loadMessages(selectedId)
-      .then(() => apiRequest(`/api/v1/messaging/conversations/${selectedId}/read`, { method: "POST", authToken: token }).catch(() => {}))
+      .then(() => apiRequest(`/api/v1/messaging/conversations/${selectedId}/read`, { method: "POST", authToken: token }).catch(() => { }))
       .finally(() => setLoadingMessages(false));
 
     const interval = setInterval(() => {
@@ -116,7 +117,11 @@ export default function MessagesPage() {
       loadMessages(selectedId, lastMessageTimeRef.current ?? undefined)
         .then((incoming) => {
           if (incoming.length > 0) {
-            apiRequest(`/api/v1/messaging/conversations/${selectedId}/read`, { method: "POST", authToken: token }).catch(() => {});
+            const newIncoming = incoming.filter((message) => !messagesRef.current.some((existing) => existing.id === message.id));
+            if (newIncoming.some((message) => message.sender_id !== user?.user_id)) {
+              playNotificationSound();
+            }
+            apiRequest(`/api/v1/messaging/conversations/${selectedId}/read`, { method: "POST", authToken: token }).catch(() => { });
             void loadConversations();
           }
         })
@@ -184,6 +189,7 @@ export default function MessagesPage() {
   }
 
   async function handleSend() {
+    unlockNotificationSound();
     const text = input.trim();
     if (!text || !selectedId || sending) return;
     setSending(true);
@@ -333,9 +339,9 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-6.5rem)] gap-4 p-6">
+    <div className="flex h-[calc(100vh-6.5rem)] min-h-0 flex-col gap-3 p-3 sm:p-4 md:flex-row md:gap-4 md:p-6">
       {/* ── Conversation list ─────────────────────────────────────────────── */}
-      <div className="flex w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
+      <div className="flex h-48 min-h-0 w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33] md:h-auto md:w-80">
         <div className="flex items-center justify-between border-b border-outline-variant px-4 py-3.5">
           <p className="text-sm font-semibold text-white">Messages</p>
           <button
@@ -359,9 +365,8 @@ export default function MessagesPage() {
                 key={c.id}
                 type="button"
                 onClick={() => setSelectedId(c.id)}
-                className={`flex w-full items-center gap-3 border-b border-outline-variant/60 px-4 py-3 text-left transition-colors hover:bg-white/5 ${
-                  selectedId === c.id ? "bg-white/8" : ""
-                }`}
+                className={`flex w-full items-center gap-3 border-b border-outline-variant/60 px-4 py-3 text-left transition-colors hover:bg-white/5 ${selectedId === c.id ? "bg-white/8" : ""
+                  }`}
               >
                 <Avatar name={c.other_user.full_name} avatarUrl={c.other_user.avatar_url} presence={c.other_user.presence} />
                 <div className="min-w-0 flex-1">
@@ -385,7 +390,7 @@ export default function MessagesPage() {
       </div>
 
       {/* ── Thread ───────────────────────────────────────────────────────── */}
-      <div className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-outline-variant bg-[#0f1c33]">
         {!selected ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-slate-500">
             <span className="material-symbols-outlined text-4xl opacity-30">chat</span>
@@ -393,16 +398,16 @@ export default function MessagesPage() {
           </div>
         ) : (
           <>
-            <div className="flex items-center gap-3 border-b border-outline-variant px-5 py-3.5">
+            <div className="flex min-w-0 items-center gap-3 border-b border-outline-variant px-4 py-3.5 sm:px-5">
               <Avatar
                 name={selected.other_user.full_name}
                 avatarUrl={selected.other_user.avatar_url}
                 presence={selected.other_user.presence}
                 size="sm"
               />
-              <div>
-                <p className="text-sm font-semibold text-white">{selected.other_user.full_name}</p>
-                <p className="text-xs text-slate-500">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-white">{selected.other_user.full_name}</p>
+                <p className="truncate text-xs text-slate-500">
                   {selected.other_user.presence.status === "custom" && selected.other_user.presence.status_text
                     ? selected.other_user.presence.status_text
                     : selected.other_user.email}
@@ -461,12 +466,12 @@ export default function MessagesPage() {
                     <span className="material-symbols-outlined">mood</span>
                   </button>
                   {showEmoji && (
-                    <div className="absolute bottom-full left-0 z-10 mb-2 overflow-hidden rounded-xl border border-outline-variant shadow-2xl">
+                    <div className="absolute bottom-full left-0 z-10 mb-2 max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-outline-variant shadow-2xl">
                       <EmojiPicker
                         onEmojiClick={(emojiData) => insertEmoji(emojiData.emoji)}
                         emojiStyle={EmojiStyle.NATIVE}
                         theme={Theme.DARK}
-                        width={320}
+                        width={280}
                         height={380}
                         previewConfig={{ showPreview: false }}
                         lazyLoadEmojis
@@ -481,7 +486,7 @@ export default function MessagesPage() {
                   onKeyDown={handleKeyDown}
                   rows={2}
                   placeholder="Message… (Enter to send, Shift+Enter for newline)"
-                  className="erp-input flex-1 resize-none px-3 py-2 text-sm"
+                  className="erp-input min-w-0 flex-1 resize-none px-3 py-2 text-sm"
                 />
                 <button
                   type="button"

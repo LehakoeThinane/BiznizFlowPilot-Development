@@ -46,10 +46,9 @@ function Field({ label, id, theme, children }: { label: string; id: string; them
 
 function Alert({ ok, text }: { ok: boolean; text: string }) {
   return (
-    <p className={`rounded-md border px-3 py-2 text-sm ${
-      ok ? "border-emerald-900/40 bg-emerald-950/30 text-emerald-400"
-         : "border-red-900/40 bg-red-950/30 text-red-400"
-    }`}>
+    <p className={`rounded-md border px-3 py-2 text-sm ${ok ? "border-emerald-900/40 bg-emerald-950/30 text-emerald-400"
+        : "border-red-900/40 bg-red-950/30 text-red-400"
+      }`}>
       {text}
     </p>
   );
@@ -329,7 +328,7 @@ export default function EmailPage() {
         <form onSubmit={handleConnect} className="space-y-6">
           <Section title="Incoming mail (IMAP)" theme={displayTheme}>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="col-span-2">
                   <Field label="IMAP host" id="e-imap-host" theme={displayTheme}>
                     <input id="e-imap-host" required value={imapHost} onChange={(e) => setImapHost(e.target.value)}
@@ -354,7 +353,7 @@ export default function EmailPage() {
 
           <Section title="Outgoing mail (SMTP)" theme={displayTheme}>
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
                 <div className="col-span-2">
                   <Field label="SMTP host" id="e-smtp-host" theme={displayTheme}>
                     <input id="e-smtp-host" required value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)}
@@ -374,7 +373,7 @@ export default function EmailPage() {
                 <input id="e-smtp-password" type="password" value={smtpPassword} onChange={(e) => setSmtpPassword(e.target.value)}
                   className={inputClass(displayTheme)} placeholder="Required to connect" autoComplete="new-password" />
               </Field>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="From email" id="e-smtp-from-email" theme={displayTheme}>
                   <input id="e-smtp-from-email" type="email" required value={smtpFromEmail} onChange={(e) => setSmtpFromEmail(e.target.value)}
                     className={inputClass(displayTheme)} placeholder="you@example.com" />
@@ -413,7 +412,7 @@ export default function EmailPage() {
 
   return (
     <div
-      className="flex h-[calc(100vh-6.5rem)] gap-4 rounded-2xl p-6"
+      className="flex h-[calc(100vh-6.5rem)] min-h-0 flex-col gap-3 rounded-2xl p-3 sm:gap-4 sm:p-4 md:flex-row md:p-6"
       style={gradient ? { backgroundImage: gradient } : undefined}
     >
       <EmailSidebar
@@ -427,7 +426,7 @@ export default function EmailPage() {
         onSaveDisplayPrefs={handleSaveDisplayPrefs}
       />
 
-      <div className={`flex w-80 shrink-0 flex-col overflow-hidden ${panelClass(displayTheme)}`}>
+      <div className={`flex h-56 min-h-0 w-full shrink-0 flex-col overflow-hidden ${panelClass(displayTheme)} md:h-auto md:w-80`}>
         <div className={`border-b px-4 py-3 ${displayTheme === "dark" ? "border-outline-variant" : "border-slate-200"}`}>
           <h2 className={`text-sm font-semibold ${textClass(displayTheme)}`}>{activeLabel}</h2>
         </div>
@@ -453,7 +452,7 @@ export default function EmailPage() {
         </div>
       </div>
 
-      <div className={`flex flex-1 flex-col overflow-hidden ${panelClass(displayTheme)}`}>
+      <div className={`flex min-h-0 flex-1 flex-col overflow-hidden ${panelClass(displayTheme)}`}>
         {inboxError && (
           <div className="p-4">
             <Alert ok={false} text={inboxError} />
@@ -490,11 +489,10 @@ export default function EmailPage() {
                     key={i}
                     type="button"
                     onClick={() => handleDownloadAttachment(i, a.filename)}
-                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
-                      displayTheme === "dark"
+                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${displayTheme === "dark"
                         ? "border-outline-variant bg-white/5 text-slate-300 hover:bg-white/10"
                         : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
-                    }`}
+                      }`}
                   >
                     <span className="material-symbols-outlined text-[14px]">attach_file</span>
                     {a.filename}

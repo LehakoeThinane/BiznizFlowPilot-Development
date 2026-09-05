@@ -90,7 +90,7 @@ export function ComposePanel({
       <button
         type="button"
         onClick={onExpand}
-        className={`fixed bottom-6 right-6 z-50 flex w-72 items-center justify-between rounded-xl border px-4 py-3 text-left shadow-2xl ${floatingPanelClass(theme)} ${floatingPanelHoverClass(theme)}`}
+        className={`fixed bottom-2 right-2 z-50 flex w-[calc(100vw-1rem)] max-w-72 items-center justify-between rounded-xl border px-4 py-3 text-left shadow-2xl sm:bottom-6 sm:right-6 ${floatingPanelClass(theme)} ${floatingPanelHoverClass(theme)}`}
       >
         <span className={`truncate text-sm font-medium ${textClass(theme)}`}>
           {draft.subject.trim() || "New message"}
@@ -110,7 +110,7 @@ export function ComposePanel({
   }
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 w-[420px] overflow-hidden rounded-2xl border shadow-2xl ${floatingPanelClass(theme)}`}>
+    <div className={`fixed bottom-2 right-2 z-50 max-h-[calc(100vh-1rem)] w-[calc(100vw-1rem)] overflow-y-auto rounded-2xl border shadow-2xl sm:bottom-6 sm:right-6 sm:w-[420px] ${floatingPanelClass(theme)}`}>
       <div className={`flex items-center justify-between border-b px-4 py-3 ${borderClass(theme)}`}>
         <h2 className={`text-sm font-semibold ${textClass(theme)}`}>New email</h2>
         <div className="flex items-center gap-3">
@@ -155,9 +155,8 @@ export function ComposePanel({
               {attachments.map((file, i) => (
                 <span
                   key={`${file.name}-${i}`}
-                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
-                    theme === "dark" ? "border-outline-variant bg-white/5 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
-                  }`}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${theme === "dark" ? "border-outline-variant bg-white/5 text-slate-300" : "border-slate-200 bg-slate-50 text-slate-600"
+                    }`}
                 >
                   <span className="material-symbols-outlined text-[14px]">attach_file</span>
                   <span className="max-w-[160px] truncate">{file.name}</span>

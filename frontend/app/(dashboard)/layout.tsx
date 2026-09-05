@@ -49,7 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // reflect actual app usage anywhere.
   useEffect(() => {
     if (!user) return;
-    const beat = () => apiRequest("/api/v1/users/me/heartbeat", { method: "POST" }).catch(() => {});
+    const beat = () => apiRequest("/api/v1/users/me/heartbeat", { method: "POST" }).catch(() => { });
     beat();
     const interval = setInterval(beat, 60_000);
     return () => clearInterval(interval);
@@ -99,11 +99,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const ownPresence: Presence | null = user
     ? {
-        status: user.status ?? "online",
-        status_text: user.status_text ?? null,
-        last_seen_at: user.last_seen_at ?? null,
-        is_online: user.is_online ?? true,
-      }
+      status: user.status ?? "online",
+      status_text: user.status_text ?? null,
+      last_seen_at: user.last_seen_at ?? null,
+      is_online: user.is_online ?? true,
+    }
     : null;
 
   function handlePresenceUpdated(presence: Presence) {
@@ -217,7 +217,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <header className="relative z-20 flex h-18 shrink-0 items-center justify-between border-b border-outline-variant bg-[#0d1628]/90 px-4 shadow-[0_2px_8px_rgba(0,0,0,0.25)] backdrop-blur md:px-6">
 
               {/* Left: hamburger (mobile) + search */}
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={() => setSidebarOpen(true)}
@@ -228,8 +228,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 </button>
 
                 {/* Search bar */}
-                <div ref={searchRef} className="relative">
-                  <div className="flex w-64 items-center gap-2 rounded-xl border border-outline-variant bg-[#0a1528]/80 px-3 py-2 sm:w-96">
+                <div ref={searchRef} className="relative min-w-0 flex-1">
+                  <div className="flex w-full max-w-96 items-center gap-2 rounded-xl border border-outline-variant bg-[#0a1528]/80 px-3 py-2">
                     <span className="material-symbols-outlined ms-16 text-on-surface-variant">
                       {searchLoading ? "hourglass_empty" : "search"}
                     </span>
@@ -255,7 +255,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                   {/* Search results dropdown */}
                   {showSearchDrop && searchActive && searchResults && totalHits > 0 && (
-                    <div className="absolute left-0 top-full z-50 mt-1 w-96 overflow-hidden rounded-xl border border-outline-variant bg-[#0f1c33] shadow-2xl">
+                    <div className="absolute left-0 top-full z-50 mt-1 max-h-[70vh] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-xl border border-outline-variant bg-[#0f1c33] shadow-2xl">
                       {(Object.entries(searchResults) as [keyof SearchResults, SearchHit[]][])
                         .filter(([, hits]) => hits.length > 0)
                         .map(([cat, hits]) => (
@@ -283,7 +283,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   )}
 
                   {showSearchDrop && searchActive && totalHits === 0 && !searchLoading && (
-                    <div className="absolute left-0 top-full z-50 mt-1 w-96 rounded-xl border border-outline-variant bg-[#0f1c33] px-4 py-3 shadow-2xl">
+                    <div className="absolute left-0 top-full z-50 mt-1 w-[min(24rem,calc(100vw-2rem))] rounded-xl border border-outline-variant bg-[#0f1c33] px-4 py-3 shadow-2xl">
                       <p className="text-sm text-on-surface-variant">No results for &quot;{debouncedSearch}&quot;</p>
                     </div>
                   )}
@@ -291,7 +291,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               </div>
 
               {/* Right actions */}
-              <div className="flex items-center gap-3">
+              <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                 <NotificationBell />
                 <div className="h-6 w-px bg-outline-variant" />
                 <div ref={profileRef} className="relative">
