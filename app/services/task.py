@@ -78,12 +78,20 @@ class TaskService:
     def create(self, business_id: UUID, current_user: CurrentUser, data: TaskCreate) -> Task:
         """Create task.
 
-        🧨 RBAC: Only owner/manager can create.
+        🧨 RBAC: Owner/manager can create for the team. Staff can create tasks
+        for themselves.
         """
-        require_role(current_user, PRIVILEGED_ROLES, "create tasks")
-
         payload = data.model_dump()
         assignee_ids = payload.pop("assignee_ids", None) or []
+
+        if current_user.role not in PRIVILEGED_ROLES:
+            if current_user.role != "staff":
+                require_role(current_user, PRIVILEGED_ROLES, "create tasks")
+            requested_assignees = assignee_ids or ([payload.get("assigned_to")] if payload.get("assigned_to") else [])
+            if any(str(assignee_id) != str(current_user.user_id) for assignee_id in requested_assignees):
+                raise PermissionError("Staff can only create tasks assigned to themselves")
+            payload["assigned_to"] = current_user.user_id
+            assignee_ids = [current_user.user_id]
         if assignee_ids and not payload.get("assigned_to"):
             payload["assigned_to"] = assignee_ids[0]
 

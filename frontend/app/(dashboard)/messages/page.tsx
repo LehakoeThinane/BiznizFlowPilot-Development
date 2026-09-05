@@ -6,8 +6,9 @@ import { apiRequest } from "@/lib/api";
 import { getStoredToken } from "@/lib/auth";
 import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 import { useUser } from "@/contexts/UserContext";
-import type { BusinessUser, Conversation, ConversationListResponse, Customer, DirectMessage, MeetingCallType, MessageListResponse, OtherUser, Poll } from "@/types/api";
+import type { BusinessUser, Conversation, ConversationListResponse, Customer, DirectMessage, Meeting, MeetingCallType, MessageListResponse, OtherUser, Poll } from "@/types/api";
 import { Avatar } from "@/components/Avatar";
+import { CallPanel } from "@/components/CallPanel";
 import { AttachmentMenu, type AttachmentAction } from "@/components/messages/AttachmentMenu";
 import { AudioAttachModal } from "@/components/messages/AudioAttachModal";
 import { CameraCaptureModal } from "@/components/messages/CameraCaptureModal";
@@ -43,6 +44,7 @@ export default function MessagesPage() {
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [profileUser, setProfileUser] = useState<OtherUser | null>(null);
+  const [activeCall, setActiveCall] = useState<Meeting | null>(null);
 
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -68,6 +70,32 @@ export default function MessagesPage() {
   const messagesRef = useRef<DirectMessage[]>([]);
 
   const selected = conversations.find((c) => c.id === selectedId) ?? null;
+
+  async function startDirectCall(otherUser: OtherUser, callType: MeetingCallType) {
+    try {
+      const start = new Date();
+      const end = new Date(start.getTime() + 60 * 60 * 1000);
+      const meeting = await apiRequest<Meeting>("/api/v1/meetings", {
+        method: "POST",
+        authToken: token,
+        body: {
+          title: `${callType === "video" ? "Video" : "Voice"} call with ${otherUser.full_name}`,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          call_type: callType,
+          participant_user_ids: [otherUser.id],
+        },
+      });
+      const started = await apiRequest<Meeting>(`/api/v1/meetings/${meeting.id}/start`, {
+        method: "POST",
+        authToken: token,
+      });
+      setProfileUser(null);
+      setActiveCall(started);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : "Failed to start call.");
+    }
+  }
 
   const loadConversations = useCallback(() => {
     return apiRequest<ConversationListResponse>("/api/v1/messaging/conversations", { authToken: token })
@@ -428,6 +456,14 @@ export default function MessagesPage() {
                     : selected.other_user.email}
                 </p>
               </div>
+              <div className="ml-auto flex shrink-0 items-center gap-1">
+                <button type="button" onClick={() => startDirectCall(selected.other_user, "voice")} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Start voice call">
+                  <span className="material-symbols-outlined">call</span>
+                </button>
+                <button type="button" onClick={() => startDirectCall(selected.other_user, "video")} className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Start video call">
+                  <span className="material-symbols-outlined">videocam</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -591,8 +627,26 @@ export default function MessagesPage() {
             <button type="button" onClick={() => { setProfileUser(null); setSelectedId(profileUser.id); }} className="mt-4 w-full rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white hover:opacity-90">
               Open conversation
             </button>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => startDirectCall(profileUser, "voice")} className="rounded-xl border border-outline-variant px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10">
+                <span className="material-symbols-outlined mr-1 align-middle text-[17px]">call</span>Voice
+              </button>
+              <button type="button" onClick={() => startDirectCall(profileUser, "video")} className="rounded-xl border border-outline-variant px-3 py-2 text-sm font-medium text-slate-200 hover:bg-white/10">
+                <span className="material-symbols-outlined mr-1 align-middle text-[17px]">videocam</span>Video
+              </button>
+            </div>
           </div>
         </div>
+      )}
+
+      {activeCall && (
+        <CallPanel
+          meetingId={activeCall.id}
+          callType={activeCall.call_type}
+          participants={activeCall.participants}
+          isOrganizer={activeCall.organizer_id === user?.user_id}
+          onClose={() => setActiveCall(null)}
+        />
       )}
 
       {activeModal === "camera" && (

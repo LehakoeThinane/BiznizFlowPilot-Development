@@ -202,20 +202,15 @@ export function RoleMenu({ role }: { role: UserRole }) {
 
   return (
     <div className="flex flex-col gap-1" onClick={unlockNotificationSound}>
-      {visibleItems.map((item, index) => {
+      {visibleItems.map((item) => {
         const isActive = item.matches.some(
           (m) => pathname === m || pathname.startsWith(`${m}/`)
         );
         const badge = item.href === "/messages" ? <UnreadBadge count={unreadMessages} /> : null;
-        const group = navGroup(item.label);
-        const previousGroup = index > 0 ? navGroup(visibleItems[index - 1].label) : null;
-        const groupHeading = group !== previousGroup ? (
-          <p className="mb-1 mt-4 px-4 text-[10px] font-semibold uppercase tracking-[0.16em] text-on-surface-variant first:mt-0">{group}</p>
-        ) : null;
 
         if (isActive) {
           return (
-            <div key={item.href}>{groupHeading}<Link
+            <div key={item.href}><Link
               href={item.href}
               className="group flex items-center gap-3 rounded-xl border border-tertiary-fixed-dim/50 bg-primary-container/70 px-4 py-3 text-sm text-on-primary-container shadow-[0_0_0_1px_rgba(45,212,190,0.15),0_0_20px_rgba(45,212,190,0.25)] transition-shadow"
             >
@@ -227,7 +222,7 @@ export function RoleMenu({ role }: { role: UserRole }) {
         }
 
         return (
-          <div key={item.href}>{groupHeading}<Link
+          <div key={item.href}><Link
             href={item.href}
             className="group flex items-center gap-3 rounded-xl border border-transparent px-4 py-3 text-sm text-surface-variant transition-colors hover:border-tertiary-fixed-dim/20 hover:bg-white/5 hover:text-surface-bright"
           >

@@ -11,11 +11,11 @@ const posts = [
     { channel: "Facebook", post: "Community poll and testimonial repost.", status: "Queued" },
 ];
 
-const channelDetails: Record<string, { account: string; cadence: string; action: string }> = {
-    LinkedIn: { account: "Company page", cadence: "Weekdays · 09:00", action: "Prepare LinkedIn post" },
-    Instagram: { account: "Business profile", cadence: "Tue / Thu · 12:00", action: "Prepare Instagram draft" },
-    "X / Twitter": { account: "Brand profile", cadence: "Daily · 10:30", action: "Prepare X post" },
-    Facebook: { account: "Business page", cadence: "Wed / Fri · 14:00", action: "Prepare Facebook post" },
+const channelDetails: Record<string, { account: string; cadence: string }> = {
+    LinkedIn: { account: "Company page", cadence: "Weekdays · 09:00" },
+    Instagram: { account: "Business profile", cadence: "Tue / Thu · 12:00" },
+    "X / Twitter": { account: "Brand profile", cadence: "Daily · 10:30" },
+    Facebook: { account: "Business page", cadence: "Wed / Fri · 14:00" },
 };
 
 export default function MarketingSocialPage() {
@@ -50,7 +50,6 @@ export default function MarketingSocialPage() {
                         <h2 className="mt-2 text-xl font-semibold text-surface-bright">{selectedChannel}</h2>
                         <p className="mt-1 text-sm text-on-surface-variant">{selected.account} · {selected.cadence}</p>
                     </div>
-                    <button type="button" className="erp-button-primary px-3 py-2 text-xs">{selected.action}</button>
                 </div>
                 <div className="mt-5 grid gap-3 md:grid-cols-3">
                     <div className="rounded-xl border border-outline-variant bg-surface-container p-4">

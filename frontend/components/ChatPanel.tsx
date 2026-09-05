@@ -26,8 +26,8 @@ function MentionBadge({ mention }: { mention: ResolvedMention }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${mention.found
-          ? "bg-brand/10 text-brand"
-          : "bg-red-50 text-red-600"
+        ? "bg-brand/10 text-brand"
+        : "bg-red-50 text-red-600"
         }`}
     >
       @{mention.type}:{mention.display_name}
@@ -55,8 +55,8 @@ function MessageBubble({
       )}
       <div
         className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm whitespace-pre-wrap break-words ${isUser
-            ? "bg-brand text-white rounded-tr-sm"
-            : "bg-slate-100 text-slate-900 rounded-tl-sm"
+          ? "bg-brand text-white rounded-tr-sm"
+          : "bg-slate-100 text-slate-900 rounded-tl-sm"
           }`}
       >
         {msg.content}
@@ -452,7 +452,7 @@ export function ChatPanel() {
                 onKeyDown={handleKeyDown}
                 rows={2}
                 placeholder="Message… (Enter to send, Shift+Enter for newline)"
-                className="flex-1 resize-none rounded-xl border border-slate-300 bg-slate-50 px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-brand/40"
+                className="min-w-0 flex-1 resize-none rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand/40"
               />
               <button
                 onClick={handleSend}

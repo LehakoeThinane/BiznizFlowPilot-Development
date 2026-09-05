@@ -67,12 +67,22 @@ class TestTaskCreate:
         assert task.title == "Prepare proposal"
         assert task.business_id == manager_user.business_id
 
-    def test_create_task_as_staff_denied(self, test_db: Session, staff_user: CurrentUser):
-        """Staff cannot create tasks."""
+    def test_create_task_as_staff_self_assigned(self, test_db: Session, staff_user: CurrentUser):
+        """Staff can create tasks, but the task is assigned to themselves."""
         service = TaskService(test_db)
         data = TaskCreate(title="Test task")
 
-        with pytest.raises(PermissionError, match="cannot"):
+        task = service.create(staff_user.business_id, staff_user, data)
+
+        assert task.title == "Test task"
+        assert task.assigned_to == staff_user.user_id
+
+    def test_staff_cannot_assign_task_to_other_user(self, test_db: Session, staff_user: CurrentUser, manager_user: CurrentUser):
+        """Staff cannot create work assigned to another user."""
+        service = TaskService(test_db)
+        data = TaskCreate(title="Test task", assigned_to=manager_user.user_id)
+
+        with pytest.raises(PermissionError, match="themselves"):
             service.create(staff_user.business_id, staff_user, data)
 
 

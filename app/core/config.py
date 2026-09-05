@@ -332,7 +332,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     anthropic_model: str = "claude-sonnet-4-6"
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    groq_model: str = "llama-3.2-3b-preview"
     perplexity_api_key: str = ""
     perplexity_model: str = "sonar"
     ai_max_tokens: int = 1024
